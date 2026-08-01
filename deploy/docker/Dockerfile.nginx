@@ -1,0 +1,19 @@
+# ============================================================
+# FinOS AI — Nginx 反向代理镜像
+# 默认 HTTP（开箱即用）；HTTPS 由 docker-compose.prod.yml 挂载
+# deploy/nginx/conf.d-tls 与证书目录覆盖。
+# ============================================================
+FROM nginx:1.27-alpine
+
+RUN rm -f /etc/nginx/conf.d/default.conf
+
+COPY deploy/nginx/nginx.conf        /etc/nginx/nginx.conf
+COPY deploy/nginx/proxy_params.conf /etc/nginx/proxy_params.conf
+COPY deploy/nginx/conf.d            /etc/nginx/conf.d
+
+EXPOSE 80 443
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=5 \
+    CMD wget -qO- http://127.0.0.1/healthz >/dev/null 2>&1 || exit 1
+
+CMD ["nginx", "-g", "daemon off;"]

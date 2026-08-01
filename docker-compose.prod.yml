@@ -1,0 +1,89 @@
+# ============================================================
+# FinOS AI — 生产环境覆盖层（Phase 7.5 #370）
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#   或： bash deploy.sh --prod
+#
+# 与基础编排的差异：
+#   1. 启用 HTTPS（挂载 conf.d-tls + 证书目录，追加 443 端口）
+#   2. POSTGRES_PASSWORD / REDIS_PASSWORD / JWT_SECRET / ENCRYPTION_MASTER_KEY
+#      / CORS_ORIGINS 强制显式设置，缺失即启动失败（杜绝默认密钥上线）
+#   3. 资源限制、日志轮转、uvicorn 4 workers
+# 注：基础编排中 api / web 的宿主端口已绑定 127.0.0.1，
+#     公网仅暴露 nginx，因此无需在此覆盖 ports。
+# ============================================================
+
+services:
+  db:
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?生产环境必须设置 POSTGRES_PASSWORD}
+    command:
+      - postgres
+      - -c
+      - max_connections=200
+      - -c
+      - shared_buffers=256MB
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+    deploy:
+      resources:
+        limits: { cpus: "2.0", memory: 2G }
+
+  redis:
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --requirepass
+      - ${REDIS_PASSWORD:?生产环境必须设置 REDIS_PASSWORD}
+      - --maxmemory
+      - 512mb
+      - --maxmemory-policy
+      - allkeys-lru
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 768M }
+
+  api:
+    environment:
+      DEBUG: "false"
+      # 生产必须显式提供，缺失即启动失败（避免用默认密钥上线）
+      JWT_SECRET: ${JWT_SECRET:?生产环境必须设置 JWT_SECRET}
+      ENCRYPTION_MASTER_KEY: ${ENCRYPTION_MASTER_KEY:?生产环境必须设置 ENCRYPTION_MASTER_KEY}
+      CORS_ORIGINS: ${CORS_ORIGINS:?生产环境必须设置 CORS_ORIGINS，例如 https://finos.example.com}
+    command:
+      ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8300", "--workers", "4"]
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
+    deploy:
+      resources:
+        limits: { cpus: "2.0", memory: 2G }
+
+  web:
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 1G }
+
+  nginx:
+    # 基础编排已发布 80，此处追加 443
+    ports:
+      - "443:443"
+    volumes:
+      # 用 TLS 站点配置覆盖默认 HTTP 配置
+      - ./deploy/nginx/conf.d-tls:/etc/nginx/conf.d:ro
+      - ./deploy/nginx/certs:/etc/nginx/certs:ro
+      - finos-certbot-www:/var/www/certbot
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+volumes:
+  finos-certbot-www:

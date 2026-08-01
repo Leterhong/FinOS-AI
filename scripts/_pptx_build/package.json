@@ -1,0 +1,12 @@
+{
+  "name": "finos-pptx-build",
+  "version": "1.0.0",
+  "private": true,
+  "description": "One-off build script for FinOS AI 项目介绍.pptx (isolated deps, not part of the web app)",
+  "scripts": {
+    "build": "node generate.js"
+  },
+  "dependencies": {
+    "pptxgenjs": "^4.0.1"
+  }
+}

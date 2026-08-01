@@ -1,0 +1,38 @@
+# ============================================================
+# FinOS AI — Backend (FastAPI) 生产镜像
+# ============================================================
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+
+# 系统依赖：psycopg2 需要 libpq；curl 用于容器健康检查
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends gcc libpq-dev curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY backend/requirements.txt ./backend/requirements.txt
+RUN pip install --upgrade pip && pip install -r backend/requirements.txt
+
+# backend/ 内已包含 alembic/ 与 alembic.ini，无需额外复制
+COPY backend/ ./backend/
+COPY deploy/scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# 数据目录（SQLite 降级 / 上传文件）需可写
+RUN useradd -m -u 1000 finos \
+    && mkdir -p /app/backend/data/uploads \
+    && chown -R finos:finos /app
+USER finos
+
+EXPOSE 8300
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=40s --retries=5 \
+    CMD curl -fsS http://127.0.0.1:8300/api/health || exit 1
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8300", "--workers", "2"]

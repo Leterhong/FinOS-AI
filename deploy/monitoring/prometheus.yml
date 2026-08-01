@@ -1,0 +1,18 @@
+# Prometheus 监控配置（Phase 7.0.4 十四/十九、日志与监控）
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: finos-api
+    metrics_path: /api/metrics
+    static_configs:
+      - targets: ["finos-api:8300"]
+
+  - job_name: finos-web
+    static_configs:
+      - targets: ["finos-web:3000"]
+
+  - job_name: finos-nginx
+    static_configs:
+      - targets: ["finos-nginx:9113"]

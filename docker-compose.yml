@@ -1,0 +1,158 @@
+# ============================================================
+# FinOS AI — 一键编排（Phase 7.5 #358）
+#
+#   docker compose up -d        启动全部服务
+#   docker compose ps           查看健康状态
+#   docker compose logs -f api  查看后端日志
+#
+# 服务拓扑：
+#   nginx(80) ──┬── web  : Next.js 15 前端 (3000)
+#               └── api  : FastAPI 后端   (8300)
+#                            ├── db    : PostgreSQL 16
+#                            └── redis : Redis 7
+#
+# 所有服务均配置 healthcheck，依赖方使用 service_healthy 条件启动。
+# ============================================================
+
+name: finos-ai
+
+services:
+  # ── 数据库 ────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: finos-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-finos}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-finos_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-finos}
+      # 中文环境下统一 UTF-8 排序
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+    volumes:
+      - finos-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-finos} -d ${POSTGRES_DB:-finos}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks: [finos-net]
+
+  # ── 缓存 ──────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: finos-redis
+    restart: unless-stopped
+    command:
+      ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-finos_dev_redis}"]
+    volumes:
+      - finos-redis-data:/data
+    healthcheck:
+      test:
+        ["CMD-SHELL", "redis-cli -a ${REDIS_PASSWORD:-finos_dev_redis} ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks: [finos-net]
+
+  # ── 后端 FastAPI ──────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.api
+    image: finos-ai/api:latest
+    container_name: finos-api
+    restart: unless-stopped
+    environment:
+      APP_NAME: ${APP_NAME:-FinOS AI Backend}
+      DEBUG: ${DEBUG:-false}
+      API_PREFIX: /api
+      DATABASE_URL: postgresql://${POSTGRES_USER:-finos}:${POSTGRES_PASSWORD:-finos_dev_password}@db:5432/${POSTGRES_DB:-finos}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-finos_dev_redis}@redis:6379/0
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET 未设置，请先执行 bash deploy.sh 或复制 .env.example 为 .env}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-10080}
+      JWT_REFRESH_EXPIRE_DAYS: ${JWT_REFRESH_EXPIRE_DAYS:-30}
+      ENCRYPTION_MASTER_KEY: ${ENCRYPTION_MASTER_KEY:?ENCRYPTION_MASTER_KEY 未设置，请先执行 bash deploy.sh}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost,http://localhost:3000}
+      API_RATE_LIMIT_PER_MINUTE: ${API_RATE_LIMIT_PER_MINUTE:-300}
+      AI_RATE_LIMIT_PER_MINUTE: ${AI_RATE_LIMIT_PER_MINUTE:-30}
+      BACKUP_API_KEY: ${BACKUP_API_KEY:-}
+      MIGRATE_LEGACY_DATA: ${MIGRATE_LEGACY_DATA:-false}
+    volumes:
+      # 用户上传的资料持久化（不随容器重建丢失）
+      - finos-api-uploads:/app/backend/data/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    expose:
+      - "8300"
+    ports:
+      # 便于本地直连调试；仅需 nginx 入口时可注释
+      - "127.0.0.1:${API_PORT:-8300}:8300"
+    networks: [finos-net]
+
+  # ── 前端 Next.js ──────────────────────────────────────────
+  web:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.web
+      args:
+        # 浏览器侧通过 nginx 同源访问 /api，避免跨域与证书问题
+        NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:-/api}
+    image: finos-ai/web:latest
+    container_name: finos-web
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:-/api}
+      # 服务端渲染时容器内直连后端
+      BACKEND_INTERNAL_URL: http://api:8300
+      # 前端侧加密密钥。NODE_ENV=production 下缺失会直接抛错拒绝服务
+      # （开源仓库的开发兜底密钥人人可见，用于生产等同未加密）。
+      FINOS_DATA_KEY: ${FINOS_DATA_KEY:?FINOS_DATA_KEY 未设置，请先执行 bash deploy.sh 或复制 .env.example 为 .env}
+      FINOS_AUTH_SECRET: ${FINOS_AUTH_SECRET:-}
+    depends_on:
+      api:
+        condition: service_healthy
+    expose:
+      - "3000"
+    ports:
+      - "127.0.0.1:${WEB_PORT:-3000}:3000"
+    networks: [finos-net]
+
+  # ── 反向代理 ──────────────────────────────────────────────
+  nginx:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.nginx
+    image: finos-ai/nginx:latest
+    container_name: finos-nginx
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-80}:80"
+    depends_on:
+      web:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks: [finos-net]
+
+volumes:
+  finos-db-data:
+  finos-redis-data:
+  finos-api-uploads:
+
+networks:
+  finos-net:
+    driver: bridge
