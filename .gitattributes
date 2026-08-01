@@ -1,0 +1,39 @@
+# ============================================================
+# 换行符规范
+#
+# 背景：Windows 上 Git 默认 core.autocrlf=true，克隆时会把文本文件
+# 转成 CRLF。Shell 脚本一旦带 CRLF，进入 Linux 容器后 shebang 会变成
+# `#!/bin/sh\r`，直接报 "exec format error" / "no such file or directory"，
+# 表现为 API 容器无法启动。因此以下文件类型强制 LF。
+# ============================================================
+
+# 默认：由 Git 自动判定文本/二进制，仓库内统一以 LF 存储
+* text=auto
+
+# ── 必须保持 LF（在 Linux 容器 / CI 中执行）────────────────
+*.sh            text eol=lf
+Dockerfile*     text eol=lf
+*.conf          text eol=lf
+entrypoint*     text eol=lf
+.env.example    text eol=lf
+*.yml           text eol=lf
+*.yaml          text eol=lf
+
+# ── Windows 批处理保持 CRLF ────────────────────────────────
+*.bat           text eol=crlf
+*.cmd           text eol=crlf
+*.ps1           text eol=crlf
+
+# ── 二进制文件：禁止任何转换与差异计算 ─────────────────────
+*.png           binary
+*.jpg           binary
+*.jpeg          binary
+*.gif           binary
+*.webp          binary
+*.ico           binary
+*.pdf           binary
+*.woff          binary
+*.woff2         binary
+*.ttf           binary
+*.db            binary
+*.sqlite        binary

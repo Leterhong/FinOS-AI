@@ -1,0 +1,48 @@
+# ============================================================
+# FinOS AI — Frontend (Next.js 15) 生产镜像
+# 多阶段构建：deps -> builder -> runner（standalone 产物）
+# ============================================================
+
+# ---------- 1. 依赖层（利用缓存，仅在 lockfile 变化时重装） ----------
+FROM node:20-alpine AS deps
+WORKDIR /app
+RUN apk add --no-cache libc6-compat
+COPY package.json package-lock.json* ./
+RUN npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+
+# ---------- 2. 构建层 ----------
+FROM node:20-alpine AS builder
+WORKDIR /app
+ENV NEXT_TELEMETRY_DISABLED=1
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+
+# 前端构建期注入后端地址（NEXT_PUBLIC_* 会被内联进产物）
+ARG NEXT_PUBLIC_BACKEND_URL=/api
+ENV NEXT_PUBLIC_BACKEND_URL=$NEXT_PUBLIC_BACKEND_URL
+
+RUN npm run build
+
+# ---------- 3. 运行层 ----------
+FROM node:20-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    PORT=3000 \
+    HOSTNAME=0.0.0.0
+
+# 非 root 运行
+RUN addgroup -g 1001 -S nodejs && adduser -S nextjs -u 1001
+
+# standalone 产物：server.js + 最小化 node_modules
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+
+USER nextjs
+EXPOSE 3000
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=5 \
+    CMD node -e "require('http').get('http://127.0.0.1:3000/login',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))"
+
+CMD ["node", "server.js"]

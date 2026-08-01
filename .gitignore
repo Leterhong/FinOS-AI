@@ -1,0 +1,121 @@
+# ---------------------------------------------------------------------------
+# FinOS AI — Git 忽略规则
+# ---------------------------------------------------------------------------
+
+# ---------- 依赖 ----------
+node_modules/
+.pnp
+.pnp.js
+.yarn/
+
+# ---------- 前端构建产物 ----------
+.next/
+.next_stale/
+out/
+dist/
+build/
+*.tsbuildinfo
+next-env.d.ts
+
+# ---------- 环境变量与密钥（严禁入库） ----------
+.env
+.env.*
+!.env.example
+!.env.local.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets.json
+backend/.env
+
+# ---------- 数据库与用户数据 ----------
+.data/
+backend/data/
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
+*.dump
+*.sql.gz
+backup/
+backups/
+
+# ---------- 用户上传文件 ----------
+uploads/
+backend/uploads/
+storage/
+public/uploads/
+
+# ---------- 日志 ----------
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.dev-*.log
+.phase*-*.log
+backend.log
+backend_*.log
+
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+env/
+ENV/
+.Python
+pip-log.txt
+*.egg-info/
+.eggs/
+
+# ---------- 测试与覆盖率 ----------
+.coverage
+.coverage.*
+coverage/
+htmlcov/
+.pytest_cache/
+tests/.tmp/
+.tox/
+.nox/
+junit.xml
+coverage.xml
+playwright-report/
+test-results/
+
+# ---------- 编辑器与 IDE ----------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-workspace
+
+# ---------- 操作系统 ----------
+.DS_Store
+Thumbs.db
+desktop.ini
+nul
+
+# ---------- 工具与缓存 ----------
+.workbuddy/
+.cache/
+.turbo/
+.eslintcache
+.parcel-cache/
+*.tmp
+*.temp
+tmp/
+temp/
+
+# ---------- 临时调试产物 ----------
+*-shot.png
+api-response*.txt
+test-payload.json
+.archive-temp/
