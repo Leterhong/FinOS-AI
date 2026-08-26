@@ -1,268 +1,144 @@
-# 安全设计 · Security
+# FinOS AI 安全设计
 
-> FinOS AI 处理的是用户最敏感的个人财务数据。本文档描述系统的安全设计：认证、授权、加密、隔离、审计与隐私控制。
+本文描述 FinOS AI 2.0 在企业资料理解、风险研判和 Agent 流程场景中的当前安全设计、部署责任与尚未完成的边界。漏洞报告流程见仓库根目录的 [`SECURITY.md`](../SECURITY.md)。
 
-## 1. 安全原则
+## 1. 两种运行模式
 
-| 原则 | 落地方式 |
-|---|---|
-| **数据属于用户** | 全部数据本地/自托管，无第三方数据回传；支持一键完整导出与彻底删除 |
-| **默认最小暴露** | 越权返回 404 不泄露资源存在性；错误响应绝不含堆栈或内部路径 |
-| **敏感字段永不明文落盘** | 金额、路径、原文使用 AES-256-GCM 透明加密 |
-| **密钥永不出库** | 用户的 LLM API Key 加密存储，任何响应与导出只返回掩码 |
-| **AI 不得擅自改动财务数据** | 所有 AI 识别结果需用户显式确认才写入 |
+| 模式 | 数据位置 | 适用场景 | 安全边界 |
+| --- | --- | --- | --- |
+| 无登录演示工作区 | 浏览器本地持久化 | 产品体验、界面评估、二次开发 | 不提供组织身份、RBAC 或共享设备隔离 |
+| 完整后端模式 | FastAPI + SQLite/PostgreSQL | 本地集成、自托管开发 | 提供会话、数据隔离和基础安全服务，生产仍需部署者加固 |
 
-## 2. 认证 Authentication
+演示工作区默认使用虚构数据。不要在公开演示、共享浏览器或未受管设备中录入客户资料、商业秘密、个人信息或生产凭据。
 
-### 2.1 密码存储
+## 2. 威胁模型
 
-使用 **bcrypt** 哈希（自适应成本因子），明文密码永不落库、永不进日志。
+FinOS AI 重点防范：
 
-```
-users.password_hash  ←  bcrypt(password)
-```
+- 未授权读取企业资料、风险结论、研究底稿或模型密钥；
+- 上传文件引发目录穿越、资源耗尽或解析器攻击；
+- Webhook、数据源或模型地址访问本机、内网和云元数据服务；
+- 伪造转发地址绕过限流、审计或访问策略；
+- 会话窃取、刷新令牌重放和 Cookie 写操作 CSRF；
+- Agent 被提示词注入诱导执行越权工具或泄漏上下文；
+- 并发任务被重复认领、重复执行或绕过人工复核；
+- 错误响应、日志或前端构建产物泄漏敏感信息。
 
-### 2.2 JWT 双令牌机制
+本项目不承诺抵御已经获得宿主机、容器运行时、数据库管理员或密钥管理系统控制权的攻击者。
 
-| 令牌 | 有效期 | 存储位置 | 用途 |
-|---|---|---|---|
-| Access Token | 7 天（`JWT_EXPIRE_MINUTES`） | localStorage `finos_token` | 每次 API 请求携带 |
-| Refresh Token | 30 天（`JWT_REFRESH_EXPIRE_DAYS`） | 客户端安全存储 | 换取新的令牌对 |
+## 3. 已实现的安全控制
 
-**Refresh Token 轮换**：`POST /api/auth/refresh` 每次签发新令牌对的同时，将旧 refresh 的 `jti` 置为 `revoked=True`。数据库中**只存 `jti` 不存 token 本体**，即使 `refresh_tokens` 表泄露也无法伪造令牌。
+### 3.1 会话与身份
 
-```
-登录 ──▶ (access_1, refresh_1)
-         refresh_tokens: jti_1 (revoked=false)
+- 开源体验通过 `/api/auth/bootstrap` 恢复现有访客空间或创建随机隔离访客身份，不将首次访问视为 401 错误。
+- Access Token 默认 15 分钟，仅保存在前端进程内存中。
+- Refresh Token 使用 `HttpOnly`、`SameSite=Lax` Cookie，作用路径限制为 `/api/auth`，HTTPS 下启用 `Secure`。
+- 每次刷新都会吊销旧 `jti` 并签发新令牌；再次使用已吊销令牌会记录安全事件。
+- Cookie 认证的变更请求使用双提交 CSRF Token；Bearer 请求仍由授权头验证。
+- 密码使用自适应哈希；旧格式在成功验证后升级。
 
-刷新 ──▶ (access_2, refresh_2)
-         refresh_tokens: jti_1 (revoked=TRUE) ← 立即失效
-                         jti_2 (revoked=false)
+2.0 默认 UI 不提供登录或注册页面，但后端认证接口仍用于完整集成和后续企业身份系统接入。无登录体验不等于生产环境匿名开放。
 
-用旧 refresh_1 再刷新 ──▶ 401（已吊销，检测到重放）
-```
+### 3.2 密钥与敏感配置
 
-**登出**：`POST /api/auth/logout` 吊销当前 refresh token，幂等。
+- JWT、数据库、Redis、加密和模型凭据均通过环境变量提供，不应硬编码。
+- 非开发环境缺失或使用弱 `JWT_SECRET` 时后端拒绝启动。
+- 开发环境可生成仅当前进程有效的临时 JWT 密钥，重启后旧会话失效。
+- 模型密钥不得使用 `NEXT_PUBLIC_` 前缀，避免进入浏览器构建产物。
+- 后端已有字段级 AES-256-GCM 与模型密钥加密基础设施；新企业业务对象迁移到服务端时必须逐字段完成数据分级与加密评审。
 
-### 2.3 双鉴权桥接
+### 3.3 文件与资料
 
-前端存在两套鉴权上下文，必须同时维护：
+- 上传内容分块读取，超过各接口配置的大小上限立即终止。
+- 存储文件名由服务端控制，读取前验证解析后的真实路径仍在允许目录内。
+- 接口限制允许的文件类型；扩展解析器应同时验证内容特征，不能只信任文件名或 MIME 声明。
+- 上传目录、数据库和本地业务数据均被 Git 忽略。
 
-| 上下文 | 凭据 | 校验方 |
-|---|---|---|
-| FastAPI 后端 | JWT（localStorage `finos_token`） | `get_current_user` 依赖 |
-| Next.js 路由守卫 | `finos_session` httpOnly cookie | `middleware.ts` |
+PDF、Office 和图片解析器属于高风险输入面。生产环境应在低权限、受限资源的隔离进程或容器中解析不可信文件，并持续更新解析依赖。
 
-- 登录/注册成功后必须调用 `POST /api/auth/session` 补种 cookie
-- 登出/注销账户必须调用 `POST /api/auth/logout` 清除 cookie
+### 3.4 出站访问与代理
 
-否则会出现 `/login` ↔ 受保护页的重定向死循环。
+- Webhook 等出站地址仅允许 HTTP/HTTPS，不允许 URL 中携带用户名或密码。
+- DNS 解析结果必须是公网地址；本机、私网、链路本地和保留地址会被拒绝。
+- 出站请求禁用自动重定向，避免通过跳转绕过首次地址校验。
+- `X-Forwarded-For` 仅在直接连接来源位于 `TRUSTED_PROXY_IPS` 时才被信任；默认不信任任何代理。
+- 生产 CORS 必须收窄到实际前端域名，不得保留开发环境来源。
 
-**Cookie `secure` 标志**由 `isSecureContext(req)` 根据 `x-forwarded-proto` 或请求协议动态判断。**严禁写死 `NODE_ENV === "production"`** —— 生产模式下 HTTP 部署会导致浏览器拒收 cookie。
+### 3.5 限流、错误与并发
 
-## 3. 授权 Authorization
+- 普通 API 与 AI API 使用不同的速率上限。
+- 未捕获异常对外返回通用错误，不应返回堆栈、SQL、内部路径或密钥。
+- 后端任务认领使用原子状态更新，降低多个 Worker 重复领取同一任务的风险。
+- 审计与安全事件用于记录登录失败、令牌重放和关键安全行为；日志仍需由部署者接入持久化、告警和留存策略。
 
-### 3.1 用户隔离铁律
+## 4. Agent 与 AI 安全
 
-**所有**数据库查询强制携带 `user_id` 过滤，无例外：
+模型输出属于不可信输入，不应直接转化为高影响操作。生产扩展必须遵守：
 
-```python
-asset = db.query(Asset).filter(
-    Asset.id == asset_id,
-    Asset.user_id == user.id,     # ← 强制条件，不可省略
-).first()
-if not asset:
-    raise HTTPException(404, "资源不存在")
-```
+1. 检索内容、上传文档和外部网页中的指令不具有系统权限；
+2. 工具由服务端白名单注册，并在执行时重新验证主体、项目和参数；
+3. 付款、授信、审批、外发、删除和写库等操作必须显式人工确认；
+4. 发送给第三方模型的数据遵循最小化原则，并记录供应商、用途和数据范围；
+5. 结论同时保存证据、规则版本、模型版本和人工复核状态；
+6. 模型超时、拒答或证据不足时必须安全失败，不能编造成功结果。
 
-### 3.2 越权返回 404 而非 403
+提示词注入无法仅靠提示词彻底解决，必须由权限边界、工具参数校验、数据隔离和人工复核共同控制。
 
-访问他人资源时返回 **404**（而非 403），不泄露"该资源确实存在但你无权访问"这一信息。资源所有权校验统一走 `require_owned_resource()`，它区分两种情形：
+## 5. 当前未完成的企业控制
 
-- 资源不存在 → 404
-- 资源存在但归属他人 → 404（对外表现一致）
-- 仅在明确的权限层级场景才返回 403
+以下能力仍在路线图中，不能因已有演示 UI 或基础后端而视为已经具备：
 
-### 3.3 工具调用上下文锁定
+- 组织、角色、项目级 RBAC 与职责分离；
+- 企业数据分级、字段级访问和租户密钥隔离；
+- 完整审批链、不可抵赖审计和审计日志防篡改；
+- 服务端企业工作流的全量持久化与迁移；
+- OCR 证据坐标、规则版本回放和模型评测体系；
+- 针对模型供应商的数据驻留、保留和跨境策略控制；
+- 集中式密钥管理、轮换、吊销和灾难恢复演练。
 
-Agent 工具调用（`POST /api/agents/tools/call`）强制注入当前用户上下文，Agent 无法通过参数指定他人 `user_id`。
+## 6. 生产上线检查清单
 
-## 4. 数据加密 Encryption
+### 身份与权限
 
-### 4.1 字段级透明加密
+- [ ] 已接入企业身份源或明确的账户生命周期管理；
+- [ ] 已实现组织、项目和资源级最小权限；
+- [ ] 高风险操作已配置双人复核或职责分离；
+- [ ] 已验证跨用户、跨项目和跨组织访问均被拒绝。
 
-敏感字段使用 SQLAlchemy `TypeDecorator`（`backend/security/types.py`），在 ORM 读写时自动加解密：
+### 密钥与数据
 
-```python
-class Asset(Base):
-    amount: Mapped[float] = mapped_column(EncryptedFloat, default=0.0)
-    #                                      ↑ 业务代码无感知，写入即加密
-```
+- [ ] `ENV=production`，`DEBUG=false`；
+- [ ] 所有 `CHANGE_ME_*` 值均已替换为独立强随机值；
+- [ ] 密钥存放于密钥管理服务，而不是镜像、仓库或日志；
+- [ ] 数据库、对象存储、备份和上传目录均已加密并限制权限；
+- [ ] 已定义数据保留、删除、备份恢复和事件响应流程。
 
-| 项 | 说明 |
-|---|---|
-| 算法 | AES-256-GCM（认证加密，同时保证机密性与完整性） |
-| 密钥 | 环境变量 `ENCRYPTION_MASTER_KEY`（URL-safe Base64 的 32 字节） |
-| 密文格式 | `aesgcm:v1:<base64>`，带版本前缀便于未来轮换 |
-| 存储 | 底层列类型为 `TEXT` |
+### 网络与运行环境
 
-**加密字段清单**（共 7 处）：
+- [ ] 全链路启用 HTTPS，Cookie 的 `Secure` 行为已验证；
+- [ ] CORS 仅包含实际生产域名；
+- [ ] `TRUSTED_PROXY_IPS` 仅包含受管反向代理；
+- [ ] 数据库、Redis、指标和管理端口未暴露到公网；
+- [ ] 文档解析运行在低权限和受限资源环境；
+- [ ] 依赖、基础镜像和容器已完成漏洞扫描。
 
-| 表 | 字段 |
-|---|---|
-| `financial_profiles` | `income`, `expense` |
-| `assets` | `amount` |
-| `transactions` | `amount` |
-| `documents` | `storage_path` |
-| `multimodal_inputs` | `storage_path`, `raw_text` |
+### AI 与业务治理
 
-即使数据库文件被完整拖走，攻击者拿到的也是密文。
+- [ ] 已评估模型供应商的数据使用、保留和地域政策；
+- [ ] 发往模型的数据已最小化、脱敏并获得授权；
+- [ ] Agent 工具已配置白名单、参数校验和执行超时；
+- [ ] 高影响结论和操作需要人工复核；
+- [ ] 已建立规则、提示词、模型和评测集的版本管理；
+- [ ] 已监控异常调用、数据外传、重复任务和安全事件。
 
-### 4.2 LLM API Key 保护
+## 7. 安全事件与漏洞披露
 
-用户配置的第三方模型 API Key 使用 **Fernet** 加密后存入 `ai_model_configs.api_key_encrypted`：
+发现疑似泄漏或漏洞时：
 
-| 场景 | 返回内容 |
-|---|---|
-| `GET /api/ai/models` | 仅 `key_mask`（形如 `sk-****abcd`） |
-| `GET /api/backup/export` | 仅掩码 |
-| `GET /api/backup/database` | 密文（不解密） |
-| 前端任何页面 | 永不显示明文 |
+1. 停止可能扩大影响的 Agent、Webhook 或外部模型调用；
+2. 隔离受影响凭据、会话、Worker 和数据源；
+3. 保留经过访问控制的必要日志和时间线；
+4. 轮换可能泄漏的密钥并吊销相关会话；
+5. 按 [`SECURITY.md`](../SECURITY.md) 私密报告，不在公开 Issue 中披露细节。
 
-明文 Key 仅在后端内存中、调用 LLM 的瞬间存在。
-
-### 4.3 存量数据自愈加密
-
-开发环境启动时（`lifespan`），`encrypt_existing_sensitive_data()` 会幂等地将历史明文敏感字段原地升级为密文，无需手动迁移。
-
-## 5. 传输与中间件安全
-
-### 5.1 中间件链
-
-```
-请求 ──▶ SecurityMiddleware ──▶ MetricsMiddleware ──▶ CORSMiddleware ──▶ 路由
-           │                       │
-           ├─ CSRF 双提交校验        └─ 记录耗时/状态码（无 PII）
-           └─ 滑动窗口限流
-```
-
-### 5.2 CSRF 防护
-
-采用**双提交 Cookie**模式：
-
-1. `GET /api/auth/csrf` 下发 token，同时写入非 HttpOnly cookie 和响应体
-2. 客户端在后续写操作请求头携带该 token
-3. 中间件比对 header 与 cookie 是否一致
-
-### 5.3 限流
-
-进程内滑动窗口限流（`backend/security/middleware.py`）：
-
-| 类型 | 默认 | 配置项 |
-|---|---|---|
-| 普通接口 | 300 次/分钟 | `API_RATE_LIMIT_PER_MINUTE` |
-| AI 接口 | 30 次/分钟 | `AI_RATE_LIMIT_PER_MINUTE` |
-
-超限返回 429。
-
-### 5.4 CORS
-
-白名单机制，仅允许 `CORS_ORIGINS` 中显式列出的来源，`allow_credentials=True`。生产环境必须收窄为实际域名。
-
-### 5.5 输入限制
-
-| 项 | 限制 | 配置项 |
-|---|---|---|
-| AI 单次输出 token | 8192 | `AI_MAX_TOKENS` |
-| AI 单次输入字符 | 100,000 | `AI_MAX_INPUT_CHARS` |
-| 请求参数校验 | Pydantic 强类型 | — |
-
-## 6. 文件上传安全
-
-| 防护 | 实现 |
-|---|---|
-| 按用户隔离存储 | 每个用户独立子目录，路径由服务端生成 |
-| 路径穿越防护 | 下载时校验解析后的真实路径必须在允许目录内 |
-| 存储路径加密 | `documents.storage_path` 为 `EncryptedString` |
-| 文件名不可控 | 服务端重命名，原文件名仅作展示字段 |
-| 内容哈希 | `multimodal_inputs.content_hash` 用于去重与完整性校验 |
-
-## 7. 错误处理与信息泄露防护
-
-三层异常处理器（`backend/main.py`）：
-
-| 异常类型 | 响应 |
-|---|---|
-| `HTTPException` | `{"success": false, "error": "<detail>"}` + 原状态码 |
-| `RequestValidationError` | `{"success": false, "error": "请求参数不合法"}` + 422 |
-| 未捕获 `Exception` | `{"success": false, "error": "服务器内部错误"}` + 500 |
-
-未捕获异常会：
-1. 通过 `log_event` 记录结构化日志（含异常类型与路径，供排障）
-2. 写入 `security_events` 表
-3. **响应体绝不包含堆栈、SQL、文件路径或内部实现细节**
-
-前端同样配置了根级与 dashboard 级错误边界，崩溃时展示友好提示而非堆栈。
-
-## 8. 审计与可观测
-
-### 8.1 审计日志
-
-| 表 | 记录内容 |
-|---|---|
-| `audit_logs` | `action`（操作类型）、`resource`、`ip`、`user_id`、时间 |
-| `security_events` | `event_type`、`severity`、`details`、`ip`、时间 |
-
-用户可通过 `GET /api/security/audit-logs` 与 `GET /api/security/events` 查看自己的记录。
-
-### 8.2 结构化日志脱敏
-
-`log_event()` 统一输出结构化日志，自动脱敏敏感字段（密码、token、API Key、金额）。日志中不出现任何可识别的财务数值。
-
-### 8.3 指标
-
-`GET /api/metrics` 暴露接口耗时与错误率，**不含任何 PII**，可直接接入 Prometheus。
-
-## 9. 隐私控制（用户权利）
-
-FinOS AI 提供完整的数据主体权利支持：
-
-| 权利 | 端点 | 说明 |
-|---|---|---|
-| **数据可携权** | `GET /api/personal-os/privacy/export` | 导出本人全部数据（结构化 JSON） |
-| **数据导出** | `GET /api/backup/export` | json / csv 格式，解密明文，Key 仅掩码 |
-| **被遗忘权** | `DELETE /api/security/account` | 彻底删除账户及全部 43 张表中的关联数据 |
-| **AI 记忆清除** | `DELETE /api/personal-os/privacy/memory` | 仅清 AI 记忆，保留财务数据 |
-| **隐私中心** | 前端 `/privacy-center` | 可视化管理上述所有操作 |
-
-**账户注销的双重确认**：必须同时提供正确密码 **和** 确认短语 `DELETE MY DATA`，防止误操作与 CSRF 触发。
-
-## 10. 生产安全检查清单
-
-部署到生产前逐项确认：
-
-- [ ] `DEBUG=false`
-- [ ] `JWT_SECRET` 已改为随机 64 字符（`openssl rand -hex 32`）
-- [ ] `ENCRYPTION_MASTER_KEY` 已设置且**已离线备份**（丢失则密文永久不可恢复）
-- [ ] `POSTGRES_PASSWORD` / `REDIS_PASSWORD` 已改为强密码
-- [ ] `BACKUP_API_KEY` 已设置
-- [ ] `CORS_ORIGINS` 收窄为实际生产域名，不含 `localhost`
-- [ ] 已启用 HTTPS（`deploy/nginx/conf.d-tls`）
-- [ ] 数据库端口未暴露到公网
-- [ ] `.env` 文件未提交到 Git（`.gitignore` 已覆盖）
-- [ ] 已配置定期备份（`deploy/scripts/backup.sh`）
-- [ ] 已验证 `/api/health` 返回正常
-
-## 11. 安全边界声明
-
-FinOS AI 是**自托管**的个人工具，其安全性依赖于部署者对宿主环境的管控。本项目：
-
-- 不提供多租户 SaaS 级别的隔离保证（虽然代码层面强制 `user_id` 隔离）
-- 不承诺抵御拥有宿主机 root 权限的攻击者
-- 不对用户自行配置的第三方 LLM 服务的数据处理行为负责
-
-**我们不使用"绝对安全""百分之百安全""完全安全"这类表述。** 安全是持续的工程实践，而非一次性承诺。若发现安全问题，请通过 Issue 或私下渠道报告。
-
----
-
-**免责声明**：FinOS AI 提供信息分析和辅助决策，不构成投资建议。
+安全是持续工程实践，不是一次性认证。任何生产部署都应根据实际数据类别、业务权限和监管地区完成独立威胁建模与安全评审。

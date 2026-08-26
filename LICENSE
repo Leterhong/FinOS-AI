@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2026 FinOS AI Contributors
+Copyright (c) 2026 Leterhong and FinOS AI contributors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -22,11 +22,28 @@ SOFTWARE.
 
 ---
 
-DISCLAIMER / 免责声明
+PROJECT NOTICE / 项目声明
 
-FinOS AI is a personal wealth management and analysis tool. It provides
-information analysis and decision support only, and does NOT constitute
-investment advice. Users are solely responsible for their own financial
-decisions.
+This notice explains the intended use of the project and does not add any
+condition to the MIT License above.
 
-FinOS AI 提供信息分析和辅助决策，不构成投资建议。
+FinOS AI is open-source infrastructure for enterprise information analysis,
+financial research, risk identification, and workflow assistance. It does not
+provide investment, credit, lending, legal, audit, accounting, or compliance
+advice, and it must not be treated as an autonomous approval or trading system.
+
+Anyone deploying or operating the Software is responsible for data rights,
+access control, model-provider selection, human review, regulatory compliance,
+and decisions made with information produced by the Software. AI-generated
+content may be incomplete, outdated, or incorrect and must be independently
+verified before use in any material decision.
+
+本声明用于解释项目用途，不对上述 MIT 许可证增加任何额外条件。
+
+FinOS AI 是面向企业资料理解、金融研究、风险识别与流程辅助的开源基础设施，
+不提供投资、授信、借贷、法律、审计、会计或合规意见，也不应被视为自动审批、
+自动交易或无人值守决策系统。
+
+软件的部署者和运营者应自行负责数据授权、访问控制、模型供应商选择、人工复核、
+监管合规以及基于软件输出作出的决定。AI 生成内容可能不完整、过时或错误，任何
+重大决策均应由具备相应职责和资质的人员独立核验。
