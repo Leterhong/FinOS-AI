@@ -4,7 +4,7 @@
 
 @layer base {
   :root {
-    --background: #05070A;
+    --background: #040810;
     --foreground: #F8FAFC;
     --card: rgba(255, 255, 255, 0.05);
     --card-foreground: #F8FAFC;
@@ -24,6 +24,14 @@
     --input: rgba(255, 255, 255, 0.08);
     --ring: #0EA5E9;
     --radius: 1rem;
+    --surface-1: rgba(255, 255, 255, 0.035);
+    --surface-2: rgba(255, 255, 255, 0.065);
+    --surface-3: rgba(255, 255, 255, 0.1);
+    --brand-a: #22e6a8;
+    --brand-b: #18bff2;
+    --brand-c: #3b82f6;
+    --font-sans-local: "Segoe UI Variable", "PingFang SC", "Microsoft YaHei UI", "Noto Sans CJK SC", system-ui, sans-serif;
+    --font-mono-local: "Cascadia Code", "SFMono-Regular", Consolas, ui-monospace, monospace;
   }
 
   * {
@@ -31,26 +39,65 @@
   }
 
   html {
-    background: #05070A;
+    background: #040810;
     color: #F8FAFC;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    color-scheme: dark;
+    scroll-behavior: smooth;
   }
 
   body {
-    background: #05070A;
+    background: #040810;
     min-height: 100vh;
     overflow-x: hidden;
+    font-family: var(--font-sans-local);
+    text-rendering: optimizeLegibility;
+  }
+
+  button, a, input, textarea, select {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button:active:not(:disabled), a:active {
+    transform: translateY(1px);
+  }
+
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus {
+    -webkit-text-fill-color: #f8fafc;
+    -webkit-box-shadow: 0 0 0 1000px #10161d inset;
+    transition: background-color 9999s ease-out;
+  }
+
+  ::selection {
+    background: rgba(0, 214, 143, 0.3);
+    color: #fff;
+  }
+
+  :focus-visible {
+    outline: 2px solid rgba(0, 214, 143, 0.9);
+    outline-offset: 3px;
   }
 }
 
 @layer utilities {
   .glass {
-    background: rgba(255, 255, 255, 0.05);
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.022));
     backdrop-filter: blur(24px);
     -webkit-backdrop-filter: blur(24px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.085);
+    box-shadow: 0 22px 70px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  }
+
+  .glass::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background: linear-gradient(115deg, rgba(255,255,255,.045), transparent 28%, transparent 72%, rgba(14,165,233,.025));
   }
 
   .glass-strong {
@@ -70,7 +117,7 @@
 
   .numeric {
     font-variant-numeric: tabular-nums;
-    font-family: var(--font-jb-mono), "JetBrains Mono", ui-monospace, monospace;
+    font-family: var(--font-mono-local);
   }
 
   .mesh-bg {
@@ -79,8 +126,10 @@
     z-index: 0;
     pointer-events: none;
     background:
-      radial-gradient(ellipse 80% 60% at 20% 10%, rgba(0, 214, 143, 0.12) 0%, transparent 60%),
-      radial-gradient(ellipse 60% 50% at 80% 80%, rgba(14, 165, 233, 0.10) 0%, transparent 60%);
+      radial-gradient(ellipse 70% 55% at 10% 0%, rgba(34, 230, 168, 0.13) 0%, transparent 62%),
+      radial-gradient(ellipse 62% 52% at 96% 88%, rgba(24, 191, 242, 0.11) 0%, transparent 60%),
+      radial-gradient(circle at 72% 8%, rgba(59, 130, 246, 0.055), transparent 30%),
+      linear-gradient(160deg, #040810 0%, #071019 50%, #040810 100%);
   }
 
   .grid-dots {
@@ -88,8 +137,9 @@
     inset: 0;
     z-index: 0;
     pointer-events: none;
-    background-image: radial-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-    background-size: 32px 32px;
+    background-image: radial-gradient(rgba(255, 255, 255, 0.032) 1px, transparent 1px);
+    background-size: 30px 30px;
+    mask-image: linear-gradient(to bottom, black, transparent 85%);
   }
 
   .shimmer {
@@ -148,6 +198,11 @@
     background: rgba(255, 255, 255, 0.2);
   }
 
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,.12) transparent;
+  }
+
   /* 无溢出时彻底隐藏滚动条（含轨道与 thumb） */
   .scrollbar-none {
     scrollbar-width: none;
@@ -157,6 +212,43 @@
     display: none;
     width: 0;
     height: 0;
+  }
+}
+
+@layer components {
+  .page-shell {
+    @apply space-y-5 pb-5 md:space-y-6;
+  }
+
+  .section-surface {
+    @apply rounded-2xl border border-white/[0.08] bg-white/[0.035] shadow-[0_20px_64px_rgba(0,0,0,.24)] backdrop-blur-xl;
+  }
+
+  .eyebrow {
+    @apply text-[10px] font-semibold uppercase tracking-[0.18em] text-white/35;
+  }
+
+  .field-control {
+    @apply w-full rounded-xl border border-white/10 bg-white/[0.04] px-3.5 py-2.5 text-sm text-white outline-none transition placeholder:text-white/25 hover:border-white/15 focus:border-semantic-success/50 focus:bg-white/[0.06];
+  }
+}
+
+@media (max-width: 767px) {
+  .glass { backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
+  .mesh-bg {
+    background:
+      radial-gradient(circle at 10% 0%, rgba(0,214,143,.12), transparent 42%),
+      radial-gradient(circle at 100% 100%, rgba(14,165,233,.1), transparent 45%),
+      #05070a;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
 

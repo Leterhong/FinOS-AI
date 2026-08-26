@@ -36,11 +36,11 @@ export default function PrivacyPage() {
       <div className="mx-auto max-w-3xl">
         <div className="mb-8 flex items-center justify-between">
           <Link
-            href="/login"
+            href="/"
             className="inline-flex items-center gap-1.5 text-sm text-white/50 transition hover:text-white"
           >
             <ArrowLeft className="h-4 w-4" />
-            返回登录
+            返回体验
           </Link>
           <Logo size={36} />
         </div>
@@ -75,10 +75,10 @@ export default function PrivacyPage() {
 
           <div className="mt-10 border-t border-white/10 pt-6 text-center">
             <Link
-              href="/login"
+              href="/"
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-brand px-6 py-2.5 text-sm font-medium text-white shadow-glow-blue transition hover:shadow-glow-purple"
             >
-              我已了解，去登录
+              我已了解，进入 FinOS AI
             </Link>
           </div>
         </div>

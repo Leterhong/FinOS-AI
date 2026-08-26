@@ -49,7 +49,6 @@ export default function AIUsagePage() {
 
   useEffect(() => {
     if (status !== "guest") load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
   const saveQuota = async () => {

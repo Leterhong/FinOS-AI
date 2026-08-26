@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getSessionUserId } from "@/auth/session";
 import { proactiveStore } from "@/ai/proactive";
 
@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /** GET /api/ai/proactive/notifications —— 当前用户的主动通知列表 + 未读数。 */
-export async function GET(_req: NextRequest) {
+export async function GET() {
   const userId = await getSessionUserId();
   if (!userId) {
     return NextResponse.json({ error: "未登录" }, { status: 401 });
@@ -17,7 +17,7 @@ export async function GET(_req: NextRequest) {
 }
 
 /** PATCH /api/ai/proactive/notifications —— 全部标记已读。 */
-export async function PATCH(_req: NextRequest) {
+export async function PATCH() {
   const userId = await getSessionUserId();
   if (!userId) {
     return NextResponse.json({ error: "未登录" }, { status: 401 });

@@ -13,11 +13,31 @@ def test_register_success(client):
     assert resp.status_code == 200
     data = assert_envelope(resp)
     assert data["token"], "注册应返回 access token"
-    assert data["refreshToken"], "注册应返回 refresh token"
+    assert "refreshToken" not in data, "Refresh Token 不应暴露给 JavaScript"
+    assert resp.cookies.get("finos_refresh"), "注册应下发 HttpOnly Refresh Cookie"
+    assert "HttpOnly" in resp.headers.get("set-cookie", "")
     assert data["user"]["email"] == email
     assert data["user"]["profileCompleted"] is False, "新用户档案应未完成"
     assert "password" not in data["user"], "响应绝不可包含密码字段"
     assert "passwordHash" not in data["user"]
+
+
+def test_bootstrap_creates_and_restores_isolated_guest(client):
+    first = client.post(f"{API}/auth/bootstrap")
+    assert first.status_code == 200
+    first_data = first.json()["data"]
+    assert first_data["guest"] is True
+    assert first_data["user"]["name"] == "体验用户"
+    assert first_data["user"]["profileCompleted"] is True
+    assert first.cookies.get("finos_refresh")
+
+    second = client.post(f"{API}/auth/bootstrap")
+    assert second.status_code == 200
+    second_data = second.json()["data"]
+    assert second_data["user"]["id"] == first_data["user"]["id"]
+    assert second.cookies.get("finos_refresh")
+    assert "password" not in first_data["user"], "响应绝不可包含密码字段"
+    assert "passwordHash" not in first_data["user"]
 
 
 def test_register_duplicate_email_returns_409(client):
@@ -48,7 +68,9 @@ def test_login_success(client):
     resp = client.post(f"{API}/auth/login", json={"email": u["email"], "password": u["password"]})
     assert resp.status_code == 200
     data = assert_envelope(resp)
-    assert data["token"] and data["refreshToken"]
+    assert data["token"]
+    assert "refreshToken" not in data
+    assert resp.cookies.get("finos_refresh")
     assert data["user"]["id"] == u["user"]["id"]
 
 
@@ -95,7 +117,8 @@ def test_refresh_rotates_token(client, user_a):
     assert resp.status_code == 200
     data = assert_envelope(resp)
     assert data["token"], "刷新应返回新的 access token"
-    new_refresh = data["refreshToken"]
+    assert "refreshToken" not in data
+    new_refresh = resp.cookies.get("finos_refresh")
     assert new_refresh and new_refresh != old_refresh, "Refresh Token 必须轮换"
 
     # 旧 refresh 应已被吊销（一次性使用）

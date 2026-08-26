@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { FinancialProfile } from "@/data/types";
-import { computeCashFlow, computeRiskMetrics } from "@/scenario/scenario-engine";
+import { computeCashFlow } from "@/scenario/scenario-engine";
 import type { TwinSnapshot } from "@/twin/engine";
 import type { FinancialAlert } from "./types";
 
@@ -42,7 +42,6 @@ export function detectFinancialEvents(
   const alerts: FinancialAlert[] = [];
   const now = Date.now();
   const cf = computeCashFlow(profile);
-  const risk = computeRiskMetrics(profile);
   const emergencyMonths = cf.expenses > 0 ? profile.cashSavings / cf.expenses : 0;
 
   // ── 1) 收入下降（变化检测） ──

@@ -66,8 +66,10 @@ class SecurityMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
-        ip = request.headers.get("x-forwarded-for", "").split(",", 1)[0].strip()
-        ip = ip or (request.client.host if request.client else "unknown")
+        peer_ip = request.client.host if request.client else "unknown"
+        forwarded = request.headers.get("x-forwarded-for", "").split(",", 1)[0].strip()
+        trusted = get_settings().trusted_proxy_ip_set
+        ip = forwarded if peer_ip in trusted and forwarded else peer_ip
 
         # --- 频率限制 ---
         now = time.monotonic()

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from backend.core import get_current_user, ok
 from backend.core.response import fail
+from backend.core.uploads import UploadTooLarge, read_upload_limited
 from backend.database import get_db
 from backend.multimodal import service
 from backend.multimodal.constants import DISCLAIMER, MODALITIES, WELCOME_MESSAGE
@@ -24,6 +25,7 @@ from backend.security.audit import write_audit
 from backend.user.models import User
 
 router = APIRouter(prefix="/multimodal", tags=["multimodal"])
+MAX_UPLOAD_SIZE = 25 * 1024 * 1024
 
 
 @router.get("/capabilities")
@@ -79,7 +81,10 @@ async def upload(
 ):
     """统一上传口：图片 / 文件 / 音频自动判类型并分派。"""
     filename = file.filename or "unnamed"
-    content = await file.read()
+    try:
+        content = await read_upload_limited(file, MAX_UPLOAD_SIZE)
+    except UploadTooLarge as exc:
+        return fail(str(exc), status_code=413)
     mod = modality or detect_modality(filename, file.content_type or "", has_file=True)
     if mod not in MODALITIES:
         return fail(f"不支持的输入类型：{mod}")

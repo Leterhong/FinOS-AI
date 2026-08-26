@@ -4,7 +4,7 @@
  * 前端改造原则：
  * - 核心财富数据统一来自后端接口，禁止读取本地 mock；
  * - Zustand 仅保存 UI 状态（主题/页面状态），财富数据以本客户端为唯一通道；
- * - JWT 保存于 localStorage（finos_token），自动附加 Authorization 头；
+ * - Access Token 仅驻留内存；Refresh Token 由后端放入 HttpOnly Cookie；
  * - 后端统一返回格式 { success, data, message } / { success:false, error }。
  *
  * 用法：
@@ -15,11 +15,19 @@
 // Docker 部署时 NEXT_PUBLIC_BACKEND_URL 留空（或同源 /api），由 nginx 把 /api 转发到 api 服务；
 // 此时 BACKEND_URL 为空字符串，fetch(`${BACKEND_URL}/api${path}`) 变成同源 `/api/...`。
 // 用 ?? 而非 ||：空字符串是合法的「同源」意图，不能回退到 localhost:8300（否则跨域/CORS 失败）。
-// 开发环境不设置该变量时，undefined ?? "http://localhost:8300" 回退到后端直连。
-const BACKEND_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL?.replace(/\/$/, "") ?? "http://localhost:8300";
+// 开发环境不设置该变量时，直接回退到后端 IPv4 地址。
+const configuredBackend =
+  process.env.NEXT_PUBLIC_BACKEND_URL?.replace(/\/$/, "") ?? "http://127.0.0.1:8300";
 
-const TOKEN_KEY = "finos_token";
+// Windows 上 Node 可能把 localhost 优先解析为 ::1，而后端仅监听 IPv4，
+// 从而让服务端代理接口出现 502，并进一步触发整站 401 级联。
+const BACKEND_URL =
+  typeof window === "undefined"
+    ? configuredBackend.replace(/^http:\/\/localhost(?=:\d+|$)/, "http://127.0.0.1")
+    : configuredBackend;
+
+let accessToken: string | null = null;
+let refreshInFlight: Promise<boolean> | null = null;
 
 export interface ApiEnvelope<T> {
   success: boolean;
@@ -39,14 +47,11 @@ export class BackendApiError extends Error {
 }
 
 function getToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(TOKEN_KEY);
+  return accessToken;
 }
 
 export function setBackendToken(token: string | null): void {
-  if (typeof window === "undefined") return;
-  if (token) window.localStorage.setItem(TOKEN_KEY, token);
-  else window.localStorage.removeItem(TOKEN_KEY);
+  accessToken = token;
 }
 
 /** 是否已持有后端鉴权 token（SSR / 未登录态返回 false）。供路由守卫与请求前置判断复用。 */
@@ -54,10 +59,34 @@ export function hasBackendToken(): boolean {
   return !!getToken();
 }
 
+async function refreshAccessToken(): Promise<boolean> {
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = (async () => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/auth/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+        credentials: "include",
+      });
+      const json = (await res.json().catch(() => null)) as ApiEnvelope<{ token: string }> | null;
+      if (!res.ok || !json?.success || !json.data?.token) return false;
+      accessToken = json.data.token;
+      return true;
+    } catch {
+      return false;
+    } finally {
+      refreshInFlight = null;
+    }
+  })();
+  return refreshInFlight;
+}
+
 async function request<T>(
   method: "GET" | "POST" | "PUT" | "DELETE",
   path: string,
   body?: unknown,
+  retry = true,
 ): Promise<T> {
   const headers: Record<string, string> = {};
   const token = getToken();
@@ -71,13 +100,19 @@ async function request<T>(
     payload = JSON.stringify(body);
   }
 
-  const res = await fetch(`${BACKEND_URL}/api${path}`, { method, headers, body: payload });
+  const res = await fetch(`${BACKEND_URL}/api${path}`, {
+    method,
+    headers,
+    body: payload,
+    credentials: "include",
+  });
   const json = (await res.json().catch(() => null)) as ApiEnvelope<T> | null;
 
   if (!json) throw new BackendApiError("后端响应格式异常", res.status);
   if (!json.success) {
-    if (res.status === 401 && typeof window !== "undefined") {
-      setBackendToken(null); // 凭证过期，清理本地 token
+    if (res.status === 401 && retry && !path.startsWith("/auth/")) {
+      setBackendToken(null);
+      if (await refreshAccessToken()) return request<T>(method, path, body, false);
     }
     throw new BackendApiError(json.error || "请求失败", res.status);
   }
@@ -92,6 +127,10 @@ export const backendApi = {
 
   /** 登录/注册后保存 token */
   setToken: setBackendToken,
+  refreshSession: refreshAccessToken,
+
+  /** 免登录启动：恢复现有会话，首次访问则创建隔离访客空间。 */
+  bootstrapSession: <T = unknown>() => request<T>("POST", "/auth/bootstrap", undefined, false),
 
   /** 文件上传（需求十：文件绑定 user_id 存后端） */
   upload: <T>(path: string, file: File) => {

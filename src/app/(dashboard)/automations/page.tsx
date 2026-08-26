@@ -75,7 +75,6 @@ import type {
   AutomationRule,
   AutomationSchedule,
   AutomationWorkflow,
-  AutomationWebhook,
   AutomationPlan,
   AutomationAction,
   WorkflowTemplate,
@@ -92,12 +91,6 @@ const SEVERITY_LABEL: Record<Severity, string> = {
   high: "重要",
   medium: "一般",
   low: "提示",
-};
-const STATUS_LABEL: Record<ActionStatus, string> = {
-  pending: "待处理",
-  done: "已完成",
-  dismissed: "已忽略",
-  deferred: "已延期",
 };
 const STATUS_STYLE: Record<ActionStatus, string> = {
   pending: "bg-sky-500/15 text-sky-300 border-sky-500/30",

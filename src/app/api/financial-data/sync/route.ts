@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
  * POST /api/financial-data/sync
  * userId 取自会话。数据刷新：用最新数据重建 Financial Twin 并返回摘要。
  */
-export async function POST(_req: Request) {
+export async function POST() {
   try {
     const userId = await getSessionUserId();
     if (!userId) {

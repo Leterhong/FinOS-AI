@@ -717,7 +717,6 @@ function ToggleRow({
 }
 
 function LifeEventSimulator({ profileName }: { profileName: string }) {
-  const profile = useFinancialStore((s) => s.profile);
   const [type, setType] = useState<LifeEventType>("buy-house");
   const [params, setParams] = useState<Record<string, string>>({});
   const [simulating, setSimulating] = useState(false);

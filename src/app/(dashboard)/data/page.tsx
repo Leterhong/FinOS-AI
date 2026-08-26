@@ -79,7 +79,6 @@ export default function DataCenterPage() {
   const dataHoldings = useFinancialStore((s) => s.dataHoldings);
   const insights = useFinancialStore((s) => s.financialInsights);
   const isImportingData = useFinancialStore((s) => s.isImportingData);
-  const isLoadingInsights = useFinancialStore((s) => s.isLoadingInsights);
   const lastImportResult = useFinancialStore((s) => s.lastImportResult);
   const importData = useFinancialStore((s) => s.importData);
   const loadFinancialData = useFinancialStore((s) => s.loadFinancialData);

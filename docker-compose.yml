@@ -103,13 +103,13 @@ services:
       dockerfile: deploy/docker/Dockerfile.web
       args:
         # 浏览器侧通过 nginx 同源访问 /api，避免跨域与证书问题
-        NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:-/api}
+        NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:-}
     image: finos-ai/web:latest
     container_name: finos-web
     restart: unless-stopped
     environment:
       NODE_ENV: production
-      NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:-/api}
+      NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:-}
       # 服务端渲染时容器内直连后端
       BACKEND_INTERNAL_URL: http://api:8300
       # 前端侧加密密钥。NODE_ENV=production 下缺失会直接抛错拒绝服务

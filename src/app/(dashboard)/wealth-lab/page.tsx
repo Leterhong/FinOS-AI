@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import PageTransition from "@/components/dashboard/PageTransition";
 import GlassCard from "@/components/ui/GlassCard";
@@ -8,7 +8,7 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import HealthRing from "@/components/charts/HealthRing";
 import ScoreRadar from "@/components/intelligence/ScoreRadar";
 import WealthProjectionChart from "@/components/intelligence/WealthProjectionChart";
-import { cn, formatCurrency, formatCurrencyFull, formatPercent } from "@/lib/utils";
+import { cn, formatCurrency, formatPercent } from "@/lib/utils";
 import {
   useWealthPredict,
   useWealthScore,
@@ -26,18 +26,15 @@ import type {
   WorkflowResult,
   Explanation,
   ImpactMap,
-  WealthDimension,
 } from "@/types/intelligence";
 import {
   FlaskConical,
   Radar,
   TrendingUp,
-  TrendingDown,
   ArrowRight,
   Sparkles,
   AlertTriangle,
   Target,
-  CalendarClock,
   Wallet,
   ShieldCheck,
   GitCompareArrows,
@@ -375,6 +372,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 function KeyMetrics({ predict, score }: { predict?: WealthPredict; score?: WealthScore }) {
+  void score;
   const ret = predict?.retirement;
   const goal = predict?.goal;
   const cf = predict?.cashflow;

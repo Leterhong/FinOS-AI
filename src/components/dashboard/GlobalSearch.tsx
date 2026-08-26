@@ -149,7 +149,26 @@ export default function GlobalSearch() {
   let flatIndex = -1;
 
   return (
-    <div className="relative hidden min-w-0 flex-1 justify-center md:flex">
+    <>
+      <button
+        type="button"
+        aria-label="打开全局搜索"
+        onClick={() => {
+          setOpen(true);
+          window.setTimeout(() => inputRef.current?.focus(), 0);
+        }}
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-white/60 transition hover:bg-white/[0.08] hover:text-white md:hidden"
+      >
+        <Search className="h-4 w-4" />
+      </button>
+      <div
+        className={cn(
+          "min-w-0 flex-1 justify-center md:relative md:flex",
+          open
+            ? "fixed inset-x-3 top-16 z-[60] flex"
+            : "hidden"
+        )}
+      >
       <div className="relative w-full max-w-md">
         <div
           className={cn(
@@ -287,6 +306,7 @@ export default function GlobalSearch() {
           )}
         </AnimatePresence>
       </div>
-    </div>
+      </div>
+    </>
   );
 }

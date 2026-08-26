@@ -327,7 +327,7 @@ export default function DigitalTwinPage() {
               </div>
               {!hasBackendToken() ? (
                 <p className="mt-3 text-xs text-white/30">
-                  未检测到后端 token，后端 Twin 通道未启用（本地分身仍正常）。登录后此处显示后端权威快照。
+                  体验会话正在初始化；本地分身仍可正常使用，连接完成后会显示后端权威快照。
                 </p>
               ) : twinStatus.isLoading ? (
                 <p className="mt-3 text-xs text-white/30">连接后端 Twin 引擎…</p>

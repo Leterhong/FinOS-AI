@@ -11,11 +11,11 @@ from __future__ import annotations
 import json
 import urllib.request
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Literal
 from urllib.error import URLError
 
 from fastapi import APIRouter, Body, Depends, Query  # noqa: F401
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -183,9 +183,9 @@ class WorkflowUpdate(BaseModel):
 class WebhookCreate(BaseModel):
     name: str
     url: str
-    method: str = "POST"
-    headers: dict = {}
-    events: list[str] = []
+    method: Literal["POST", "PUT", "PATCH"] = "POST"
+    headers: dict = Field(default_factory=dict)
+    events: list[str] = Field(default_factory=list)
     enabled: bool = True
 
 
@@ -498,8 +498,8 @@ def run_workflow(workflow_id: str, user: User = Depends(get_current_user), db: S
         return fail("工作流不存在", status_code=404)
     try:
         result = workflow_svc.run_workflow(db, user, wf, None, build_context(db, user))
-    except Exception as exc:  # noqa: BLE001
-        return fail(f"工作流执行失败：{exc}", status_code=500)
+    except Exception:  # noqa: BLE001
+        return fail("工作流执行失败，请稍后重试", status_code=500)
     return ok(result, "已执行工作流")
 
 
@@ -518,10 +518,15 @@ def list_webhooks(user: User = Depends(get_current_user), db: Session = Depends(
 
 @router.post("/webhooks")
 def create_webhook(body: WebhookCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from backend.security.network import UnsafeOutboundUrl, validate_public_http_url
+    try:
+        safe_url = validate_public_http_url(body.url)
+    except UnsafeOutboundUrl as exc:
+        return fail(str(exc))
     wh = AutomationWebhook(
         user_id=user.id,
         name=body.name[:120],
-        url=body.url,
+        url=safe_url,
         method=body.method,
         enabled=body.enabled,
     )
@@ -554,12 +559,13 @@ def test_webhook(webhook_id: str, user: User = Depends(get_current_user), db: Se
     status = None
     error = None
     try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        from backend.security.network import open_public_url
+        with open_public_url(req, timeout=10) as resp:
             status = resp.status
     except URLError as e:
         error = str(getattr(e, "reason", e))
     except Exception as e:  # noqa: BLE001
-        error = str(e)
+        error = type(e).__name__
     wh.last_called_at = datetime.now(timezone.utc)
     wh.last_status = status
     wh.call_count = (wh.call_count or 0) + 1

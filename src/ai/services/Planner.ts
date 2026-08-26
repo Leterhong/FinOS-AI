@@ -85,6 +85,7 @@ class Planner {
   }
 
   private planWithRules(goal: RecognizedGoal, _userQuestion: string): AITask[] {
+    void _userQuestion;
     const taskDefs = goalTaskMap[goal.type] ?? goalTaskMap["general-question"];
     const now = Date.now();
 

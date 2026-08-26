@@ -25,6 +25,6 @@ class AnalyzeIn(BaseModel):
 def cfo_analyze(body: AnalyzeIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
         result = analyze(db, user, body.question)
-    except Exception as e:  # noqa: BLE001
-        return fail(f"CFO 分析失败：{e}", status_code=500)
+    except Exception:  # noqa: BLE001
+        return fail("CFO 分析失败，请稍后重试", status_code=500)
     return ok(result)

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { profileManager } from "@/financial-profile";
 import { computeTwin } from "@/twin/engine";
 import { generateAdvisorAlerts } from "@/twin/advisor";
@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
  *  - 画像不存在时返回 200 + { exists:false, profile:null }（新用户 → 空状态），
  *    不再返回 404，避免浏览器控制台报错。
  */
-export async function GET(_req: NextRequest) {
+export async function GET() {
   const userId = await getSessionUserId();
   if (!userId) {
     return NextResponse.json({ error: "未登录" }, { status: 401 });

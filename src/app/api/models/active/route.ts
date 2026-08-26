@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getActiveModelSummary } from "@/ai/model-center/models/resolver";
 import { getModelHealth } from "@/ai/model-center/health";
 import { getSessionUserId } from "@/auth/session";
@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /** GET /api/models/active —— 当前用户激活模型摘要 + 健康监控（Chat 徽标 / Dashboard AI Brain）。 */
-export async function GET(_req: NextRequest) {
+export async function GET() {
   const userId = await getSessionUserId();
   if (!userId) {
     return NextResponse.json({ error: "未登录" }, { status: 401 });

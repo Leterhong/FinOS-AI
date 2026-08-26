@@ -78,7 +78,7 @@ def _unique_email(tag: str) -> str:
 
 
 def register_user(client: TestClient, email: str | None = None, password: str = "Test1234!") -> dict[str, Any]:
-    """注册并返回 ``{email, password, token, refreshToken, user, headers}``。"""
+    """注册并返回测试身份；Refresh Token 仅从 HttpOnly Cookie 读取。"""
     email = email or _unique_email("user")
     resp = client.post(f"{API}/auth/register", json={"email": email, "password": password})
     assert resp.status_code == 200, f"注册失败: {resp.status_code} {resp.text}"
@@ -89,7 +89,7 @@ def register_user(client: TestClient, email: str | None = None, password: str = 
         "email": email,
         "password": password,
         "token": data["token"],
-        "refreshToken": data.get("refreshToken"),
+        "refreshToken": resp.cookies.get("finos_refresh"),
         "user": data["user"],
         "headers": {"Authorization": f"Bearer {data['token']}"},
     }

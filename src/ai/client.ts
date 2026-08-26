@@ -35,8 +35,7 @@ export interface ChatRunInput {
 
 /** 解析 SSE 文本流，逐条产出 WorkflowEvent。 */
 async function* readSSE(
-  res: Response,
-  signal?: AbortSignal
+  res: Response
 ): AsyncGenerator<WorkflowEvent> {
   if (!res.body) throw new Error("AI 响应没有可读的数据流");
   const reader = res.body.getReader();
@@ -87,7 +86,7 @@ async function* streamWorkflow(
     }
     throw new Error(message);
   }
-  yield* readSSE(res, signal);
+  yield* readSSE(res);
 }
 
 /** 运行 /api/ai/workflow：规划器 → 多智能体 → 总结，流式返回事件。 */

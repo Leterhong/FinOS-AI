@@ -10,7 +10,6 @@ import type {
   FinancialMemoryEntry,
   DecisionMemoryEntry,
   ExecutionMemoryEntry,
-  ExecutionMemoryKind,
   HistoryItem,
   LegacyMemoryEntry,
 } from "./types";

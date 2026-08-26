@@ -5,7 +5,7 @@ import json
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from backend.database.base import Base
@@ -40,15 +40,29 @@ def get_task(db: Session, task_id: str) -> Optional[AsyncTask]:
 
 
 def claim_pending(db: Session, limit: int = 10) -> list[AsyncTask]:
-    """原子地认领一批待处理任务（SQLite 下用 status 过滤即可）。"""
-    rows = db.execute(
-        select(AsyncTask).where(AsyncTask.status == "pending").order_by(AsyncTask.created_at).limit(limit)
-    ).scalars().all()
-    for row in rows:
-        row.status = "running"
-        row.started_at = _utcnow()
+    """以条件更新认领任务，避免多 Worker 对同一任务重复执行。"""
+    candidate_ids = list(
+        db.scalars(
+            select(AsyncTask.id)
+            .where(AsyncTask.status == "pending")
+            .order_by(AsyncTask.created_at)
+            .limit(limit)
+        )
+    )
+    claimed_ids: list[str] = []
+    started_at = _utcnow()
+    for task_id in candidate_ids:
+        result = db.execute(
+            update(AsyncTask)
+            .where(AsyncTask.id == task_id, AsyncTask.status == "pending")
+            .values(status="running", started_at=started_at)
+        )
+        if result.rowcount == 1:
+            claimed_ids.append(task_id)
     db.commit()
-    return rows
+    if not claimed_ids:
+        return []
+    return list(db.scalars(select(AsyncTask).where(AsyncTask.id.in_(claimed_ids))))
 
 
 def mark_completed(db: Session, task: AsyncTask, result: Any) -> None:

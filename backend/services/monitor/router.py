@@ -20,6 +20,6 @@ router = APIRouter(prefix="/monitor", tags=["monitor"])
 def monitor_run(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
         result = run(db, user)
-    except Exception as e:  # noqa: BLE001
-        return fail(f"监控失败：{e}", status_code=500)
+    except Exception:  # noqa: BLE001
+        return fail("监控失败，请稍后重试", status_code=500)
     return ok(result)

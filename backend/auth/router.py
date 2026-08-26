@@ -2,6 +2,7 @@
 
 POST /api/auth/register — bcrypt 加密入库，返回 access + refresh Token
 POST /api/auth/login    — 校验密码，返回 access + refresh Token
+POST /api/auth/bootstrap — 自动恢复会话或创建隔离访客空间
 POST /api/auth/refresh  — 用 Refresh Token 轮换出新的 access + refresh
 POST /api/auth/logout   — 吊销当前 Refresh Token
 GET  /api/auth/csrf     — 下发双提交 CSRF Token（cookie + 响应体）
@@ -13,12 +14,13 @@ import re
 import secrets
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.auth.models import RefreshToken
+from backend.config import get_settings
 from backend.core import get_current_user, ok
 from backend.core.logging_config import get_logger, log_event
 from backend.core.response import fail
@@ -37,9 +39,11 @@ from backend.user.models import User
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = get_logger("finos.auth")
+settings = get_settings()
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 CSRF_COOKIE = "finos_csrf"
+REFRESH_COOKIE = "finos_refresh"
 
 
 class RegisterIn(BaseModel):
@@ -62,7 +66,7 @@ def _user_public(u: User, db: Session) -> dict:
     return {
         "id": u.id,
         "email": u.email,
-        "name": u.email.split("@", 1)[0],
+        "name": "体验用户" if u.email.endswith("@guest.finos.local") else u.email.split("@", 1)[0],
         "avatar": u.avatar,
         "avatarUrl": u.avatar,
         "profileCompleted": has_profile or has_assets,
@@ -78,8 +82,103 @@ def _issue_tokens(db: Session, user: User) -> dict:
     return {"token": access, "refreshToken": refresh}
 
 
+def _secure_request(request: Request) -> bool:
+    return request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
+
+
+def _set_refresh_cookie(response: Response, token: str, request: Request) -> None:
+    response.set_cookie(
+        REFRESH_COOKIE,
+        token,
+        max_age=60 * 60 * 24 * settings.jwt_refresh_expire_days,
+        httponly=True,
+        secure=_secure_request(request),
+        samesite="lax",
+        path="/api/auth",
+    )
+
+
+def _active_refresh_user(raw: str, db: Session) -> tuple[User, RefreshToken] | None:
+    """返回仍有效的刷新会话；bootstrap 使用它避免把无 cookie 当作 401。"""
+    if not raw:
+        return None
+    payload = decode_refresh_token(raw)
+    if not payload or not payload.get("jti"):
+        return None
+    record = db.scalar(select(RefreshToken).where(RefreshToken.jti == payload["jti"]))
+    if record is None or record.revoked:
+        return None
+    expires_at = record.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at < datetime.now(timezone.utc):
+        record.revoked = True
+        db.add(record)
+        db.commit()
+        return None
+    user = db.get(User, record.user_id)
+    return (user, record) if user is not None else None
+
+
+def _seed_guest_financial_data(db: Session, user: User) -> None:
+    """为全新访客提供可探索的示例数据；数据仍按随机 user_id 独立存储。"""
+    db.add(
+        FinancialProfile(
+            user_id=user.id,
+            age=31,
+            income=32_000,
+            expense=14_500,
+            risk_level="balanced",
+            goal="2038 年实现财务自由",
+        )
+    )
+    db.add_all(
+        [
+            Asset(user_id=user.id, type="cash", name="现金与应急储备", amount=186_000, source="demo"),
+            Asset(user_id=user.id, type="fund", name="指数基金组合", amount=428_000, source="demo"),
+            Asset(user_id=user.id, type="stock", name="长期权益组合", amount=236_000, source="demo"),
+            Asset(user_id=user.id, type="bond", name="稳健债券配置", amount=120_000, source="demo"),
+        ]
+    )
+
+
+@router.post("/bootstrap")
+def bootstrap(request: Request, response: Response, db: Session = Depends(get_db)):
+    """免登录入口：恢复现有刷新会话，或为当前浏览器创建隔离访客空间。
+
+    与直接调用 ``/refresh`` 不同，本端点在首次访问时始终返回 200，避免浏览器
+    控制台出现预期内的 401；现有真实账户的 refresh cookie 仍会被正常恢复。
+    """
+    raw = (request.cookies.get(REFRESH_COOKIE) or "").strip()
+    active = _active_refresh_user(raw, db)
+    if active:
+        user, record = active
+        record.revoked = True
+        db.add(record)
+        tokens = _issue_tokens(db, user)
+        _set_refresh_cookie(response, tokens["refreshToken"], request)
+        db.commit()
+        return ok({"token": tokens["token"], "user": _user_public(user, db), "guest": user.email.endswith("@guest.finos.local")})
+
+    guest_id = secrets.token_hex(12)
+    user = User(
+        email=f"guest-{guest_id}@guest.finos.local",
+        password_hash=hash_password(secrets.token_urlsafe(32)),
+    )
+    db.add(user)
+    db.flush()
+    _seed_guest_financial_data(db, user)
+    db.commit()
+    db.refresh(user)
+    tokens = _issue_tokens(db, user)
+    _set_refresh_cookie(response, tokens["refreshToken"], request)
+    db.commit()
+    log_event(logger, "info", "auth.bootstrap.guest", user_id=user.id, ip=client_ip(request))
+    return ok({"token": tokens["token"], "user": _user_public(user, db), "guest": True}, "体验空间已就绪")
+
+
 @router.post("/register")
-def register(body: RegisterIn, request: Request, db: Session = Depends(get_db)):
+def register(body: RegisterIn, request: Request, response: Response, db: Session = Depends(get_db)):
     email = body.email.strip().lower()
     if not EMAIL_RE.match(email):
         return fail("邮箱格式不正确")
@@ -94,13 +193,14 @@ def register(body: RegisterIn, request: Request, db: Session = Depends(get_db)):
     db.refresh(user)
     write_audit(db, user_id=user.id, action="auth.register", resource="account", request=request)
     tokens = _issue_tokens(db, user)
+    _set_refresh_cookie(response, tokens["refreshToken"], request)
     db.commit()
     log_event(logger, "info", "auth.register.ok", user_id=user.id, ip=client_ip(request))
-    return ok({**tokens, "user": _user_public(user, db)}, "注册成功，欢迎创建你的财富数字分身")
+    return ok({"token": tokens["token"], "user": _user_public(user, db)}, "注册成功，欢迎创建你的财富数字分身")
 
 
 @router.post("/login")
-def login(body: LoginIn, request: Request, db: Session = Depends(get_db)):
+def login(body: LoginIn, request: Request, response: Response, db: Session = Depends(get_db)):
     email = body.email.strip().lower()
     user = db.scalar(select(User).where(User.email == email))
     if user is None or not verify_password(body.password, user.password_hash):
@@ -124,13 +224,14 @@ def login(body: LoginIn, request: Request, db: Session = Depends(get_db)):
 
     write_audit(db, user_id=user.id, action="auth.login", resource="account", request=request)
     tokens = _issue_tokens(db, user)
+    _set_refresh_cookie(response, tokens["refreshToken"], request)
     db.commit()
     log_event(logger, "info", "auth.login.ok", user_id=user.id, ip=client_ip(request))
-    return ok({**tokens, "user": _user_public(user, db)}, "登录成功")
+    return ok({"token": tokens["token"], "user": _user_public(user, db)}, "登录成功")
 
 
 @router.post("/refresh")
-def refresh(body: RefreshIn, request: Request, db: Session = Depends(get_db)):
+def refresh(body: RefreshIn, request: Request, response: Response, db: Session = Depends(get_db)):
     """Refresh Token 轮换：校验 → 吊销旧 jti → 签发新 access+refresh。"""
     raw = (body.refreshToken or request.cookies.get("finos_refresh") or "").strip()
     if not raw:
@@ -171,13 +272,14 @@ def refresh(body: RefreshIn, request: Request, db: Session = Depends(get_db)):
     record.revoked = True
     db.add(record)
     tokens = _issue_tokens(db, user)
+    _set_refresh_cookie(response, tokens["refreshToken"], request)
     db.commit()
     log_event(logger, "info", "auth.refresh.ok", user_id=user.id, ip=client_ip(request))
-    return ok({**tokens, "user": _user_public(user, db)}, "令牌已刷新")
+    return ok({"token": tokens["token"], "user": _user_public(user, db)}, "令牌已刷新")
 
 
 @router.post("/logout")
-def logout(body: RefreshIn, request: Request, db: Session = Depends(get_db)):
+def logout(body: RefreshIn, request: Request, response: Response, db: Session = Depends(get_db)):
     """退出登录：吊销传入的 Refresh Token（幂等，无 token 也返回成功）。"""
     raw = (body.refreshToken or request.cookies.get("finos_refresh") or "").strip()
     if raw:
@@ -190,6 +292,7 @@ def logout(body: RefreshIn, request: Request, db: Session = Depends(get_db)):
                 write_audit(db, user_id=record.user_id, action="auth.logout", resource="account", request=request)
                 db.commit()
                 log_event(logger, "info", "auth.logout.ok", user_id=record.user_id, ip=client_ip(request))
+    response.delete_cookie(REFRESH_COOKIE, path="/api/auth", secure=_secure_request(request), samesite="lax")
     return ok({"loggedOut": True}, "已退出登录")
 
 

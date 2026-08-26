@@ -37,19 +37,13 @@ function fmt(n: number): string {
  * 在沙箱/离线环境都能稳定产出。未来可替换为 LLM 版本而不改调用方。
  */
 export function generateActionPlan(input: ActionAgentInput): ActionPlanJSON {
-  const { goal, goalType, twin, profile } = input;
+  const { goal, twin, profile } = input;
   const riskLevel = input.preference?.riskLevel ?? profile.riskLevel ?? "moderate";
 
   const monthlyExpenses = profile.monthlyExpenses || 1;
+  const monthlyIncome = profile.monthlySalary || 1;
   const emergencyMonths =
     profile.cashSavings > 0 ? profile.cashSavings / monthlyExpenses : 0;
-  const monthlyIncome = profile.monthlySalary || 1;
-  const savingsRate =
-    monthlyIncome > 0
-      ? ((monthlyIncome - monthlyExpenses - (profile.monthlyInvestment || 0)) /
-          monthlyIncome) *
-        100
-      : 0;
 
   const onTrack = twin.onTrack;
   const gap = twin.retireGapYears; // 正=提前，负=延期

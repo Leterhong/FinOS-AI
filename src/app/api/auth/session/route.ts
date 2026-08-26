@@ -13,9 +13,13 @@ export const dynamic = "force-dynamic";
  * 使 middleware 的登录判定与真实登录态一致，避免登出后跳登录页被弹回的死循环。
  */
 
-const BACKEND_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL?.replace(/\/$/, "") ||
-  "http://localhost:8300";
+const publicBackendUrl =
+  process.env.NEXT_PUBLIC_BACKEND_URL?.replace(/\/$/, "") || "http://127.0.0.1:8300";
+// Node 在部分 Windows 环境会把 localhost 优先解析为 ::1，而后端只监听 127.0.0.1，
+// 从而产生间歇性 502。服务端调用允许单独配置内网地址，本地默认强制 IPv4。
+const BACKEND_URL = (
+  process.env.BACKEND_INTERNAL_URL?.replace(/\/$/, "") || publicBackendUrl
+).replace(/^http:\/\/localhost(?=:\d+)/, "http://127.0.0.1");
 
 export async function POST(req: NextRequest) {
   const auth = req.headers.get("authorization");
@@ -42,7 +46,8 @@ export async function POST(req: NextRequest) {
 
     await setSession({ userId: user.id, email: user.email }, isSecureContext(req));
     return NextResponse.json({ ok: true });
-  } catch {
-    return NextResponse.json({ ok: false, error: "backend error" }, { status: 502 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "backend unavailable";
+    return NextResponse.json({ ok: false, error: message }, { status: 502 });
   }
 }

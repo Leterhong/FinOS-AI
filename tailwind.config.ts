@@ -36,8 +36,8 @@ const config: Config = {
         },
       },
       fontFamily: {
-        sans: ["var(--font-inter)", "system-ui", "sans-serif"],
-        mono: ["var(--font-jb-mono)", "JetBrains Mono", "monospace"],
+        sans: ["var(--font-sans-local)"],
+        mono: ["var(--font-mono-local)"],
       },
       animation: {
         shimmer: "shimmer 2.5s ease-in-out infinite",

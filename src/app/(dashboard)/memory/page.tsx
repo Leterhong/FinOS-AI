@@ -82,7 +82,10 @@ export default function MemoryCenterPage() {
   const updateM = useUpdateMemory();
   const deleteM = useDeleteMemory();
 
-  const groups: Record<string, MemoryItem[]> = data?.groups ?? {};
+  const groups = useMemo<Record<string, MemoryItem[]>>(
+    () => data?.groups ?? {},
+    [data?.groups]
+  );
   const labels: Record<string, string> = data?.labels ?? {};
 
   const orderedKinds = useMemo<string[]>(() => {

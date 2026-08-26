@@ -211,7 +211,7 @@ const REQUEST_LABEL: Record<string, string> = {
 export default function UsageCenterPage() {
   const { data, isLoading, isError } = useAiUsage();
 
-  const rows: AiUsageRow[] = data?.usage ?? [];
+  const rows = useMemo<AiUsageRow[]>(() => data?.usage ?? [], [data?.usage]);
   const totals = data?.totals;
 
   // 按模型聚合（跨 requestType 求和），用于柱状图与排行

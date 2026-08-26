@@ -5,17 +5,17 @@ import Logo from "@/components/brand/Logo";
 
 /**
  * 全局初始化 Loading 页（Phase 5.7）。
- * 应用初始化 / 路由切换时展示品牌 Logo 渐变动画 + "Building your AI CFO..."。
+ * 企业研判空间初始化 / 路由切换时展示轻量品牌反馈。
  */
 export default function Loading() {
   return (
-    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-7 bg-[#070a14]">
+    <div className="flex min-h-[65vh] flex-col items-center justify-center gap-5">
       <motion.div
         initial={{ opacity: 0, scale: 0.82, filter: "blur(10px)" }}
         animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
         transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
       >
-        <Logo size={104} />
+        <Logo size={72} />
       </motion.div>
 
       <motion.div
@@ -25,15 +25,15 @@ export default function Loading() {
         className="text-center"
       >
         <p className="text-lg font-semibold tracking-tight text-white/90">
-          Building your AI CFO
+          正在连接企业研判空间
         </p>
         <p className="mt-1.5 text-sm text-white/40">
-          正在为你构建专属的 AI 财富管家…
+          正在装载资料、规则与风险上下文…
         </p>
       </motion.div>
 
       <motion.div
-        className="h-1 w-44 overflow-hidden rounded-full bg-white/10"
+        className="h-0.5 w-36 overflow-hidden rounded-full bg-white/10"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.55 }}

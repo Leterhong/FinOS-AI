@@ -67,6 +67,7 @@ __pycache__/
 *$py.class
 *.so
 .venv/
+.venv*/
 venv/
 env/
 ENV/

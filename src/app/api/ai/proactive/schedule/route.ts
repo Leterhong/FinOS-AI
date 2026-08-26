@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getSessionUserId } from "@/auth/session";
 import { requireFinancialContext, isNeedProfile } from "@/ai/guard";
 import { isEmptyProfile } from "@/data/types";
@@ -15,7 +15,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /** GET /api/ai/proactive/schedule —— 查询每日 / 每周任务到期状态。 */
-export async function GET(_req: NextRequest) {
+export async function GET() {
   const userId = await getSessionUserId();
   if (!userId) {
     return NextResponse.json({ error: "未登录" }, { status: 401 });
@@ -29,7 +29,7 @@ export async function GET(_req: NextRequest) {
  * 每周报告到期 → 运行 weekly 体检并生成每周财富报告。
  * 无到期任务时直接返回（不运行、不调 LLM）。
  */
-export async function POST(_req: NextRequest) {
+export async function POST() {
   const ctx = await requireFinancialContext();
   if (isNeedProfile(ctx)) return ctx;
 

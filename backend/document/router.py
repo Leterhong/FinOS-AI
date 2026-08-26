@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from backend.config import UPLOAD_DIR
 from backend.core import get_current_user, ok
 from backend.core.response import fail
+from backend.core.uploads import UploadTooLarge, read_upload_limited
 from backend.database import get_db
 from backend.document.models import Document
 from backend.security.audit import write_audit
@@ -35,9 +36,10 @@ async def upload(file: UploadFile, request: Request, user: User = Depends(get_cu
     ext = Path(filename).suffix.lower()
     if ext not in ALLOWED_EXT:
         return fail(f"不支持的文件类型：{ext}")
-    content = await file.read()
-    if len(content) > MAX_SIZE:
-        return fail("文件超过 20MB 上限")
+    try:
+        content = await read_upload_limited(file, MAX_SIZE)
+    except UploadTooLarge as exc:
+        return fail(str(exc), status_code=413)
 
     # 按用户隔离目录存储，文件名用 UUID 防穿越/冲突
     user_dir = UPLOAD_DIR / user.id

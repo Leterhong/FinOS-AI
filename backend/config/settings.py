@@ -68,7 +68,7 @@ class Settings(BaseSettings):
     # 绝不允许回退到「人人可见的固定字符串」——那等同于任何人都能伪造 token。
     jwt_secret: str = ""
     jwt_algorithm: str = "HS256"
-    jwt_expire_minutes: int = 60 * 24 * 7  # Access Token 有效期：7 天
+    jwt_expire_minutes: int = 15  # Access Token 短期有效；由 HttpOnly Refresh Cookie 静默续期
     jwt_refresh_expire_days: int = 30  # Refresh Token 有效期：30 天
 
     # --- 整库备份接口保护（/api/backup/database 需携带此 Key） ---
@@ -85,6 +85,8 @@ class Settings(BaseSettings):
 
     # --- CORS：Next.js 前端 ---
     cors_origins: str = "http://localhost:3000,http://localhost:3001,http://localhost:3002"
+    # 只有来自这些反向代理的请求才信任 X-Forwarded-For；默认不信任任何代理。
+    trusted_proxy_ips: str = ""
 
     # --- 启动期自动迁移前端 Node 侧 .data 历史数据（任务 #290，默认关闭） ---
     migrate_legacy_data: bool = False
@@ -92,6 +94,10 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    @property
+    def trusted_proxy_ip_set(self) -> set[str]:
+        return {o.strip() for o in self.trusted_proxy_ips.split(",") if o.strip()}
 
     def model_post_init(self, __context) -> None:  # noqa: D105
         # .env 中留空时回退默认值（SQLite 开发降级）

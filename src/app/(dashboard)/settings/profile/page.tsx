@@ -65,6 +65,7 @@ export default function ProfileSettingsPage() {
   const joined = currentUser.createdAt
     ? new Date(currentUser.createdAt).toLocaleDateString("zh-CN")
     : "—";
+  const isGuest = currentUser.email.endsWith("@guest.finos.local");
 
   const netWorth =
     profile && profileStatus === "loaded"
@@ -156,7 +157,7 @@ export default function ProfileSettingsPage() {
               <p className="mt-1 text-sm text-white/50">{currentUser.email}</p>
               <div className="mt-3 flex flex-wrap justify-center gap-2 sm:justify-start">
                 <span className="rounded-full bg-white/[0.06] px-3 py-1 text-xs text-white/50">
-                  注册于 {joined}
+                  {isGuest ? "本地体验空间" : `注册于 ${joined}`}
                 </span>
               </div>
             </div>
@@ -295,29 +296,30 @@ export default function ProfileSettingsPage() {
               onExecute={handleRebuild}
             />
 
-            {/* 删除账户 */}
-            <ActionRow
-              icon={<ShieldCheck className="h-4 w-4" />}
-              title="删除账户"
-              desc="永久删除你的账户与所有财富数据，并退出登录。此操作不可恢复。"
-              danger
-              disabled={busy}
-              confirming={confirming === "delete"}
-              onConfirm={() => setConfirming("delete")}
-              onCancel={() => setConfirming(null)}
-              onExecute={handleDelete}
-              prompt={
-                confirming === "delete" ? (
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="输入登录密码确认删除"
-                    className="mt-1 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs text-white outline-none focus:border-red-400/50"
-                  />
-                ) : undefined
-              }
-            />
+            {!isGuest && (
+              <ActionRow
+                icon={<ShieldCheck className="h-4 w-4" />}
+                title="删除账户"
+                desc="永久删除你的账户与所有财富数据，并退出当前空间。此操作不可恢复。"
+                danger
+                disabled={busy}
+                confirming={confirming === "delete"}
+                onConfirm={() => setConfirming("delete")}
+                onCancel={() => setConfirming(null)}
+                onExecute={handleDelete}
+                prompt={
+                  confirming === "delete" ? (
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="输入账户密码确认删除"
+                      className="mt-1 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs text-white outline-none focus:border-red-400/50"
+                    />
+                  ) : undefined
+                }
+              />
+            )}
           </div>
         </GlassCard>
       </div>

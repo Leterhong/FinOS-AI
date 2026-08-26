@@ -59,6 +59,7 @@ class ModelRouter {
    * Route a task to the optimal model.
    */
   route(taskType: TaskType, _context?: Record<string, unknown>): RoutingDecision {
+    void _context;
     const route = this.taskRouting[taskType];
     return { ...route };
   }

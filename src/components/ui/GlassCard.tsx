@@ -37,7 +37,7 @@ export default function GlassCard({
           : undefined
       }
       className={cn(
-        "relative rounded-2xl glass text-white overflow-hidden",
+        "group/card relative rounded-2xl glass text-white overflow-hidden transition-[border-color,box-shadow,transform] duration-300 hover:border-white/[0.13]",
         glow && "glow-ring",
         interactive && "cursor-pointer transition-shadow duration-300 hover:shadow-glow-blue",
         className

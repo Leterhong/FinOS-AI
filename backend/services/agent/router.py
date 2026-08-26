@@ -32,8 +32,8 @@ def run(body: RunIn, user: User = Depends(get_current_user), db: Session = Depen
         return fail(f"task_type 必须是 {sorted(TASK_TYPES)} 之一")
     try:
         result = run_orchestration(db, user, body.task_type, body.question)
-    except Exception as e:  # noqa: BLE001
-        return fail(f"编排失败：{e}", status_code=500)
+    except Exception:  # noqa: BLE001
+        return fail("编排失败，请稍后重试", status_code=500)
     return ok(result, "Agent 编排完成")
 
 

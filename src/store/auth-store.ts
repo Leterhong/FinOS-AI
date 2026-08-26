@@ -28,31 +28,57 @@ interface AuthState {
   setUser: (user: PublicUser | null) => void;
 }
 
+let sessionBootstrapInFlight: Promise<PublicUser | null> | null = null;
+
 export const useAuthStore = create<AuthState>((set) => ({
   currentUser: null,
   status: "initial",
   error: null,
 
-  loadMe: async () => {
-    // 无 token 直接判定为访客：避免对 /auth/me 发起「必然 401」的请求，
-    // 既消除控制台红色报错，也避免无谓的网络往返与重定向。
-    if (!hasBackendToken()) {
-      set({ currentUser: null, status: "guest" });
-      return null;
-    }
+  loadMe: () => {
+    if (sessionBootstrapInFlight) return sessionBootstrapInFlight;
     set({ status: "loading" });
-    try {
-      const data = await backendApi.get<{ user: PublicUser }>("/auth/me");
-      set({ currentUser: data.user, status: "authed" });
-      return data.user;
-    } catch {
-      // token 失效（401）时清理遗留凭据，避免停留在「死 token」guest 态、
-      // 反复被 middleware 弹回登录页却仍能看到过期 token 的混乱。
-      backendApi.setToken(null);
-      void clearNextSession();
-      set({ currentUser: null, status: "guest" });
-      return null;
-    }
+    const operation = (async (): Promise<PublicUser | null> => {
+      try {
+      // bootstrap 在首次访问时创建隔离访客空间，已有 refresh cookie 时恢复原会话。
+      // 与先请求 /refresh 不同，它不会用一个“预期中的 401”污染浏览器控制台。
+      let user: PublicUser;
+      let token: string | null = null;
+      if (hasBackendToken()) {
+        const session = await backendApi.get<{ user: PublicUser }>("/auth/me");
+        user = session.user;
+      } else {
+        const session = await backendApi.bootstrapSession<{
+          token: string;
+          user: PublicUser;
+          guest: boolean;
+        }>();
+        token = session.token;
+        user = session.user;
+        backendApi.setToken(token);
+      }
+      if (token) {
+        const bridged = await establishNextSession(token);
+        if (!bridged) throw new Error("无法建立本地会话");
+        const demo = await fetch("/api/demo/bootstrap", {
+          method: "POST",
+          credentials: "same-origin",
+        });
+        if (!demo.ok) throw new Error("无法初始化体验空间");
+      }
+      set({ currentUser: user, status: "authed", error: null });
+        return user;
+      } catch {
+        backendApi.setToken(null);
+        set({ currentUser: null, status: "guest" });
+        return null;
+      }
+    })();
+    sessionBootstrapInFlight = operation;
+    void operation.finally(() => {
+      if (sessionBootstrapInFlight === operation) sessionBootstrapInFlight = null;
+    });
+    return operation;
   },
 
   register: async (email, password) => {
@@ -94,6 +120,11 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   logout: async () => {
+    try {
+      await backendApi.post("/auth/logout", {});
+    } catch {
+      /* 本地退出仍继续，服务端 Cookie 会自然过期。 */
+    }
     backendApi.setToken(null);
     // 清除 Next.js 会话 cookie：否则 middleware 的 hasSession 判定仍为真，
     // 跳 /login 会被弹回 /，形成「退不回登录页」的死循环。
@@ -126,16 +157,22 @@ export const useAuthStore = create<AuthState>((set) => ({
  * 用 FastAPI JWT 反查身份后在 Next.js 侧种下 `finos_session` cookie（UX 路由判定用）。
  * cookie 仅是粗粒度提示，设置失败不影响主登录流程，故吞掉异常。
  */
-async function establishNextSession(token: string): Promise<void> {
-  try {
-    await fetch("/api/auth/session", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-      credentials: "same-origin",
-    });
-  } catch {
-    /* best-effort：cookie 缺失只影响 middleware 粗检，真实鉴权走 JWT */
+async function establishNextSession(token: string | null): Promise<boolean> {
+  if (!token) return false;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await fetch("/api/auth/session", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        credentials: "same-origin",
+      });
+      if (response.ok) return true;
+    } catch {
+      /* 短暂服务抖动由下一次循环重试。 */
+    }
+    await new Promise((resolve) => setTimeout(resolve, 180));
   }
+  return false;
 }
 
 /** 清除 Next.js 会话 cookie（登出 / 删账户时调用）。同样 best-effort。 */

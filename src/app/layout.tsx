@@ -1,27 +1,12 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
-  display: "swap",
-});
-
-const jbMono = JetBrains_Mono({
-  subsets: ["latin"],
-  variable: "--font-jb-mono",
-  display: "swap",
-});
-
 export const metadata: Metadata = {
-  title: "FinOS AI — Your AI Personal CFO",
-  description:
-    "FinOS AI · Your Personal AI CFO. 建立你的财富分身，连接你的模型，让 AI 长期陪伴你的财富成长。",
+  title: "FinOS AI — 企业金融风险研判 Agent",
+  description: "面向企业经营与风险研判的金融服务 Agent",
   icons: {
-    icon: [{ url: "/logo.png", type: "image/png" }],
-    apple: [{ url: "/logo.png" }],
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
   },
 };
 
@@ -31,8 +16,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
-      <body className={`${inter.variable} ${jbMono.variable} font-sans antialiased`}>
+    <html lang="zh-CN" className="dark" data-scroll-behavior="smooth" suppressHydrationWarning>
+      <body className="font-sans antialiased">
         <Providers>
           <div className="mesh-bg" />
           <div className="grid-dots" />

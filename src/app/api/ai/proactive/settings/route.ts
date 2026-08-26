@@ -15,7 +15,7 @@ const VALID_CATEGORIES: NotificationCategory[] = [
 ];
 
 /** GET /api/ai/proactive/settings —— 读取主动提醒设置。 */
-export async function GET(_req: NextRequest) {
+export async function GET() {
   const userId = await getSessionUserId();
   if (!userId) {
     return NextResponse.json({ error: "未登录" }, { status: 401 });

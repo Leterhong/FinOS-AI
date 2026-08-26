@@ -56,7 +56,7 @@ function emitCached(result: AgentAnalysisOutput[], emit?: (e: WorkflowEvent) => 
 }
 
 export async function orchestrate(req: OrchestrationRequest): Promise<OrchestrationResult> {
-  const { question, profile, userId, agents: forcedAgents, force, emit, lifecycle, memoryContext } = req;
+  const { question, profile, userId, agents: forcedAgents, force, emit, memoryContext } = req;
 
   // 1) 路由：推断类型与所需 Agent
   const routed = routeRequest(question);

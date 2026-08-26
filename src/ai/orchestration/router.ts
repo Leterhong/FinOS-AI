@@ -30,6 +30,7 @@ export interface RouteResult {
 }
 
 export function routeRequest(question: string, _intent?: ChatIntent): RouteResult {
+  void _intent;
   const q = question || "";
   const matched: AgentId[] = [];
   let primary: AIAnalysisType = "cfo_summary";

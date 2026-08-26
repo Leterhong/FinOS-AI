@@ -1,7 +1,6 @@
 import "server-only";
 
 import type { FinancialProfile } from "@/data/types";
-import { computeCashFlow } from "@/scenario/scenario-engine";
 import type { TwinSnapshot } from "@/twin/engine";
 import type { ActionItem, ActionPlan, FinancialAlert } from "./types";
 
@@ -20,7 +19,6 @@ export function generateActionPlan(
   const weekly: ActionItem[] = [];
   const monthly: ActionItem[] = [];
   const yearly: ActionItem[] = [];
-  const cf = computeCashFlow(profile);
   const has = (type: string) => alerts.some((a) => a.type === type);
 
   // ── 通用健康习惯（始终建议） ──

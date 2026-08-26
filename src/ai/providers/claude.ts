@@ -80,6 +80,7 @@ export class ClaudeProvider extends BaseProvider {
   }
 
   async embed(_texts: string[]): Promise<number[][]> {
+    void _texts;
     throw new Error(`[${this.id}] embeddings are not supported by this provider.`);
   }
 }

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { runWorkflowWithEmitter } from "@/ai/server/workflow-runner";
 import { requireFinancialContext, isNeedProfile } from "@/ai/guard";
 import { classifyIntent } from "@/ai/intent/router";
 import { orchestrate } from "@/ai/orchestration/orchestrator";
@@ -125,7 +124,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "请求体不是合法 JSON" }, { status: 400 });
   }
 
-  const { messages, activeEvents } = body ?? {};
+  const { messages } = body ?? {};
   if (!Array.isArray(messages) || messages.length === 0) {
     return NextResponse.json({ error: "缺少 messages 字段" }, { status: 400 });
   }
