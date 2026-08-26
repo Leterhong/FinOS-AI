@@ -38,16 +38,23 @@ export interface AnalysisDocument {
   facts: number;
   ruleHits: number;
   uploadedAt: string;
+  analysis?: string;
+  model?: string;
+  error?: string;
 }
 
 export interface AgentRun {
   id: string;
   name: string;
   role: string;
-  status: "运行中" | "已完成" | "等待输入";
+  status: "运行中" | "已完成" | "失败";
   task: string;
   progress: number;
   duration: string;
+  model?: string;
+  output?: string;
+  error?: string;
+  createdAt: string;
 }
 
 export interface WorkflowTask {
@@ -75,4 +82,5 @@ export interface ResearchBrief {
   summary: string;
   topic: string;
   createdAt: string;
+  model?: string;
 }

@@ -60,11 +60,6 @@ export const useAuthStore = create<AuthState>((set) => ({
       if (token) {
         const bridged = await establishNextSession(token);
         if (!bridged) throw new Error("无法建立本地会话");
-        const demo = await fetch("/api/demo/bootstrap", {
-          method: "POST",
-          credentials: "same-origin",
-        });
-        if (!demo.ok) throw new Error("无法初始化体验空间");
       }
       set({ currentUser: user, status: "authed", error: null });
         return user;

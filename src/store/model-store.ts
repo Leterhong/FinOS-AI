@@ -9,6 +9,7 @@ import type {
   PlaygroundResult,
   ProviderConfigInput,
 } from "@/ai/model-center/types";
+import { ensureWorkspaceSession } from "@/lib/workspace-session";
 
 // AI 模型中心 Store（Phase 5.5）。浏览器仅通过 fetch 调用 /api/models/*，
 // API Key 明文只在提交时短暂传输，服务端加密保存，前端仅持有掩码。
@@ -59,8 +60,10 @@ export const useModelStore = create<ModelState>((set, get) => ({
     const uid = userId ?? get().userId;
     set({ isLoading: true, error: null });
     try {
-      const res = await fetch(`/api/models?userId=${encodeURIComponent(uid)}`);
+      await ensureWorkspaceSession();
+      const res = await fetch(`/api/models?userId=${encodeURIComponent(uid)}`, { cache: "no-store" });
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "加载模型失败");
       set({
         models: data.models ?? [],
         active: data.active ?? null,
@@ -74,11 +77,13 @@ export const useModelStore = create<ModelState>((set, get) => ({
   loadActive: async (userId) => {
     const uid = userId ?? get().userId;
     try {
-      const res = await fetch(`/api/models/active?userId=${encodeURIComponent(uid)}`);
+      await ensureWorkspaceSession();
+      const res = await fetch(`/api/models/active?userId=${encodeURIComponent(uid)}`, { cache: "no-store" });
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "加载模型状态失败");
       set({ active: data.active ?? null, health: data.health ?? [] });
-    } catch {
-      // 静默失败，徽标降级
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : "加载模型状态失败" });
     }
   },
 
@@ -86,6 +91,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
     const uid = get().userId;
     set({ isSaving: true, error: null });
     try {
+      await ensureWorkspaceSession();
       const res = await fetch("/api/models", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -106,6 +112,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
     const uid = get().userId;
     set({ isSaving: true, error: null });
     try {
+      await ensureWorkspaceSession();
       const res = await fetch(`/api/models/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -126,6 +133,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
   deleteModel: async (id) => {
     const uid = get().userId;
     try {
+      await ensureWorkspaceSession();
       const res = await fetch(
         `/api/models/${id}?userId=${encodeURIComponent(uid)}`,
         { method: "DELETE" }
@@ -143,6 +151,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
   setDefaultModel: async (id) => {
     const uid = get().userId;
     try {
+      await ensureWorkspaceSession();
       const res = await fetch(`/api/models/${id}/default`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -162,12 +171,14 @@ export const useModelStore = create<ModelState>((set, get) => ({
     const uid = get().userId;
     set({ isTesting: id, testResult: null, error: null });
     try {
+      await ensureWorkspaceSession();
       const res = await fetch(`/api/models/${id}/test`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId: uid }),
       });
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "测试失败");
       set({ isTesting: null, testResult: data.result ?? null });
       await get().loadModels();
       return data.result as ModelTestResult;
@@ -180,12 +191,14 @@ export const useModelStore = create<ModelState>((set, get) => ({
   testDraft: async (input) => {
     set({ isTesting: "draft", testResult: null, error: null });
     try {
+      await ensureWorkspaceSession();
       const res = await fetch("/api/models/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(input),
       });
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "测试失败");
       set({ isTesting: null, testResult: data.result ?? null });
       return data.result as ModelTestResult;
     } catch (e) {
@@ -198,12 +211,14 @@ export const useModelStore = create<ModelState>((set, get) => ({
     const uid = get().userId;
     set({ isPlaygroundRunning: true, playgroundResult: null, error: null });
     try {
+      await ensureWorkspaceSession();
       const res = await fetch("/api/models/playground", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId: uid, question, modelId }),
       });
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "运行失败");
       set({ isPlaygroundRunning: false, playgroundResult: data.result ?? null });
     } catch (e) {
       set({

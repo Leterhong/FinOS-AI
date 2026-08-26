@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { LayoutDashboard, BriefcaseBusiness, Files, ShieldAlert, ChartNoAxesCombined, Scale, Bot, Workflow, MessageSquareText, X, ArrowUpRight, Activity } from "lucide-react";
+import { LayoutDashboard, BriefcaseBusiness, Files, ShieldAlert, ChartNoAxesCombined, Scale, Bot, Workflow, MessageSquareText, X, ArrowUpRight, Activity, Cpu } from "lucide-react";
 import Logo from "@/components/brand/Logo";
 import { cn } from "@/lib/utils";
 
@@ -17,6 +17,7 @@ const groups = [
   { label: "研究与规则", items: [
     { href: "/research", label: "投研中心", icon: ChartNoAxesCombined },
     { href: "/rules", label: "规则库", icon: Scale },
+    { href: "/models", label: "AI 模型中心", icon: Cpu },
     { href: "/agents", label: "Agent 中心", icon: Bot },
   ]},
   { label: "协作执行", items: [
@@ -36,7 +37,7 @@ export default function Sidebar({ open = false, onClose }: { open?: boolean; onC
       </div>
       <div className="mx-4 mt-4 rounded-xl border border-cyan-400/15 bg-cyan-400/[0.055] px-3.5 py-3">
         <div className="flex items-center gap-2 text-xs font-medium text-cyan-100"><Activity className="h-3.5 w-3.5 text-cyan-300" />企业研判空间</div>
-        <p className="mt-1.5 truncate text-[11px] text-slate-500">华东产业金融中心</p>
+        <p className="mt-1.5 truncate text-[11px] text-slate-500">本地安全工作区 · 零预置数据</p>
       </div>
       <nav className="scrollbar-thin min-h-0 flex-1 overflow-y-auto px-3 py-4">
         {groups.map(group => <div key={group.label} className="mb-5">
@@ -55,7 +56,7 @@ export default function Sidebar({ open = false, onClose }: { open?: boolean; onC
         <Link href="/assistant" className="flex items-center justify-between rounded-xl border border-cyan-300/15 bg-gradient-to-r from-cyan-400/12 to-blue-500/10 px-3.5 py-3 text-xs font-medium text-cyan-50 hover:border-cyan-300/30">
           <span className="flex items-center gap-2"><Bot className="h-4 w-4 text-cyan-300" />发起一项研判</span><ArrowUpRight className="h-3.5 w-3.5 text-slate-500" />
         </Link>
-        <div className="mt-3 flex items-center gap-2.5 px-1.5"><div className="grid h-8 w-8 place-items-center rounded-lg border border-white/10 bg-white/[0.05] text-[11px] font-semibold text-slate-200">风控</div><div className="min-w-0"><p className="truncate text-xs text-slate-300">企业金融研判组</p><p className="mt-0.5 text-[10px] text-emerald-400/80">演示空间 · Agent 正常</p></div></div>
+        <Link href="/models" className="mt-3 flex items-center gap-2.5 rounded-lg px-1.5 py-1.5 hover:bg-white/[0.035]"><div className="grid h-8 w-8 place-items-center rounded-lg border border-white/10 bg-white/[0.05]"><Cpu className="h-3.5 w-3.5 text-cyan-300" /></div><div className="min-w-0"><p className="truncate text-xs text-slate-300">AI 运行基础设施</p><p className="mt-0.5 text-[10px] text-slate-600">配置模型、密钥与连接</p></div></Link>
       </div>
     </aside>
   </>;

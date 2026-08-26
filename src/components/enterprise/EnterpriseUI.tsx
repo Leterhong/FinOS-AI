@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, DatabaseZap, Minus, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { RiskLevel } from "@/types/enterprise";
 
@@ -31,4 +31,20 @@ export function MetricCard({ label, value, detail, trend = "flat", accent = "cya
 
 export function PageIntro({ eyebrow, title, description, actions }: { eyebrow: string; title: string; description: string; actions?: ReactNode }) {
   return <div className="flex flex-col justify-between gap-4 border-b border-white/[0.07] pb-5 md:flex-row md:items-end"><div><p className="mb-2 text-[10px] font-semibold uppercase tracking-[.22em] text-cyan-300/70">{eyebrow}</p><h1 className="text-2xl font-semibold tracking-[-.03em] text-white md:text-[30px]">{title}</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">{description}</p></div>{actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}</div>;
+}
+
+export function EmptyStateCard({
+  title,
+  description,
+  action,
+  icon: Icon = DatabaseZap,
+  className,
+}: {
+  title: string;
+  description: string;
+  action?: ReactNode;
+  icon?: LucideIcon;
+  className?: string;
+}) {
+  return <div className={cn("flex min-h-48 flex-col items-center justify-center px-6 py-10 text-center", className)}><div className="grid h-12 w-12 place-items-center rounded-2xl border border-cyan-400/15 bg-cyan-400/[0.055]"><Icon className="h-5 w-5 text-cyan-300" /></div><h3 className="mt-4 text-sm font-semibold text-slate-100">{title}</h3><p className="mt-2 max-w-lg text-xs leading-6 text-slate-500">{description}</p>{action && <div className="mt-5">{action}</div>}</div>;
 }

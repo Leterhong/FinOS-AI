@@ -66,7 +66,7 @@ def _user_public(u: User, db: Session) -> dict:
     return {
         "id": u.id,
         "email": u.email,
-        "name": "体验用户" if u.email.endswith("@guest.finos.local") else u.email.split("@", 1)[0],
+        "name": "访客工作区" if u.email.endswith("@guest.finos.local") else u.email.split("@", 1)[0],
         "avatar": u.avatar,
         "avatarUrl": u.avatar,
         "profileCompleted": has_profile or has_assets,
@@ -120,28 +120,6 @@ def _active_refresh_user(raw: str, db: Session) -> tuple[User, RefreshToken] | N
     return (user, record) if user is not None else None
 
 
-def _seed_guest_financial_data(db: Session, user: User) -> None:
-    """为全新访客提供可探索的示例数据；数据仍按随机 user_id 独立存储。"""
-    db.add(
-        FinancialProfile(
-            user_id=user.id,
-            age=31,
-            income=32_000,
-            expense=14_500,
-            risk_level="balanced",
-            goal="2038 年实现财务自由",
-        )
-    )
-    db.add_all(
-        [
-            Asset(user_id=user.id, type="cash", name="现金与应急储备", amount=186_000, source="demo"),
-            Asset(user_id=user.id, type="fund", name="指数基金组合", amount=428_000, source="demo"),
-            Asset(user_id=user.id, type="stock", name="长期权益组合", amount=236_000, source="demo"),
-            Asset(user_id=user.id, type="bond", name="稳健债券配置", amount=120_000, source="demo"),
-        ]
-    )
-
-
 @router.post("/bootstrap")
 def bootstrap(request: Request, response: Response, db: Session = Depends(get_db)):
     """免登录入口：恢复现有刷新会话，或为当前浏览器创建隔离访客空间。
@@ -167,7 +145,6 @@ def bootstrap(request: Request, response: Response, db: Session = Depends(get_db
     )
     db.add(user)
     db.flush()
-    _seed_guest_financial_data(db, user)
     db.commit()
     db.refresh(user)
     tokens = _issue_tokens(db, user)

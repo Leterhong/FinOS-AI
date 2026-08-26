@@ -110,7 +110,42 @@ test("不得包含商业套餐 / 支付 / 订阅收费代码", () => {
       if (text.includes(word.toLowerCase())) offenders.push(`${rel(file)}: ${word}`);
     }
   }
-  assert.deepEqual(offenders, [], `FinOS AI 是开源个人财富 OS，不得引入收费系统:\n${offenders.join("\n")}`);
+  assert.deepEqual(offenders, [], `FinOS AI 是开源企业金融 Agent，不得引入收费系统:\n${offenders.join("\n")}`);
+});
+
+// ---------------------------------------------------------------- 企业 AI 主链路与零数据原则
+test("企业工作区不得包含预置业务数据或旧版引导接口", () => {
+  assert.equal(existsSync(join(SRC, "data", "enterprise-demo.ts")), false, "enterprise-demo.ts 必须删除");
+  assert.equal(existsSync(join(SRC, "app", "api", "demo", "bootstrap", "route.ts")), false, "旧版 demo bootstrap API 必须删除");
+  const store = read(join(SRC, "store", "enterprise-store.ts"));
+  for (const collection of ["cases", "documents", "risks", "agents", "tasks", "rules", "briefs"]) {
+    assert.match(store, new RegExp(`${collection}: \\[\\]`), `${collection} 必须从空数组启动`);
+  }
+  assert.match(store, /migrate:\s*\(\)\s*=>\s*emptyWorkspace\(\)/, "旧持久化版本必须迁移为空工作区");
+});
+
+test("企业 AI 页面必须调用服务端模型网关", () => {
+  const assistant = read(join(SRC, "app", "(dashboard)", "assistant", "page.tsx"));
+  const agents = read(join(SRC, "app", "(dashboard)", "agents", "page.tsx"));
+  const research = read(join(SRC, "app", "(dashboard)", "research", "page.tsx"));
+  const documents = read(join(SRC, "app", "(dashboard)", "documents", "page.tsx"));
+  assert.match(assistant, /callEnterpriseAI/);
+  assert.match(agents, /callEnterpriseAI/);
+  assert.match(research, /callEnterpriseAI/);
+  assert.match(documents, /analyzeEnterpriseDocument/);
+  assert.ok(existsSync(join(SRC, "app", "api", "enterprise", "ai", "route.ts")));
+  assert.ok(existsSync(join(SRC, "app", "api", "enterprise", "ai", "document", "route.ts")));
+});
+
+test("模型中心必须可见且模型 API 只信任服务端工作区会话", () => {
+  const sidebar = read(join(SRC, "components", "dashboard", "Sidebar.tsx"));
+  assert.match(sidebar, /href:\s*["']\/models["']/, "侧边栏必须提供 AI 模型入口");
+  const modelApi = read(join(SRC, "app", "api", "models", "route.ts"));
+  assert.match(modelApi, /getSessionUserId/);
+  assert.ok(!/modelConfigStore\.add\(body\.userId/.test(modelApi), "禁止信任客户端传入 userId");
+  const modelStore = read(join(SRC, "ai", "model-center", "models", "store.ts"));
+  assert.match(modelStore, /encryptApiKey/);
+  assert.match(modelStore, /keyMask:\s*mask/);
 });
 
 // ---------------------------------------------------------------- 安全红线

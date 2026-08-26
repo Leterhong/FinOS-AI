@@ -1,22 +1,91 @@
 "use client";
 
-import { useState } from "react";
-import { Bot, CornerDownLeft, FileSearch, Link2, Scale, ShieldAlert, Sparkles } from "lucide-react";
-import { PageIntro, Panel } from "@/components/enterprise/EnterpriseUI";
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { Bot, CornerDownLeft, Cpu, DatabaseZap, Loader2, ShieldCheck, Sparkles, UserRound } from "lucide-react";
+import { EmptyStateCard, PageIntro, Panel } from "@/components/enterprise/EnterpriseUI";
+import { callEnterpriseAI } from "@/lib/enterprise-ai";
+import { useEnterpriseStore } from "@/store/enterprise-store";
+import { useModelStore } from "@/store/model-store";
 
-interface Message { id: number; question: string; answer: string; evidence: string; rule: string }
-const suggestions = ["分析晟远新能源的短期偿债风险","核验科泽生物并购协议中的或有负债","整理华辰精工所在行业的关键变化"];
-const buildAnswer = (question: string): Omit<Message,"id"|"question"> => {
-  if (question.includes("科泽") || question.includes("并购") || question.includes("或有")) return { answer: "科泽生物当前最重要的不确定性来自补充协议中的回购安排。该条款与管理层访谈口径不一致，可能形成 6,000–8,000 万元或有负债，建议在估值与融资结构中单独进行压力测试。", evidence: "并购协议补充条款第 4.2 条、管理层访谈纪要 E-0321", rule: "并购融资尽调规则 M&A-17" };
-  if (question.includes("华辰") || question.includes("行业") || question.includes("客户")) return { answer: "华辰精工收入增长仍然较快，但核心客户集中度达到 52.4%，第一大客户回款周期延长 18 天。建议将订单真实性、回款节奏与出口审查周期结合评估。", evidence: "客户销售明细、应收账款账龄表、行业研究底稿", rule: "供应链融资规则 SCF-12" };
-  return { answer: "当前首要风险是关联方资金占用对短期偿债能力的侵蚀，其次是新增互保主体带来的潜在代偿责任。两项风险存在叠加效应，建议在审批前完成资金用途穿透与回收安排核验。", evidence: "审计报告 P.86、现金流量表 P.15、担保明细 P.103", rule: "授信准入规则 CR-08、CR-21" };
-};
+interface Message {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  model?: string;
+  latencyMs?: number;
+  totalTokens?: number;
+  error?: boolean;
+}
+
+const promptStarters = [
+  "根据当前工作区，列出已知事实、数据缺口和下一步核验动作",
+  "检查现有资料能否支持企业经营风险判断",
+  "结合现有规则，给出需要人工复核的事项",
+];
 
 export default function AssistantPage() {
-  const [query,setQuery]=useState("");
-  const [messages,setMessages]=useState<Message[]>([{ id:1, question:"晟远新能源目前最需要关注的授信风险是什么？", ...buildAnswer("晟远新能源") }]);
-  const submit=()=>{ const question=query.trim(); if(!question)return; setMessages(current=>[...current,{id:Date.now(),question,...buildAnswer(question)}]); setQuery(""); };
-  return <div className="page-shell"><PageIntro eyebrow="Financial reasoning copilot" title="智能研判助手" description="基于当前项目资料、企业规则库和可信研究来源回答问题；每个关键判断均附证据与适用边界。" />
-    <div className="grid gap-4 xl:grid-cols-[1fr_290px]"><Panel className="flex min-h-[650px] flex-col"><div className="scrollbar-thin flex-1 overflow-y-auto p-4 sm:p-6"><div className="mx-auto max-w-3xl space-y-7">{messages.map(message => <div key={message.id}><div className="flex gap-3"><div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-white/10 bg-white/[0.04] text-[10px] text-slate-300">你</div><div className="rounded-2xl rounded-tl-sm bg-white/[0.055] px-4 py-3 text-sm text-slate-200">{message.question}</div></div><div className="mt-4 flex gap-3"><div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-cyan-400/15 bg-cyan-400/[0.07]"><Bot className="h-4 w-4 text-cyan-300" /></div><div className="min-w-0 flex-1"><div className="rounded-2xl rounded-tl-sm border border-white/[0.07] bg-[#0b1521] p-4"><div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[.16em] text-cyan-300/70"><Sparkles className="h-3.5 w-3.5" />研判摘要</div><p className="mt-3 text-sm leading-7 text-slate-300">{message.answer}</p><div className="mt-4 grid gap-3 sm:grid-cols-2"><div className="rounded-xl border border-rose-400/15 bg-rose-400/[0.035] p-3"><div className="flex items-center gap-2 text-[11px] font-medium text-rose-200"><ShieldAlert className="h-3.5 w-3.5" />关键证据</div><p className="mt-2 text-[11px] leading-5 text-slate-400">{message.evidence}</p></div><div className="rounded-xl border border-amber-400/15 bg-amber-400/[0.035] p-3"><div className="flex items-center gap-2 text-[11px] font-medium text-amber-200"><Scale className="h-3.5 w-3.5" />规则依据</div><p className="mt-2 text-[11px] leading-5 text-slate-400">{message.rule}</p></div></div><div className="mt-4 flex flex-wrap gap-2"><button className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] px-2.5 py-2 text-[10px] text-slate-400"><FileSearch className="h-3 w-3" />查看引用证据</button><button className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] px-2.5 py-2 text-[10px] text-slate-400"><Link2 className="h-3 w-3" />查看规则原文</button></div></div><p className="mt-2 text-[9px] text-slate-700">Agent 输出用于辅助研判，重要结论需人工复核。</p></div></div></div>)}</div></div><div className="border-t border-white/[0.07] p-4"><div className="mx-auto max-w-3xl"><div className="mb-2 flex gap-2 overflow-x-auto pb-1">{suggestions.map(s=><button key={s} onClick={()=>setQuery(s)} className="whitespace-nowrap rounded-lg border border-white/[0.07] px-3 py-2 text-[10px] text-slate-500 hover:text-slate-300">{s}</button>)}</div><div className="flex items-end gap-2 rounded-2xl border border-white/[0.1] bg-white/[0.03] p-2 focus-within:border-cyan-400/30"><textarea value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();submit();}}} rows={2} placeholder="询问企业、资料、规则、风险或研究问题…" className="min-h-12 flex-1 resize-none bg-transparent px-2 py-2 text-sm text-white outline-none placeholder:text-slate-600" /><button onClick={submit} aria-label="发送研判问题" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-cyan-300 text-[#041018]"><CornerDownLeft className="h-4 w-4" /></button></div></div></div></Panel><aside className="space-y-4"><Panel className="p-4"><p className="text-xs font-semibold text-slate-200">当前研判上下文</p><div className="mt-4 space-y-3 text-[11px]"><div className="rounded-xl border border-white/[0.07] p-3"><p className="text-slate-600">企业项目</p><p className="mt-1.5 text-slate-300">晟远新能源 · 流动资金授信</p></div><div className="rounded-xl border border-white/[0.07] p-3"><p className="text-slate-600">已引用资料</p><p className="mt-1.5 text-slate-300">3 份 · 256 个事实</p></div><div className="rounded-xl border border-white/[0.07] p-3"><p className="text-slate-600">适用规则集</p><p className="mt-1.5 text-slate-300">授信准入 v3.2</p></div></div></Panel><Panel className="p-4"><p className="text-xs font-semibold text-slate-200">回答边界</p><ul className="mt-3 space-y-2 text-[10px] leading-5 text-slate-600"><li>· 不编造缺失的企业经营事实</li><li>· 区分事实、推断与建议</li><li>· 关键结论必须可定位原文</li><li>· 无法判断时明确提出补充材料</li></ul></Panel></aside></div>
+  const cases = useEnterpriseStore((state) => state.cases);
+  const documents = useEnterpriseStore((state) => state.documents);
+  const rules = useEnterpriseStore((state) => state.rules);
+  const risks = useEnterpriseStore((state) => state.risks);
+  const active = useModelStore((state) => state.active);
+  const loadActive = useModelStore((state) => state.loadActive);
+  const [query, setQuery] = useState("");
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [sending, setSending] = useState(false);
+
+  useEffect(() => { void loadActive(); }, [loadActive]);
+
+  const submit = async () => {
+    const question = query.trim();
+    if (!question || sending || !active?.configured) return;
+    const userMessage: Message = { id: `${Date.now()}-user`, role: "user", content: question };
+    setMessages((current) => [...current, userMessage]);
+    setQuery("");
+    setSending(true);
+    try {
+      const result = await callEnterpriseAI({
+        question,
+        mode: "chat",
+        context: { cases, documents, rules, risks },
+      });
+      setMessages((current) => [...current, {
+        id: `${Date.now()}-assistant`,
+        role: "assistant",
+        content: result.answer,
+        model: result.model,
+        latencyMs: result.latencyMs,
+        totalTokens: result.usage.totalTokens,
+      }]);
+    } catch (error) {
+      setMessages((current) => [...current, {
+        id: `${Date.now()}-error`,
+        role: "assistant",
+        content: error instanceof Error ? error.message : "AI 调用失败，请检查模型连接。",
+        error: true,
+      }]);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return <div className="page-shell">
+    <PageIntro eyebrow="AI financial reasoning" title="智能研判助手" description="由你配置的真实大模型驱动。助手只接收当前工作区的项目、资料元数据、规则和风险上下文，不再返回预置回答。" actions={<Link href="/models" className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-300"><Cpu className="h-3.5 w-3.5 text-cyan-300" />{active?.configured ? active.displayName : "配置 AI 模型"}</Link>} />
+    <div className="grid gap-4 xl:grid-cols-[1fr_300px]">
+      <Panel className="flex min-h-[650px] flex-col">
+        {!active?.configured ? <EmptyStateCard icon={Cpu} className="flex-1" title="先连接一个 AI 大模型" description="助手不会使用本地模板或伪造回复。请在模型中心填写 Provider、Base URL、Model ID 和 API Key，并完成连接测试。" action={<Link href="/models" className="rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]">前往 AI 模型中心</Link>} /> : <>
+          <div className="scrollbar-thin flex-1 overflow-y-auto p-4 sm:p-6">
+            {messages.length === 0 ? <div className="flex h-full min-h-80 flex-col items-center justify-center text-center"><div className="grid h-14 w-14 place-items-center rounded-2xl border border-cyan-400/15 bg-cyan-400/[0.06]"><Sparkles className="h-6 w-6 text-cyan-300" /></div><h2 className="mt-4 text-base font-semibold text-white">向真实模型发起企业研判</h2><p className="mt-2 max-w-lg text-xs leading-6 text-slate-500">当前上下文包含 {cases.length} 个项目、{documents.length} 份资料、{rules.length} 条规则和 {risks.length} 个风险信号。没有上下文时，模型会明确提示需要补充数据。</p><div className="mt-5 flex max-w-2xl flex-wrap justify-center gap-2">{promptStarters.map((prompt) => <button key={prompt} onClick={() => setQuery(prompt)} className="rounded-xl border border-white/[0.08] bg-white/[0.025] px-3 py-2 text-[10px] text-slate-400 hover:border-cyan-400/20 hover:text-cyan-200">{prompt}</button>)}</div></div> : <div className="mx-auto max-w-3xl space-y-5">{messages.map((message) => <div key={message.id} className={`flex gap-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}>{message.role === "assistant" && <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-cyan-400/15 bg-cyan-400/[0.07]"><Bot className="h-4 w-4 text-cyan-300" /></div>}<div className={`max-w-[88%] rounded-2xl px-4 py-3 ${message.role === "user" ? "rounded-tr-sm bg-white/[0.07] text-slate-200" : message.error ? "rounded-tl-sm border border-rose-400/15 bg-rose-400/[0.04] text-rose-100" : "rounded-tl-sm border border-white/[0.07] bg-[#0b1521] text-slate-300"}`}><p className="whitespace-pre-wrap text-sm leading-7">{message.content}</p>{message.role === "assistant" && !message.error && <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 border-t border-white/[0.06] pt-2 text-[9px] text-slate-600"><span>{message.model}</span><span>{message.latencyMs} ms</span><span>{message.totalTokens} tokens</span><span>需人工复核</span></div>}</div>{message.role === "user" && <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-white/10 bg-white/[0.04]"><UserRound className="h-4 w-4 text-slate-400" /></div>}</div>)}</div>}
+            {sending && <div className="mx-auto mt-5 flex max-w-3xl items-center gap-3"><div className="grid h-8 w-8 place-items-center rounded-lg border border-cyan-400/15 bg-cyan-400/[0.07]"><Bot className="h-4 w-4 text-cyan-300" /></div><div className="inline-flex items-center gap-2 rounded-2xl rounded-tl-sm border border-white/[0.07] bg-[#0b1521] px-4 py-3 text-xs text-slate-400"><Loader2 className="h-3.5 w-3.5 animate-spin text-cyan-300" />模型正在研判工作区上下文</div></div>}
+          </div>
+          <div className="border-t border-white/[0.07] p-4"><div className="mx-auto max-w-3xl"><div className="flex items-end gap-2 rounded-2xl border border-white/[0.1] bg-white/[0.03] p-2 focus-within:border-cyan-400/30"><textarea value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void submit(); } }} rows={2} placeholder="询问当前企业项目、资料、规则、风险或研究问题…" className="min-h-12 flex-1 resize-none bg-transparent px-2 py-2 text-sm text-white outline-none placeholder:text-slate-600" /><button onClick={() => void submit()} disabled={!query.trim() || sending} aria-label="发送研判问题" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-cyan-300 text-[#041018] disabled:opacity-40"><CornerDownLeft className="h-4 w-4" /></button></div></div></div>
+        </>}
+      </Panel>
+      <aside className="space-y-4">
+        <Panel className="p-4"><p className="text-xs font-semibold text-slate-200">当前上下文</p><div className="mt-4 grid grid-cols-2 gap-2 text-center"><div className="rounded-xl border border-white/[0.07] p-3"><p className="numeric text-lg text-white">{cases.length}</p><p className="mt-1 text-[9px] text-slate-600">项目</p></div><div className="rounded-xl border border-white/[0.07] p-3"><p className="numeric text-lg text-white">{documents.length}</p><p className="mt-1 text-[9px] text-slate-600">资料</p></div><div className="rounded-xl border border-white/[0.07] p-3"><p className="numeric text-lg text-white">{rules.length}</p><p className="mt-1 text-[9px] text-slate-600">规则</p></div><div className="rounded-xl border border-white/[0.07] p-3"><p className="numeric text-lg text-white">{risks.length}</p><p className="mt-1 text-[9px] text-slate-600">风险</p></div></div>{cases.length + documents.length + rules.length === 0 && <div className="mt-3 flex gap-2 rounded-xl border border-amber-400/10 bg-amber-400/[0.035] p-3"><DatabaseZap className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" /><p className="text-[10px] leading-5 text-amber-100/60">工作区暂无业务数据，模型只能提供通用框架，不能作出企业事实判断。</p></div>}</Panel>
+        <Panel className="p-4"><div className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-cyan-300" /><p className="text-xs font-semibold text-slate-200">AI 回答边界</p></div><ul className="mt-3 space-y-2 text-[10px] leading-5 text-slate-600"><li>· 只使用当前工作区明确数据</li><li>· 区分事实、推断与数据缺口</li><li>· 不伪造证据、规则和外部来源</li><li>· 重大结论必须由人员复核</li></ul></Panel>
+      </aside>
+    </div>
   </div>;
 }

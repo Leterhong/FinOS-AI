@@ -26,7 +26,7 @@ const nextConfig: NextConfig = {
       { source: "/privacy-center", destination: "/documents", permanent: true },
       { source: "/usage", destination: "/agents", permanent: true },
       { source: "/settings/profile", destination: "/", permanent: true },
-      { source: "/settings/models", destination: "/agents", permanent: true },
+      { source: "/settings/models", destination: "/models", permanent: true },
       { source: "/settings/ai-usage", destination: "/agents", permanent: true },
       { source: "/settings/data-sources", destination: "/documents", permanent: true },
     ];

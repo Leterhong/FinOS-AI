@@ -105,8 +105,10 @@ export default function ModelFormDialog({ open, onClose, editing }: Props) {
   async function handleSave() {
     if (editing) {
       await updateModel(editing.id, draft());
+      if (useModelStore.getState().error) return;
     } else {
-      await addModel(draft());
+      const created = await addModel(draft());
+      if (!created) return;
     }
     onClose();
   }

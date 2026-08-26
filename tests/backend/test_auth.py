@@ -27,8 +27,8 @@ def test_bootstrap_creates_and_restores_isolated_guest(client):
     assert first.status_code == 200
     first_data = first.json()["data"]
     assert first_data["guest"] is True
-    assert first_data["user"]["name"] == "体验用户"
-    assert first_data["user"]["profileCompleted"] is True
+    assert first_data["user"]["name"] == "访客工作区"
+    assert first_data["user"]["profileCompleted"] is False
     assert first.cookies.get("finos_refresh")
 
     second = client.post(f"{API}/auth/bootstrap")

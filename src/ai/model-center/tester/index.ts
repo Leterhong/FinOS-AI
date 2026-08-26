@@ -123,7 +123,7 @@ export async function runPlayground(
       messages: [
         {
           role: "system",
-          content: "你是 FinOS AI 的个人 CFO 助手，用简体中文、专业而简洁地回答用户的财务问题。",
+          content: "你是 FinOS AI 的企业经营与风险研判助手。用简体中文专业、审慎地回答，并明确事实、推断和信息缺口；不得虚构企业数据或替代人工决策。",
         },
         { role: "user", content: question },
       ],
