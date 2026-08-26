@@ -2,9 +2,9 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  // Phase 7.5 #358：Docker 生产镜像使用 standalone 产物，
-  // 只打包实际被引用的依赖，运行镜像体积从 ~1.2G 降到 ~200M。
-  output: "standalone",
+  // Docker 生产镜像使用 standalone 产物；本地生产预览保持标准输出，
+  // 这样 `npm start` 与 Next.js 的官方启动方式一致。
+  output: process.env.FINOS_STANDALONE === "1" ? "standalone" : undefined,
   async redirects() {
     return [
       { source: "/login", destination: "/", permanent: true },

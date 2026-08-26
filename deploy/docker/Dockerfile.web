@@ -13,7 +13,8 @@ RUN npm ci --no-audit --no-fund || npm install --no-audit --no-fund
 # ---------- 2. 构建层 ----------
 FROM node:20-alpine AS builder
 WORKDIR /app
-ENV NEXT_TELEMETRY_DISABLED=1
+ENV NEXT_TELEMETRY_DISABLED=1 \
+    FINOS_STANDALONE=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
