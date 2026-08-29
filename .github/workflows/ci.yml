@@ -13,7 +13,7 @@ jobs:
     name: 前端（类型检查 / 测试 / 构建）
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -34,7 +34,7 @@ jobs:
       # 测试隔离环境：独立 SQLite + 强随机测试密钥（见 tests/conftest.py）
       ENV: test
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"  # 与本地验证环境一致（README 要求 3.11+，3.12 满足）
@@ -51,7 +51,7 @@ jobs:
       ENV: test
       E2E_VERBOSE: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: 20
