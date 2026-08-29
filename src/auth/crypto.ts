@@ -13,6 +13,8 @@ import {
   timingSafeEqual,
   createHmac,
 } from "node:crypto";
+
+import { resolveSecretOrThrow } from "@/security/secret-guard";
 import type { SessionPayload } from "./types";
 
 const DEV_FALLBACK_SECRET = "finos-dev-only-auth-secret-do-not-use-in-prod";
@@ -23,23 +25,11 @@ const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 let warned = false;
 
 function getAuthSecret(): string {
-  const secret = process.env.FINOS_AUTH_SECRET || process.env.FINOS_DATA_KEY;
-  if (!secret) {
-    // 生产环境禁止回退到公开的开发密钥：会话签名密钥一旦公开，
-    // 任何人都能伪造任意用户的登录态。必须启动失败而非降级运行。
-    if (process.env.NODE_ENV === "production") {
-      throw new Error(
-        "[auth] 生产环境必须配置 FINOS_AUTH_SECRET（或 FINOS_DATA_KEY）环境变量。" +
-          "开发默认密钥是公开的，用于生产将允许任意伪造会话。"
-      );
-    }
-    if (!warned) {
-      warned = true;
-      console.warn(
-        "[auth] FINOS_AUTH_SECRET 未配置，使用开发默认密钥。生产环境必须配置！"
-      );
-    }
-    return DEV_FALLBACK_SECRET;
+  const raw = process.env.FINOS_AUTH_SECRET || process.env.FINOS_DATA_KEY;
+  const secret = resolveSecretOrThrow(raw, "auth", DEV_FALLBACK_SECRET);
+  if (!raw && process.env.NODE_ENV !== "production" && !warned) {
+    warned = true;
+    console.warn("[auth] FINOS_AUTH_SECRET 未配置，使用开发默认密钥。生产环境必须配置！");
   }
   return secret;
 }

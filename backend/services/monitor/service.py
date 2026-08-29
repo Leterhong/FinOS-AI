@@ -63,6 +63,22 @@ def run(db: Session, user: User) -> dict:
 
     notifications: list[dict] = []
     for ch in alerts:
+        # 冷却去重：同标题的监控通知 24 小时内不重复写入（此前每次运行都新增）。
+        from datetime import timedelta
+
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+        recent = db.scalar(
+            select(Notification.id)
+            .where(
+                Notification.user_id == user.id,
+                Notification.source == "monitor",
+                Notification.title == ch["title"],
+                Notification.created_at >= cutoff,
+            )
+            .limit(1)
+        )
+        if recent:
+            continue
         n = Notification(
             user_id=user.id,
             source="monitor",
@@ -73,17 +89,31 @@ def run(db: Session, user: User) -> dict:
         db.add(n)
         notifications.append({"id": n.id, "title": n.title, "severity": n.severity})
 
-    # 无变化也写一条例行体检通知
+    # 无变化也写一条例行体检通知（同样去重）
     if not alerts:
-        n = Notification(
-            user_id=user.id,
-            source="monitor",
-            severity="info",
-            title="财富例行体检",
-            body="本次监控未发现明显异常，资产与风险状况稳定。",
+        from datetime import timedelta
+
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+        recent = db.scalar(
+            select(Notification.id)
+            .where(
+                Notification.user_id == user.id,
+                Notification.source == "monitor",
+                Notification.title == "财富例行体检",
+                Notification.created_at >= cutoff,
+            )
+            .limit(1)
         )
-        db.add(n)
-        notifications.append({"id": n.id, "title": n.title, "severity": n.severity})
+        if not recent:
+            n = Notification(
+                user_id=user.id,
+                source="monitor",
+                severity="info",
+                title="财富例行体检",
+                body="本次监控未发现明显异常，资产与风险状况稳定。",
+            )
+            db.add(n)
+            notifications.append({"id": n.id, "title": n.title, "severity": n.severity})
 
     db.commit()
 

@@ -229,7 +229,10 @@ async def stream(body: GenerateIn, request: Request, user: User = Depends(get_cu
         try:
             async for delta in gw_stream(base_url, api_key, model_id, body.messages, body.temperature, body.max_tokens):
                 count += len(delta)
-                yield f"data: {delta}\n\n"
+                # SSE 数据行不能包含裸换行：delta 内含 \n 时按行拆分，
+                # 否则规范客户端会把换行后的内容当作非 data 行丢弃。
+                for part in str(delta).split("\n"):
+                    yield f"data: {part}\n\n" if part else ": keepalive\n\n"
             yield "data: [DONE]\n\n"
         except GatewayError as e:
             yield f"event: error\ndata: {e}\n\n"

@@ -42,8 +42,9 @@ async def lifespan(_: FastAPI):
         try:
             with SessionLocal() as db:
                 encrypt_existing_sensitive_data(db)
-        except Exception:
-            pass
+        except Exception as exc:  # noqa: BLE001
+            # 主密钥错误 / 迁移失败绝不能静默——否则历史密文将不可解。
+            logger.error("sensitive_data_migration_failed", extra={"error": str(exc)})
     # 启动期自动迁移前端 .data 历史数据（任务 #290）；失败仅记录不阻断启动。
     if settings.migrate_legacy_data:
         legacy_data = Path(__file__).resolve().parents[2] / ".data"
@@ -52,12 +53,18 @@ async def lifespan(_: FastAPI):
                 with SessionLocal() as db:
                     stats = run_legacy_import(str(legacy_data), db)
                     db.commit()
-                    print(f"[legacy-migration] 完成: {stats}")
+                    logger.info("legacy_migration_done", extra={"stats": str(stats)})
             except Exception as exc:  # noqa: BLE001
-                print(f"[legacy-migration] 跳过（出错不阻断启动）: {exc}")
-    # 启动异步任务 Worker（非阻塞后台线程）
+                logger.error("legacy_migration_skipped", extra={"error": str(exc)})
+    # 启动异步任务 Worker 与自动化调度线程（非阻塞后台线程）
     task_worker.start_worker()
+    from backend.autonomous.scheduler.service import start_scheduler
+
+    start_scheduler()
     yield
+    from backend.autonomous.scheduler.service import stop_scheduler
+
+    stop_scheduler()
     task_worker.stop_worker()
 
 
@@ -98,20 +105,26 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     )
     logger.exception("unhandled_exception at %s %s", request.method, request.url.path)
     try:
-        with SessionLocal() as db:
-            from backend.security.audit import write_security_event
+        # 同步 DB 写入放线程池执行，避免阻塞事件循环。
+        import asyncio
 
-            write_security_event(
-                db,
-                user_id=None,
-                event_type="unhandled_exception",
-                severity="error",
-                details=f"{type(exc).__name__} @ {request.method} {request.url.path}",
-                request=request,
-            )
-            db.commit()
+        from backend.security.audit import write_security_event
+
+        def _record() -> None:
+            with SessionLocal() as db:
+                write_security_event(
+                    db,
+                    user_id=None,
+                    event_type="unhandled_exception",
+                    severity="error",
+                    details=f"{type(exc).__name__} @ {request.method} {request.url.path}",
+                    request=request,
+                )
+                db.commit()
+
+        await asyncio.to_thread(_record)
     except Exception:  # noqa: BLE001 记录异常本身失败也不得影响响应
-        pass
+        logger.debug("audit_write_for_500_failed", exc_info=True)
     return JSONResponse(status_code=500, content={"success": False, "error": "服务器内部错误"})
 
 

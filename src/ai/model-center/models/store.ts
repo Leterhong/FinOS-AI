@@ -12,6 +12,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { encryptJson, decryptJson } from "../../../financial-data/storage/crypto";
 import { encryptApiKey, decryptApiKey, maskApiKey } from "../encryption";
+import { assertSafeBaseUrl } from "../providers/base-url-guard";
 import { getPreset } from "../providers/presets";
 import type { EncryptedBlob } from "../../../financial-data/types";
 import type {
@@ -28,8 +29,22 @@ interface StoreFile {
   updatedAt: string;
 }
 
+/** 密文存在但无法解密（FINOS_DATA_KEY 变更/丢失等）——绝不能当作空库覆盖写回。 */
+export class ModelStoreDecryptError extends Error {}
+
 function sanitize(userId: string): string {
   return userId.replace(/[^a-zA-Z0-9_.-]/g, "_").slice(0, 120) || "anon";
+}
+
+/** 采样参数服务端兜底校验：前端传什么都不得破坏后续上游请求。 */
+function coerceTemperature(value: unknown): number | undefined {
+  const n = typeof value === "string" ? Number(value) : value;
+  return typeof n === "number" && Number.isFinite(n) && n >= 0 && n <= 2 ? n : undefined;
+}
+
+function coerceMaxTokens(value: unknown): number | undefined {
+  const n = typeof value === "string" ? Number(value) : value;
+  return typeof n === "number" && Number.isInteger(n) && n > 0 && n <= 1_000_000 ? n : undefined;
 }
 
 class ModelConfigStore {
@@ -45,18 +60,34 @@ class ModelConfigStore {
 
   private async load(userId: string): Promise<AIProviderConfig[]> {
     if (this.cache.has(userId)) return this.cache.get(userId)!;
+    let raw: string;
     try {
-      const raw = await fs.readFile(this.filePath(userId), "utf8");
-      const blob = JSON.parse(raw) as EncryptedBlob;
-      const file = decryptJson<StoreFile>(blob);
-      // 用户隔离强校验：文件内 userId 必须匹配。
-      const configs = file.userId === userId ? file.configs ?? [] : [];
-      this.cache.set(userId, configs);
-      return configs;
-    } catch {
-      this.cache.set(userId, []);
-      return [];
+      raw = await fs.readFile(this.filePath(userId), "utf8");
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException)?.code;
+      if (code === "ENOENT") {
+        // 全新工作区：没有密文文件是正常状态。
+        this.cache.set(userId, []);
+        return [];
+      }
+      throw error;
     }
+    let file: StoreFile;
+    try {
+      const blob = JSON.parse(raw) as EncryptedBlob;
+      file = decryptJson<StoreFile>(blob);
+    } catch (error) {
+      // 解密失败（密钥不匹配/文件损坏）：向上抛出并拒绝一切写操作，
+      // 否则下一次 persist() 会用空列表覆盖密文，用户 API Key 静默清零。
+      throw new ModelStoreDecryptError(
+        "模型配置解密失败：请确认 FINOS_DATA_KEY 与加密该数据时一致",
+        { cause: error }
+      );
+    }
+    // 用户隔离强校验：文件内 userId 必须匹配。
+    const configs = file.userId === userId ? file.configs ?? [] : [];
+    this.cache.set(userId, configs);
+    return configs;
   }
 
   private async persist(userId: string, configs: AIProviderConfig[]) {
@@ -146,6 +177,9 @@ class ModelConfigStore {
     const configs = await this.load(userId);
     const preset = getPreset(input.providerName);
     const now = new Date().toISOString();
+    const baseUrl = (input.baseUrl?.trim() || preset.baseUrl).replace(/\/+$/, "");
+    // 出站边界：落库前校验 Base URL（拒绝云元数据/链路本地，生产默认禁内网）。
+    await assertSafeBaseUrl(baseUrl);
     const config: AIProviderConfig = {
       id: randomUUID(),
       userId,
@@ -154,10 +188,10 @@ class ModelConfigStore {
       displayName: input.displayName?.trim() || preset.label,
       modelName: input.modelName?.trim() || input.modelId,
       modelId: input.modelId.trim(),
-      baseUrl: (input.baseUrl?.trim() || preset.baseUrl).replace(/\/+$/, ""),
+      baseUrl,
       encryptedApiKey: input.apiKey ? encryptApiKey(input.apiKey.trim()) : undefined,
-      temperature: input.temperature,
-      maxTokens: input.maxTokens,
+      temperature: coerceTemperature(input.temperature),
+      maxTokens: coerceMaxTokens(input.maxTokens),
       status: "untested",
       isDefault: configs.length === 0, // 首个模型自动设为默认
       roles: input.roles ?? ["default"],
@@ -184,11 +218,17 @@ class ModelConfigStore {
     if (input.displayName !== undefined) c.displayName = input.displayName.trim() || c.displayName;
     if (input.modelName !== undefined) c.modelName = input.modelName.trim() || c.modelName;
     if (input.modelId !== undefined) c.modelId = input.modelId.trim() || c.modelId;
-    if (input.baseUrl !== undefined) c.baseUrl = input.baseUrl.trim().replace(/\/+$/, "") || c.baseUrl;
+    if (input.baseUrl !== undefined) {
+      const nextBaseUrl = input.baseUrl.trim().replace(/\/+$/, "") || c.baseUrl;
+      await assertSafeBaseUrl(nextBaseUrl);
+      c.baseUrl = nextBaseUrl;
+    }
     if (input.roles !== undefined) c.roles = input.roles;
-    // 采样参数（数字或 undefined）；NaN/负数防御由上游 UI 保证。
-    if (input.temperature !== undefined) c.temperature = input.temperature;
-    if (input.maxTokens !== undefined) c.maxTokens = input.maxTokens;
+    // 采样参数服务端兜底校验（不信任上游 UI）。
+    const temperature = coerceTemperature(input.temperature);
+    if (temperature !== undefined) c.temperature = temperature;
+    const maxTokens = coerceMaxTokens(input.maxTokens);
+    if (maxTokens !== undefined) c.maxTokens = maxTokens;
     // apiKey 留空表示不修改；提供则重新加密。
     if (input.apiKey) c.encryptedApiKey = encryptApiKey(input.apiKey.trim());
     c.status = "untested"; // 配置变更后需重新测试

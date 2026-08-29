@@ -4,6 +4,7 @@
 """
 from __future__ import annotations
 
+import hashlib
 import json
 
 from fastapi import APIRouter, Depends
@@ -99,7 +100,11 @@ def workflow(
     db: Session = Depends(get_db),
 ):
     """多 Agent 工作流（串行 + 并行 + 条件编排）。"""
-    key = f"agent:{user.id}:wf:{hash((body.question, tuple(body.agents or [])))}"
+    # 内置 hash() 每进程随机化（PYTHONHASHSEED）且可能碰撞，改用 sha256 稳定键。
+    digest = hashlib.sha256(
+        json.dumps([body.question, sorted(body.agents or [])], ensure_ascii=False).encode("utf-8")
+    ).hexdigest()
+    key = f"agent:{user.id}:wf:{digest}"
     if not body.question:
         cached = cache_get(key)
         if cached:

@@ -1,6 +1,7 @@
 """安全审计、安全事件和账户数据删除 API。"""
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Request
@@ -8,21 +9,103 @@ from pydantic import BaseModel, Field
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from backend.ai.models import AIModelConfig, AIUsageLog
+from backend.agents.models import AgentRunLog, UserAgentConfig
+from backend.ai.models import AIConversation, AIModelConfig, AIUsageLog
+from backend.auth.models import RefreshToken
+from backend.autonomous.models import (
+    AutomationAction,
+    AutomationEvent,
+    AutomationMarketCache,
+    AutomationPlan,
+    AutomationPreference,
+    AutomationRun,
+    AutomationRule,
+    AutomationScheduled,
+    AutomationSnapshot,
+    AutomationWebhook,
+    AutomationWorkflow,
+)
 from backend.core import get_current_user, ok
 from backend.core.response import fail
 from backend.core.security import verify_password
+from backend.config import UPLOAD_DIR
 from backend.database import get_db
 from backend.document.models import Document
 from backend.financial.models import Asset, FinancialProfile, Transaction
+from backend.intelligence.models import (
+    HealthScoreHistory,
+    LongTermMemory,
+    ScenarioSimulation,
+    WealthPrediction,
+    WealthStrategy,
+)
 from backend.memory.models import Memory
+from backend.multimodal.models import ExtractionResult, MultimodalInput
 from backend.notification.models import Notification
+from backend.personal_os.models import (
+    DailyBriefing,
+    DecisionJournal,
+    KnowledgeItem,
+    PlanVersion,
+    TimelineEvent,
+    WealthAvatar,
+)
+from backend.report.models import WealthReport
 from backend.security.audit import write_audit
 from backend.security.models import AuditLog, SecurityEvent
 from backend.services.models import AgentTask, FinancialTwin, KnowledgeChunk
+from backend.tasks.models import AsyncTask
 from backend.user.models import User
 
 router = APIRouter(prefix="/security", tags=["security"])
+
+# 账户删除必须覆盖全部含 user_id 的业务表——遗漏任何一张都会让
+# 「账户及关联数据已删除」变成虚假承诺（合规硬要求）。
+_USER_SCOPED_MODELS = (
+    KnowledgeChunk,
+    AgentTask,
+    FinancialTwin,
+    AsyncTask,
+    AgentRunLog,
+    UserAgentConfig,
+    AIConversation,
+    AIUsageLog,
+    AIModelConfig,
+    AutomationEvent,
+    AutomationRun,
+    AutomationAction,
+    AutomationSnapshot,
+    AutomationPlan,
+    AutomationPreference,
+    AutomationMarketCache,
+    AutomationWebhook,
+    AutomationScheduled,
+    AutomationWorkflow,
+    AutomationRule,
+    WealthReport,
+    MultimodalInput,
+    ExtractionResult,
+    WealthAvatar,
+    TimelineEvent,
+    KnowledgeItem,
+    DecisionJournal,
+    PlanVersion,
+    DailyBriefing,
+    WealthPrediction,
+    ScenarioSimulation,
+    WealthStrategy,
+    HealthScoreHistory,
+    LongTermMemory,
+    Notification,
+    Memory,
+    Document,
+    Transaction,
+    Asset,
+    FinancialProfile,
+    RefreshToken,
+    SecurityEvent,
+    AuditLog,
+)
 
 
 class DeleteAccountIn(BaseModel):
@@ -67,21 +150,12 @@ def delete_account(
         except OSError:
             pass
 
-    for model in (
-        KnowledgeChunk,
-        AgentTask,
-        FinancialTwin,
-        Notification,
-        Memory,
-        Document,
-        Transaction,
-        Asset,
-        FinancialProfile,
-        AIUsageLog,
-        AIModelConfig,
-        SecurityEvent,
-        AuditLog,
-    ):
+    # 上传目录整树删除：多模态 AES 加密文件与文档原件均不残留。
+    for user_dir in (UPLOAD_DIR / "multimodal" / user.id, UPLOAD_DIR / user.id):
+        if user_dir.is_dir():
+            shutil.rmtree(user_dir, ignore_errors=True)
+
+    for model in _USER_SCOPED_MODELS:
         db.execute(delete(model).where(model.user_id == user.id))
     db.delete(user)
     db.commit()

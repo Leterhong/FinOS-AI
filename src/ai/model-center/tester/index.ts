@@ -8,6 +8,7 @@ import "server-only";
 
 import { OpenAICompatibleProvider } from "../providers/OpenAICompatibleProvider";
 import type { ResolvedModel } from "../providers/OpenAICompatibleProvider";
+import { UnsafeBaseUrlError, assertSafeBaseUrl } from "../providers/base-url-guard";
 import { modelConfigStore } from "../models/store";
 import { resolveModelById, resolveActiveModel } from "../models/resolver";
 import { getPreset } from "../providers/presets";
@@ -80,7 +81,25 @@ export async function testDraftModel(input: ProviderConfigInput): Promise<ModelT
   return runTest(resolved);
 }
 
+function urlErrorResult(message: string): ModelTestResult {
+  return {
+    ok: false,
+    status: "error",
+    latencyMs: 0,
+    error: message,
+    testedAt: new Date().toISOString(),
+  };
+}
+
 async function runTest(resolved: ResolvedModel): Promise<ModelTestResult> {
+  try {
+    await assertSafeBaseUrl(resolved.baseUrl);
+  } catch (error) {
+    if (error instanceof UnsafeBaseUrlError) {
+      return urlErrorResult(error.message);
+    }
+    throw error;
+  }
   const { signal, clear } = withTimeoutSignal(TEST_TIMEOUT_MS);
   try {
     const provider = new OpenAICompatibleProvider(resolved);

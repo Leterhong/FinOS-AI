@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import hmac
+import re
 import time
 from collections import defaultdict
 from threading import Lock
@@ -21,15 +22,30 @@ logger = get_logger("finos.metrics")
 
 router = APIRouter()
 
+# 路径中的 ID 段（UUID / 十六进制 / 长数字）归一化为 :id，
+# 防止逐资源路径把进程内统计表撑成无界内存。
+_ID_SEGMENT = re.compile(r"^[0-9a-fA-F]{8,}|\d{4,}$")
+
 _stats: dict[str, dict] = defaultdict(
     lambda: {"count": 0, "errors": 0, "total_ms": 0.0, "max_ms": 0.0}
 )
 _lock = Lock()
+_MAX_ENDPOINTS = 500
+
+
+def normalize_endpoint(path: str) -> str:
+    parts = path.rstrip("/").split("/")
+    return "/".join(":id" if (_ID_SEGMENT.match(p)) else p for p in parts)
 
 
 def record(endpoint: str, ms: float, error: bool) -> None:
     with _lock:
-        s = _stats[endpoint]
+        s = _stats.get(endpoint)
+        if s is None:
+            # 硬上限兜底：达到容量后丢弃新维度而不是无限增长。
+            if len(_stats) >= _MAX_ENDPOINTS:
+                return
+            s = _stats[endpoint] = {"count": 0, "errors": 0, "total_ms": 0.0, "max_ms": 0.0}
         s["count"] += 1
         s["total_ms"] += ms
         if ms > s["max_ms"]:
@@ -67,7 +83,7 @@ class MetricsMiddleware(BaseHTTPMiddleware):
             raise
         finally:
             ms = (time.perf_counter() - start) * 1000
-            endpoint = f"{request.method} {request.url.path}"
+            endpoint = f"{request.method} {normalize_endpoint(request.url.path)}"
             record(endpoint, ms, error)
             if error or ms > 1000:
                 logger.warning(
@@ -77,29 +93,23 @@ class MetricsMiddleware(BaseHTTPMiddleware):
 
 
 def _authorized(request: Request) -> bool:
-    """运行指标属于运维信息，不对匿名公众开放。
+    """运行指标属于运维信息，仅允许持有 ``X-Metrics-Key``（值为 BACKUP_API_KEY）
+    的采集器读取；普通登录用户（含访客）无权查看全局统计。
 
-    两种放行方式：
-    1. 采集器携带 ``X-Metrics-Key``（值为 BACKUP_API_KEY），供 Prometheus 等使用；
-    2. 已登录用户携带有效的 Bearer Access Token。
+    BACKUP_API_KEY 未配置时端点关闭（fail-closed）。
     """
     from backend.config import get_settings
-    from backend.core.security import decode_access_token
 
     expected = (get_settings().backup_api_key or "").strip()
+    if not expected:
+        return False
     provided = request.headers.get("x-metrics-key", "")
-    if expected and provided and hmac.compare_digest(provided, expected):
-        return True
-
-    authz = request.headers.get("authorization", "")
-    if authz.lower().startswith("bearer "):
-        return decode_access_token(authz[7:].strip()) is not None
-    return False
+    return bool(provided) and hmac.compare_digest(provided, expected)
 
 
 @router.get("/metrics")
 def metrics(request: Request):
-    """暴露累计接口耗时与错误率统计（只读，无 PII）。需运维 Key 或已登录。"""
+    """暴露累计接口耗时与错误率统计（只读，无 PII）。仅限运维 Key。"""
     if not _authorized(request):
         return fail("无权访问运行指标", status_code=403)
     return ok(snapshot())

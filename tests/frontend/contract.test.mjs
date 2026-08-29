@@ -183,13 +183,20 @@ test("不得在前端源码硬编码真实密钥", () => {
 test("开发兜底密钥必须在生产环境 fail-fast", () => {
   // 本项目开源，DEV_FALLBACK_SECRET 对所有人可见。
   // 若生产环境缺失真实密钥时静默回退到它，加密等同于无效。
+  // 守卫可以是文件内联判断，也可以走集中式 resolveSecretOrThrow（secret-guard.ts）。
+  const guardModule = join(SRC, "security", "secret-guard.ts");
+  const centralizedOk =
+    existsSync(guardModule) &&
+    /NODE_ENV\s*===\s*["']production["']/.test(read(guardModule)) &&
+    /throw new Error/.test(read(guardModule));
   const offenders = [];
   for (const file of FILES) {
     const text = read(file);
     if (!text.includes("DEV_FALLBACK_SECRET")) continue;
-    const hasGuard =
+    const inlineGuard =
       /NODE_ENV\s*===\s*["']production["']/.test(text) && /throw new Error/.test(text);
-    if (!hasGuard) offenders.push(rel(file));
+    const usesCentralized = /resolveSecretOrThrow/.test(text);
+    if (!inlineGuard && !(centralizedOk && usesCentralized)) offenders.push(rel(file));
   }
   assert.deepEqual(
     offenders,

@@ -8,7 +8,8 @@ FROM node:20-alpine AS deps
 WORKDIR /app
 RUN apk add --no-cache libc6-compat
 COPY package.json package-lock.json* ./
-RUN npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+# lockfile 必须生效：npm ci 失败直接构建失败，不静默降级到 npm install
+RUN npm ci --no-audit --no-fund
 
 # ---------- 2. 构建层 ----------
 FROM node:20-alpine AS builder

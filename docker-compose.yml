@@ -73,12 +73,19 @@ services:
       REDIS_URL: redis://:${REDIS_PASSWORD:-finos_dev_redis}@redis:6379/0
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET 未设置，请先执行 bash deploy.sh 或复制 .env.example 为 .env}
       JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
-      JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-10080}
+      # Access Token 短期有效（安全模型：15 分钟 + Refresh 静默续期）
+      JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-15}
       JWT_REFRESH_EXPIRE_DAYS: ${JWT_REFRESH_EXPIRE_DAYS:-30}
       ENCRYPTION_MASTER_KEY: ${ENCRYPTION_MASTER_KEY:?ENCRYPTION_MASTER_KEY 未设置，请先执行 bash deploy.sh}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost,http://localhost:3000}
       API_RATE_LIMIT_PER_MINUTE: ${API_RATE_LIMIT_PER_MINUTE:-300}
       AI_RATE_LIMIT_PER_MINUTE: ${AI_RATE_LIMIT_PER_MINUTE:-30}
+      AI_MAX_TOKENS: ${AI_MAX_TOKENS:-8192}
+      AI_MAX_INPUT_CHARS: ${AI_MAX_INPUT_CHARS:-100000}
+      # 默认不信任任何代理；经 nginx 时可设为 nginx 容器 IP
+      TRUSTED_PROXY_IPS: ${TRUSTED_PROXY_IPS:-}
+      # 自托管 Ollama 等内网模型地址：默认禁止，需要时显式置 true
+      AI_ALLOW_PRIVATE_ENDPOINTS: ${AI_ALLOW_PRIVATE_ENDPOINTS:-}
       BACKUP_API_KEY: ${BACKUP_API_KEY:-}
       MIGRATE_LEGACY_DATA: ${MIGRATE_LEGACY_DATA:-false}
     volumes:
@@ -116,6 +123,8 @@ services:
       # （开源仓库的开发兜底密钥人人可见，用于生产等同未加密）。
       FINOS_DATA_KEY: ${FINOS_DATA_KEY:?FINOS_DATA_KEY 未设置，请先执行 bash deploy.sh 或复制 .env.example 为 .env}
       FINOS_AUTH_SECRET: ${FINOS_AUTH_SECRET:-}
+      # 自托管 Ollama 等内网模型地址：默认禁止，需要时显式置 true
+      FINOS_ALLOW_PRIVATE_AI_ENDPOINTS: ${AI_ALLOW_PRIVATE_ENDPOINTS:-}
     depends_on:
       api:
         condition: service_healthy

@@ -68,11 +68,14 @@ export interface WorkflowTask {
 }
 
 export interface EnterpriseRule {
+  id: string;
   code: string;
   name: string;
   domain: string;
   version: string;
   coverage: string;
+  /** 覆盖度百分比（0-100）：由「标记为已测试」动作驱动，不再用中文字符串当宽度。 */
+  coverageRate: number;
   updated: string;
 }
 

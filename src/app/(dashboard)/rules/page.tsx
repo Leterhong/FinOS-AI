@@ -1,7 +1,7 @@
 "use client";
 
 import { type FormEvent, useState } from "react";
-import { CheckCircle2, FileDiff, Plus, Search, ShieldCheck } from "lucide-react";
+import { CheckCircle2, FileDiff, Plus, Search, ShieldCheck, Trash2 } from "lucide-react";
 import EnterpriseDialog from "@/components/enterprise/EnterpriseDialog";
 import { EmptyStateCard, PageIntro, Panel } from "@/components/enterprise/EnterpriseUI";
 import { useEnterpriseStore } from "@/store/enterprise-store";
@@ -9,6 +9,8 @@ import { useEnterpriseStore } from "@/store/enterprise-store";
 export default function RulesPage() {
   const allRules = useEnterpriseStore((state) => state.rules);
   const addRule = useEnterpriseStore((state) => state.addRule);
+  const testRule = useEnterpriseStore((state) => state.testRule);
+  const deleteRule = useEnterpriseStore((state) => state.deleteRule);
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const rules = allRules.filter((rule) => `${rule.code}${rule.name}${rule.domain}`.toLowerCase().includes(query.toLowerCase()));
@@ -32,7 +34,7 @@ export default function RulesPage() {
     <Panel>
       <div className="flex flex-col gap-3 border-b border-white/[0.07] p-4 sm:flex-row sm:items-center"><label className="flex flex-1 items-center gap-2 rounded-xl border border-white/[0.08] bg-black/10 px-3"><Search className="h-3.5 w-3.5 text-slate-600" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索规则编号、名称或业务域" className="h-10 flex-1 bg-transparent text-xs text-white outline-none placeholder:text-slate-600" /></label><span className="text-[10px] text-slate-600">本地工作区自动保存</span></div>
       <div className="divide-y divide-white/[0.06]">
-        {rules.map((rule) => <div key={rule.code} className="grid gap-3 px-5 py-5 text-left transition hover:bg-white/[0.025] sm:grid-cols-[.55fr_1.5fr_.7fr_.5fr_.7fr] sm:items-center"><div><span className="rounded-md border border-cyan-400/15 bg-cyan-400/[0.06] px-2 py-1 text-[10px] font-semibold text-cyan-300">{rule.code}</span></div><div><p className="text-xs font-medium text-slate-200">{rule.name}</p><p className="mt-1 text-[10px] text-slate-600">创建于 {rule.updated} · {rule.coverage === "待测试" ? "尚未完成验证" : "已完成验证"}</p></div><span className="text-xs text-slate-400">{rule.domain}</span><span className="numeric text-xs text-slate-500">{rule.version}</span><div>{rule.coverage === "待测试" ? <span className="text-[10px] text-amber-300">待测试</span> : <><div className="flex justify-between text-[10px] text-slate-600"><span>覆盖度</span><span>{rule.coverage}</span></div><div className="mt-1.5 h-1 rounded-full bg-white/[0.07]"><div className="h-full rounded-full bg-emerald-400" style={{ width: rule.coverage }} /></div></>}</div></div>)}
+        {rules.map((rule) => <div key={rule.id} className="grid gap-3 px-5 py-5 text-left transition hover:bg-white/[0.025] sm:grid-cols-[.55fr_1.5fr_.7fr_.5fr_.9fr] sm:items-center"><div><span className="rounded-md border border-cyan-400/15 bg-cyan-400/[0.06] px-2 py-1 text-[10px] font-semibold text-cyan-300">{rule.code}</span></div><div><p className="text-xs font-medium text-slate-200">{rule.name}</p><p className="mt-1 text-[10px] text-slate-600">更新于 {rule.updated} · {rule.coverage === "待测试" ? "尚未完成验证" : "已完成验证"}</p></div><span className="text-xs text-slate-400">{rule.domain}</span><span className="numeric text-xs text-slate-500">{rule.version}</span><div>{rule.coverage === "待测试" ? <button onClick={() => testRule(rule.id)} className="rounded-lg border border-amber-400/20 bg-amber-400/[0.06] px-2.5 py-1.5 text-[10px] text-amber-200 transition hover:bg-amber-400/[0.12]">标记为已测试</button> : <div className="flex justify-between text-[10px] text-slate-600"><span>覆盖度</span><span>{rule.coverageRate}%</span></div>}<div className="mt-1.5 h-1 rounded-full bg-white/[0.07]"><div className="h-full rounded-full bg-emerald-400 transition-all" style={{ width: `${rule.coverageRate}%` }} /></div></div><button onClick={() => deleteRule(rule.id)} title="删除规则" className="justify-self-end rounded-lg p-1.5 text-slate-600 transition hover:bg-rose-400/10 hover:text-rose-300"><Trash2 className="h-3.5 w-3.5" /></button></div>)}
         {rules.length === 0 && <EmptyStateCard title={allRules.length === 0 ? "还没有业务规则" : "没有匹配的规则"} description={allRules.length === 0 ? "根据企业适用制度创建真实规则。新增规则默认标记为“待测试”，不会生成虚假的覆盖率或命中次数。" : "请调整搜索条件。"} action={allRules.length === 0 ? <button onClick={() => setOpen(true)} className="rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]">新建首条规则</button> : undefined} />}
       </div>
     </Panel>

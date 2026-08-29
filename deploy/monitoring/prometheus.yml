@@ -1,4 +1,6 @@
-# Prometheus 监控配置（Phase 7.0.4 十四/十九、日志与监控）
+# Prometheus 监控配置
+# /api/metrics 需要 X-Metrics-Key（值为 .env 中的 BACKUP_API_KEY）；
+# BACKUP_API_KEY 未配置时该端点 fail-closed，无法抓取。
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
@@ -6,13 +8,13 @@ global:
 scrape_configs:
   - job_name: finos-api
     metrics_path: /api/metrics
+    # 在此填入与 .env 中 BACKUP_API_KEY 一致的值
+    authorization:
+      type: MetricsKey
+      credentials: "CHANGE_ME_BACKUP_API_KEY"
     static_configs:
-      - targets: ["finos-api:8300"]
+      - targets: ["api:8300"]
 
   - job_name: finos-web
     static_configs:
-      - targets: ["finos-web:3000"]
-
-  - job_name: finos-nginx
-    static_configs:
-      - targets: ["finos-nginx:9113"]
+      - targets: ["web:3000"]

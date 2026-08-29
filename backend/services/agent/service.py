@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.ai.gateway import GatewayError, generate as gw_generate
+from backend.ai.gateway import GatewayError, generate_sync as gw_generate_sync
 from backend.ai.models import AIModelConfig
 from backend.services.agent.executor import execute
 from backend.services.agent.memory import clear, for_task
@@ -53,7 +53,7 @@ def run_orchestration(db: Session, user: User, task_type: str, question: str) ->
             api_key = decrypt_secret(cfg.api_key_encrypted)
             if api_key:
                 try:
-                    gen = gw_generate(
+                    gen = gw_generate_sync(
                         cfg.base_url,
                         api_key,
                         cfg.model_id,

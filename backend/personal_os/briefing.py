@@ -20,11 +20,12 @@ from backend.user.models import User
 
 
 def _today() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    # 面向用户的「今天」按服务器本地时钟（此前 UTC 导致东八区 8 点才换日）。
+    return datetime.now().astimezone().strftime("%Y-%m-%d")
 
 
 def _greeting() -> str:
-    h = datetime.now(timezone.utc).hour
+    h = datetime.now().astimezone().hour
     if h < 11:
         return "早安"
     if h < 18:
@@ -88,7 +89,9 @@ def generate_briefing(user: User, db, force: bool = False) -> dict:
             .limit(20)
         ).all()
     )
-    critical = [n for n in notifs if n.severity in ("warn", "critical")]
+    # 兼容两代严重度词表：automation 现写 critical/high/medium/low，
+    # monitor 仍写 warn/info——此前只匹配旧词表，high 级告警进不了简报。
+    critical = [n for n in notifs if n.severity in ("warn", "critical", "high")]
     if critical:
         reminders = "；".join(f"{n.title}" for n in critical[:3])
         if tone == "neutral":

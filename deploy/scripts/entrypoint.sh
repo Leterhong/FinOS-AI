@@ -32,8 +32,9 @@ fi
 
 echo "[entrypoint] 执行数据库迁移 alembic upgrade head"
 if ! alembic -c backend/alembic.ini upgrade head; then
-  echo "[entrypoint] 迁移失败，回退到 SQLAlchemy create_all 建表" >&2
-  python -c "from backend.database.session import init_db; init_db()"
+  echo "[entrypoint] 迁移失败：拒绝以 create_all 兜底启动（避免生产 schema 静默分叉）。" >&2
+  echo "[entrypoint] 请检查 alembic 版本表与迁移脚本后重试；确需重建请手动执行 init_db。" >&2
+  exit 1
 fi
 
 echo "[entrypoint] 启动服务：$*"

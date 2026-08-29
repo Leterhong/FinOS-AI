@@ -32,7 +32,7 @@ export default function EnterpriseCommandCenter() {
 
     <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
       <MetricCard label="企业项目" value={String(cases.length)} detail={`${cases.filter((item) => item.status !== "已完成").length} 个进行中`} />
-      <MetricCard label="研判资料" value={String(documents.length)} detail={`${documents.reduce((sum, item) => sum + item.facts, 0)} 个已抽取事实`} accent="amber" />
+      <MetricCard label="研判资料" value={String(documents.length)} detail={`${documents.filter((item) => item.status === "已解析").length} 份完成 AI 解析`} accent="amber" />
       <MetricCard label="风险信号" value={String(risks.length)} detail={`${highRisks.length} 项高风险`} accent="rose" />
       <MetricCard label="平均完整度" value={`${averageProgress}%`} detail={`${rules.length} 条业务规则`} accent="emerald" />
     </div>

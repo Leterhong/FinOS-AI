@@ -54,6 +54,10 @@ _PERCENT_RE = re.compile(r"(\d{1,3}(?:\.\d+)?)\s*[%％]")
 
 _INCOME_HINTS = ("月薪", "工资", "薪资", "收入", "税后", "到手", "年薪", "奖金", "分红", "租金收入")
 _EXPENSE_HINTS = ("支出", "花费", "开销", "消费", "房租", "还款", "月供", "生活费", "账单")
+# 明确的年度口径：仅这些词触发「折算月均」，避免「2024年」等日期误伤。
+_ANNUAL_HINT_RE = re.compile(r"年薪|年收入|年支出|年开销|年租金|年终奖|年度")
+# 聚合口径：仅这些词标记 aggregate=True，才允许确认时覆盖月度收支画像。
+_AGGREGATE_HINT_RE = re.compile(r"月薪|月收入|月支出|月开销|月固定|每月|月均|年收入|年薪")
 _GOAL_HINTS = ("目标", "攒够", "存够", "计划", "希望", "打算", "想要", "退休", "买房", "财务自由")
 _RISK_HINTS = {
     "conservative": ("保守", "稳健型偏保守", "低风险", "不能亏", "保本"),
@@ -221,12 +225,18 @@ def extract_entities(text: str, *, default_kind: str = KIND_ASSET) -> list[Entit
         # 「月」字样出现在收支行 → 认为是月度金额
         payload: dict = {}
         if kind in (KIND_INCOME, KIND_EXPENSE):
-            if "年" in line and "月" not in line:
+            if "年" in line and "月" not in line and _ANNUAL_HINT_RE.search(line):
+                # 仅出现年薪/年收入等明确年度口径词才提供月均折算；金额本身
+                # 保持原值（此前把「年终奖 50000」直接改写成 4166 存库）。
                 payload["period"] = "yearly"
-                amount = round(amount / 12.0, 2)
-                payload["note"] = "原文为年度金额，已折算为月均"
+                payload["monthlyAvg"] = round(amount / 12.0, 2)
+                payload["note"] = "原文为年度金额；月均仅供参考，不改动原始金额"
             else:
                 payload["period"] = "monthly"
+            # 仅「月薪/月收入/月支出/每月」等聚合口径标记 aggregate，
+            # 确认时才允许覆盖月度收支画像，单笔流水不得覆盖整个 profile。
+            if _AGGREGATE_HINT_RE.search(line):
+                payload["aggregate"] = True
 
         date_m = _DATE_RE.search(line)
         label = _clip(re.sub(r"[\d,.]+", " ", line).strip(" -|:：\t"), 40) or line[:40]

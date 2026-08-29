@@ -8,13 +8,10 @@ DATE="$(date +%Y%m%d-%H%M%S)"
 DEST="${BACKUP_DIR}/${DATE}"
 mkdir -p "$DEST"
 
-echo "==> 备份 PostgreSQL（finos）"
-docker compose exec -T finos-db pg_dump -U finos finos | gzip > "$DEST/finos.sql.gz"
-
-echo "==> 备份向量库（finos_vector）"
-docker compose exec -T finos-vector pg_dump -U finos finos_vector | gzip > "$DEST/finos_vector.sql.gz"
+echo "==> 备份 PostgreSQL（服务名 db，库名取自 POSTGRES_DB，默认 finos）"
+docker compose exec -T db pg_dump -U "${POSTGRES_USER:-finos}" "${POSTGRES_DB:-finos}" | gzip > "$DEST/finos.sql.gz"
 
 echo "==> 备份上传文件"
-docker compose cp finos-api:/app/backend/data/uploads "$DEST/uploads" 2>/dev/null || echo "（无上传文件，跳过）"
+docker compose cp api:/app/backend/data/uploads "$DEST/uploads" 2>/dev/null || echo "（无上传文件，跳过）"
 
 echo "==> 备份完成：$DEST"

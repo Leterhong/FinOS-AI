@@ -57,7 +57,7 @@ def generate_daily(db: Session, user: User, *, force: bool = False) -> dict:
 # 每周总结（自建）
 # --------------------------------------------------------------------------- #
 def _week_period() -> str:
-    now = datetime.now(timezone.utc)
+    now = datetime.now().astimezone()
     monday = now - timedelta(days=now.weekday())
     return f"{monday.strftime('%Y-%m-%d')} ~ {(monday + timedelta(days=6)).strftime('%Y-%m-%d')}"
 

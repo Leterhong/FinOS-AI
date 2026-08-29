@@ -180,10 +180,22 @@ def run_workflow(
     ctx = ctx or build_context(db, user)
     event = context.get("event") or {}
     metrics = build_metrics(ctx, None)
-    # 把事件字段并进指标，便于条件里直接引用
-    for k in ("event_type", "severity", "metric", "change_pct", "prev_value", "new_value"):
-        if k in event:
-            metrics[k] = event[k]
+    # 把事件字段并进指标，便于条件里直接引用。
+    # 事件 dict 是 camelCase（Event.to_dict()），同时兼容 snake_case——
+    # 此前只查 snake_case，用户按 event_type/change_pct 配置的条件静默失效。
+    field_aliases = {
+        "eventType": "event_type",
+        "severity": "severity",
+        "metric": "metric",
+        "changePct": "change_pct",
+        "prevValue": "prev_value",
+        "newValue": "new_value",
+    }
+    for camel, snake in field_aliases.items():
+        if camel in event:
+            metrics[snake] = event[camel]
+        elif snake in event:
+            metrics[snake] = event[snake]
     if event.get("metric") == "monthly_income":
         metrics["income_change_pct"] = event.get("changePct")
     if event.get("metric") == "monthly_expense":

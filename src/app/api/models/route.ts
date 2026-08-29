@@ -3,12 +3,13 @@ import { modelConfigStore } from "@/ai/model-center/models/store";
 import { getActiveModelSummary } from "@/ai/model-center/models/resolver";
 import type { ProviderConfigInput, ProviderType } from "@/ai/model-center/types";
 import { getSessionUserId } from "@/auth/session";
+import { withModelStoreErrors } from "@/ai/model-center/models/route-guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /** GET /api/models —— 列出当前用户模型（掩码）+ 当前激活模型摘要。 */
-export async function GET() {
+async function GET_impl() {
   const userId = await getSessionUserId();
   if (!userId) {
     return NextResponse.json({ error: "未登录" }, { status: 401 });
@@ -21,7 +22,7 @@ export async function GET() {
 }
 
 /** POST /api/models —— 添加模型。 */
-export async function POST(req: NextRequest) {
+async function POST_impl(req: NextRequest) {
   const userId = await getSessionUserId();
   if (!userId) {
     return NextResponse.json({ error: "未登录" }, { status: 401 });
@@ -51,3 +52,7 @@ export async function POST(req: NextRequest) {
   });
   return NextResponse.json({ model: created }, { status: 201 });
 }
+
+export const GET = withModelStoreErrors(GET_impl);
+
+export const POST = withModelStoreErrors(POST_impl);

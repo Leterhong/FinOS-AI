@@ -34,9 +34,9 @@ def get_task(task_id: str, user: User = Depends(get_current_user), db: Session =
     task = repo.get_task(db, task_id)
     if task is None:
         return fail("任务不存在", status_code=404)
-    # 用户隔离：仅本人或匿名任务可见
-    if task.user_id and task.user_id != user.id:
-        return fail("无权访问该任务", status_code=403)
+    # 用户隔离：任务一律归属创建者；无主任务（历史脏数据）不对外可见。
+    if not task.user_id or task.user_id != user.id:
+        return fail("任务不存在", status_code=404)
     return ok(
         {
             "task_id": task.id,

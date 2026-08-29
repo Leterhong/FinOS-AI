@@ -6,7 +6,8 @@
 
 让企业资料、经营事实、业务规则与外部研究进入同一条可追溯的研判链路，辅助团队完成资料理解、规则匹配、风险提示、投研整理和流程协作。
 
-[![Release](https://img.shields.io/badge/release-2.0.0-38bdf8.svg)](./CHANGELOG.md)
+[![CI](https://github.com/Leterhong/FinOS-AI/actions/workflows/ci.yml/badge.svg)](https://github.com/Leterhong/FinOS-AI/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/badge/release-2.0.1-38bdf8.svg)](./CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-22c55e.svg)](./LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6.svg)](https://www.typescriptlang.org/)
 [![Security Policy](https://img.shields.io/badge/security-policy-f59e0b.svg)](./SECURITY.md)
@@ -105,7 +106,7 @@ Browser
 | --- | --- |
 | 前端 | Next.js 15、React 19、TypeScript strict、Tailwind CSS、Zustand、Framer Motion |
 | 后端 | FastAPI、SQLAlchemy 2、Pydantic v2、Uvicorn |
-| 文档处理 | `pdf-parse`、`mammoth`、分块上传限制、路径边界校验 |
+| 文档处理 | `mammoth`（Word）、`pdf-parse`（PDF）、多编码 CSV、分块上传限制、路径边界校验 |
 | 数据 | SQLite、PostgreSQL 16、Redis 7 |
 | 安全 | 短期 Access Token、HttpOnly Refresh Cookie、AES-256-GCM、限流、可信代理、SSRF 防护 |
 | 部署 | Docker Compose、nginx、独立 Next.js 运行产物 |
@@ -202,19 +203,19 @@ npm run build           # Next.js 生产构建
 npm run test:backend    # 后端与 AI 回归
 ```
 
-测试使用隔离数据，不连接真实模型服务。更多信息见 [`tests/README.md`](./tests/README.md)。
+以上四条门禁同时由 GitHub Actions（`.github/workflows/ci.yml`）在 push 与 PR 时自动执行。测试使用隔离数据，不连接真实模型服务。更多信息见 [`tests/README.md`](./tests/README.md)。
 
 ## 安全与责任边界
 
 已实现的核心控制包括：
 
-- Access Token 仅驻留前端内存，Refresh Token 使用限定路径的 HttpOnly Cookie。
-- Refresh Token 轮换与重放检测；Cookie 会话写操作使用 CSRF 防护。
-- 生产环境缺失或使用弱 JWT 密钥时拒绝启动。
+- Access Token 默认 15 分钟且仅驻留前端内存，Refresh Token 使用 HttpOnly Cookie 并以原子吊销实现轮换与重放检测。
+- 生产环境缺失、过短或使用示例占位值的 JWT / 数据加密密钥时拒绝启动（前后端同一策略）。
 - 上传文件分块读取并限制大小，文件路径必须保持在允许目录内。
-- Webhook 等出站 URL 拒绝本机、内网、保留地址和自动重定向。
-- 仅信任明确配置的反向代理来源提供的转发地址。
-- 模型密钥、数据库凭据和企业资料不进入公开仓库或浏览器构建。
+- Webhook 等出站 URL 拒绝本机、内网、保留地址和自动重定向；模型 Base URL 同样拒绝云元数据/链路本地地址，本机与内网地址默认仅限开发环境、生产需显式放行。
+- 仅信任明确配置的反向代理来源提供的转发地址（限流与审计同一判定）。
+- 模型凭据以 AES-256-GCM 加密落盘，解密失败时拒绝读写而不是清空；健康检查与错误响应不泄漏内部细节。
+- 模型密钥、数据库凭据和企业资料不进入公开仓库或浏览器构建（`.dockerignore` 同步排除子目录环境文件）。
 
 当前开源工作区不是已经完成多租户认证、企业 RBAC、数据分级和审批隔离的 SaaS 产品。部署者必须自行完成组织权限、数据授权、日志留存、模型供应商评估和适用地区的监管合规。
 

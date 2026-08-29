@@ -50,6 +50,9 @@ export default function DashboardLayout({
             <div className="scrollbar-thin flex min-h-0 flex-1 flex-col overflow-y-auto pr-1">
               {children}
             </div>
+            <footer className="mt-4 shrink-0 border-t border-white/[0.06] pt-3 text-[10px] leading-5 text-slate-600">
+              FinOS AI提供信息分析和辅助决策，不构成投资建议，也不替代授信、投资、法律、审计或合规负责人。重大结论请以人工复核为准。
+            </footer>
           </div>
         </main>
       </div>

@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runPlayground } from "@/ai/model-center/tester";
 import { getSessionUserId } from "@/auth/session";
+import { withModelStoreErrors } from "@/ai/model-center/models/route-guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /** POST /api/models/playground —— 用当前/指定模型跑测试问题（Model Playground）。 */
-export async function POST(req: NextRequest) {
+async function POST_impl(req: NextRequest) {
   const userId = await getSessionUserId();
   if (!userId) {
     return NextResponse.json({ error: "未登录" }, { status: 401 });
@@ -24,3 +25,5 @@ export async function POST(req: NextRequest) {
   const result = await runPlayground(userId, question, body?.modelId);
   return NextResponse.json({ result });
 }
+
+export const POST = withModelStoreErrors(POST_impl);

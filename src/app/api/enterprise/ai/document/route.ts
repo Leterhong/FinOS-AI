@@ -13,20 +13,50 @@ const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_TEXT_CHARS = 60_000;
 const ALLOWED_EXTENSIONS = new Set([".pdf", ".docx", ".xlsx", ".xls", ".csv", ".txt", ".md", ".json"]);
 
+/** 多编码解码：中文 Excel 导出的 CSV 常为 GBK/GB18030，不能只按 UTF-8 硬解。 */
+function decodeText(content: Buffer): string {
+  try {
+    // utf8 对非法字节静默替换，先用严格解码探测是否真的是 UTF-8。
+    return new TextDecoder("utf-8", { fatal: true }).decode(content).replace(/^\uFEFF/, "");
+  } catch {
+    // 非 UTF-8：Node 的 TextDecoder 支持 gb18030，按中文业务场景优先尝试。
+    try {
+      return new TextDecoder("gb18030").decode(content);
+    } catch {
+      return content.toString("latin1");
+    }
+  }
+}
+
+/** PDF 提取：pdf-parse（完整 CMap/编码支持）优先，失败时退回内置提取器。 */
+async function extractPdf(fileName: string, content: Buffer): Promise<string> {
+  try {
+    const mod = (await import("pdf-parse")) as unknown as {
+      default?: (b: Buffer) => Promise<{ text: string }>;
+    };
+    const pdfParse =
+      mod.default ?? (mod as unknown as (b: Buffer) => Promise<{ text: string }>);
+    const result = await pdfParse(content);
+    if (result.text.trim()) return result.text;
+  } catch {
+    // 解析失败退回内置提取器，由上层「未提取到文本」兜底提示 OCR。
+  }
+  return parseForAnalysis(fileName, content).text;
+}
+
 async function extractText(file: File, content: Buffer, extension: string): Promise<string> {
   if (extension === ".docx") {
     const result = await mammoth.extractRawText({ buffer: content });
     return result.value;
   }
-  if ([".txt", ".md", ".csv", ".json"].includes(extension)) {
-    return content.toString("utf8");
+  if (extension === ".pdf") {
+    return extractPdf(file.name, content);
   }
-  const parsed = parseForAnalysis(file.name, content);
-  if (parsed.text.trim()) return parsed.text;
-  if (parsed.records.length) {
-    return JSON.stringify(parsed.records.slice(0, 500));
+  if ([".xlsx", ".xls"].includes(extension)) {
+    const parsed = parseForAnalysis(file.name, content);
+    return parsed.text.trim() || (parsed.records.length ? JSON.stringify(parsed.records.slice(0, 500)) : "");
   }
-  return "";
+  return decodeText(content);
 }
 
 export async function POST(req: NextRequest) {

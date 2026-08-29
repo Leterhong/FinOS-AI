@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { testDraftModel } from "@/ai/model-center/tester";
 import type { ProviderConfigInput } from "@/ai/model-center/types";
 import { getSessionUserId } from "@/auth/session";
+import { withModelStoreErrors } from "@/ai/model-center/models/route-guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /** POST /api/models/test —— 测试未保存的临时配置（添加弹窗「测试连接」）。 */
-export async function POST(req: NextRequest) {
+async function POST_impl(req: NextRequest) {
   const userId = await getSessionUserId();
   if (!userId) {
     return NextResponse.json({ error: "未登录" }, { status: 401 });
@@ -24,3 +25,5 @@ export async function POST(req: NextRequest) {
   const result = await testDraftModel(body);
   return NextResponse.json({ result });
 }
+
+export const POST = withModelStoreErrors(POST_impl);

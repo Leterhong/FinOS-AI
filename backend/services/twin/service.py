@@ -22,7 +22,8 @@ def _risk_score(allocation_pct: dict) -> float:
     """风险暴露评分（0-100）：集中度 + 负债占比越高风险越大。"""
     top = max(allocation_pct.values(), default=0.0)
     concentration = max(0.0, top - 0.5) * 100  # 超 50% 单一资产开始计风险
-    liability_pct = max(0.0, -allocation_pct.get("liability", 0.0))
+    # allocation_pct 由 twin_engine 计算，负债以正数占比表示（此前误加负号恒为 0）。
+    liability_pct = max(0.0, allocation_pct.get("liability", 0.0))
     debt_risk = min(liability_pct, 1.0) * 40
     return round(min(100.0, concentration + debt_risk), 2)
 
@@ -34,36 +35,61 @@ def compute_and_save(db: Session, user: User) -> dict:
     if not twin.get("hasData"):
         return {**twin, "history": []}
 
+    risk_score = _risk_score(twin.get("allocation", {}))
+    goal_progress = _goal_progress(twin, profile)
+    # 快照必须包含 riskScore/goalProgress：monitor 变化检测依赖与上一快照对比，
+    # 此前这两个键只存在于返回值，导致对比基准恒为 0、每次运行都误报。
+    snapshot_payload = {
+        **twin,
+        "riskScore": risk_score,
+        "goalProgress": goal_progress,
+    }
     snapshot = FinancialTwin(
         user_id=user.id,
         net_worth=twin.get("netWorth", 0.0),
         cash_flow=twin.get("monthlySurplus", 0.0),
-        risk_score=_risk_score(twin.get("allocation", {})),
+        risk_score=risk_score,
         health_score=twin.get("healthScore", 0),
-        goal_progress=_goal_progress(twin, profile),
-        snapshot=json.dumps(twin, ensure_ascii=False, default=str),
+        goal_progress=goal_progress,
+        snapshot=json.dumps(snapshot_payload, ensure_ascii=False, default=str),
     )
     db.add(snapshot)
+    _prune_history(db, user.id)
     db.commit()
-    return {**twin, "riskScore": snapshot.risk_score, "goalProgress": snapshot.goal_progress, "history": history(db, user)}
+    return {**twin, "riskScore": risk_score, "goalProgress": goal_progress, "history": history(db, user)}
+
+
+_MAX_TWIN_SNAPSHOTS = 50
+
+
+def _prune_history(db: Session, user_id: str) -> None:
+    """只保留最近 N 条快照，防止每次监控都插行的表无限膨胀。"""
+    ids = db.scalars(
+        select(FinancialTwin.id)
+        .where(FinancialTwin.user_id == user_id)
+        .order_by(FinancialTwin.created_at.desc(), FinancialTwin.id.desc())
+        .offset(_MAX_TWIN_SNAPSHOTS)
+        .limit(500)
+    ).all()
+    if ids:
+        from sqlalchemy import delete
+
+        db.execute(delete(FinancialTwin).where(FinancialTwin.id.in_(ids)))
 
 
 def _goal_progress(twin: dict, profile: FinancialProfile | None) -> float:
-    """目标完成度：以净资产对比用户自设目标金额（goal 含数字则解析）。"""
+    """目标完成度：以净资产对比用户自设目标金额。
+
+    统一使用 intelligence/context.parse_goal_amount：排除「50岁/10年」等
+    时间与年龄表述、支持「亿」单位——此前本地正则会把「50岁退休」解析成
+    目标 50 元、进度 100%。
+    """
     if not profile or not profile.goal:
         return 0.0
-    import re
+    from backend.intelligence.context import parse_goal_amount
 
-    m = re.search(r"(\d[\d,]*)\s*(万|w|k)?", profile.goal)
-    if not m:
-        return 0.0
-    target = float(m.group(1).replace(",", ""))
-    unit = m.group(2)
-    if unit in {"万", "w"}:
-        target *= 10000
-    elif unit == "k":
-        target *= 1000
-    if target <= 0:
+    target = parse_goal_amount(profile.goal)
+    if not target or target <= 0:
         return 0.0
     return round(min(1.0, max(0.0, twin.get("netWorth", 0.0) / target)), 4)
 

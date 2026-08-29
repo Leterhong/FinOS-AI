@@ -11,7 +11,7 @@ import json
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.ai.gateway import GatewayError, generate as gw_generate
+from backend.ai.gateway import GatewayError, generate_sync as gw_generate_sync
 from backend.ai.models import AIModelConfig
 from backend.memory.models import Memory
 from backend.services.rag.service import retrieve_knowledge
@@ -93,7 +93,7 @@ def analyze(db: Session, user: User, question: str = "") -> dict:
                 prompt += f"用户问题：{question}\n"
             prompt += "请基于以上给出简洁、可执行的财富建议（不超过 200 字）。"
             try:
-                gen = gw_generate(
+                gen = gw_generate_sync(
                     cfg.base_url,
                     api_key,
                     cfg.model_id,

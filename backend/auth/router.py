@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from backend.auth.models import RefreshToken
@@ -161,7 +161,7 @@ def register(body: RegisterIn, request: Request, response: Response, db: Session
         return fail("邮箱格式不正确")
     exists = db.scalar(select(User).where(User.email == email))
     if exists:
-        log_event(logger, "warning", "auth.register.duplicate", email=email, ip=client_ip(request))
+        log_event(logger, "warning", "auth.register.duplicate", email=f"{email[:3]}***", ip=client_ip(request))
         return fail("该邮箱已注册", status_code=409)
 
     user = User(email=email, password_hash=hash_password(body.password))
@@ -190,7 +190,7 @@ def login(body: LoginIn, request: Request, response: Response, db: Session = Dep
             request=request,
         )
         db.commit()
-        log_event(logger, "warning", "auth.login.failed", email=email, ip=client_ip(request))
+        log_event(logger, "warning", "auth.login.failed", email=f"{email[:3]}***", ip=client_ip(request))
         return fail("邮箱或密码错误", status_code=401)
 
     # 历史 scrypt 账户首次成功登录即升级为 bcrypt，不保留旧密码派生值。
@@ -245,12 +245,29 @@ def refresh(body: RefreshIn, request: Request, response: Response, db: Session =
     if user is None:
         return fail("账号不存在", status_code=401)
 
-    # 轮换：吊销旧 jti，签发新对。
-    record.revoked = True
-    db.add(record)
+    # 轮换：原子吊销旧 jti（仅当仍未吊销时生效），签发新对。
+    # 并发携带同一 token 的重放请求只会有一个 UPDATE 命中（rowcount=1），
+    # 其余按重放处理——修复「读到 revoked=False 后再吊销」的 TOCTOU 双花竞态。
+    revoked_rows = db.execute(
+        update(RefreshToken)
+        .where(RefreshToken.jti == jti, RefreshToken.revoked == False)  # noqa: E712
+        .values(revoked=True)
+    ).rowcount
+    db.commit()
+    if not revoked_rows:
+        write_security_event(
+            db,
+            user_id=user.id,
+            event_type="refresh_reuse",
+            severity="warn",
+            details="并发刷新检测到重复使用同一刷新令牌",
+            request=request,
+        )
+        db.commit()
+        log_event(logger, "warning", "auth.refresh.reuse", user_id=user.id, ip=client_ip(request))
+        return fail("刷新令牌无效或已过期", status_code=401)
     tokens = _issue_tokens(db, user)
     _set_refresh_cookie(response, tokens["refreshToken"], request)
-    db.commit()
     log_event(logger, "info", "auth.refresh.ok", user_id=user.id, ip=client_ip(request))
     return ok({"token": tokens["token"], "user": _user_public(user, db)}, "令牌已刷新")
 

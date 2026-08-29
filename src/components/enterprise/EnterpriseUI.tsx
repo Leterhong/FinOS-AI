@@ -3,6 +3,16 @@ import { ArrowDownRight, ArrowUpRight, DatabaseZap, Minus, type LucideIcon } fro
 import { cn } from "@/lib/utils";
 import type { RiskLevel } from "@/types/enterprise";
 
+/**
+ * 涨跌配色助手：中国市场惯例为「涨红、跌绿」。
+ * 所有涉及涨跌、升降的方向性展示统一使用本助手，避免各处自写色值导致口径不一致。
+ */
+export function updownClass(direction: "up" | "down" | "flat"): string {
+  if (direction === "up") return "text-rose-400";
+  if (direction === "down") return "text-emerald-400";
+  return "text-slate-400";
+}
+
 export const riskMeta: Record<RiskLevel, { label: string; className: string; dot: string }> = {
   critical: { label: "重大", className: "border-rose-400/25 bg-rose-400/10 text-rose-300", dot: "bg-rose-400" },
   high: { label: "高", className: "border-orange-400/25 bg-orange-400/10 text-orange-300", dot: "bg-orange-400" },

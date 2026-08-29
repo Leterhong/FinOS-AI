@@ -244,11 +244,17 @@ def _h_call_webhook(db: Session, user: User, params: dict, context: dict) -> dic
     status = None
     err = None
     try:
+        # 出站安全边界：无论 URL 来自已保存的 Webhook 还是动作参数内联值，
+        # 都必须通过公网地址校验并禁用自动重定向（否则规则动作可探测内网/云元数据）。
+        from backend.security.network import UnsafeOutboundUrl, open_public_url
+
         req = urllib.request.Request(
             str(url), data=payload, headers=headers, method=str(params.get("method") or (hook.method if hook else "POST"))
         )
-        with urllib.request.urlopen(req, timeout=5.0) as resp:  # noqa: S310
+        with open_public_url(req, timeout=5.0) as resp:
             status = resp.status
+    except UnsafeOutboundUrl as exc:
+        err = f"出站地址被拒绝：{exc}"
     except Exception as exc:  # noqa: BLE001
         err = str(exc)[:200]
 
@@ -267,7 +273,9 @@ def _h_create_task(db: Session, user: User, params: dict, context: dict) -> dict
     task_type = str(params.get("taskType") or "ping")
     payload = params.get("payload") if isinstance(params.get("payload"), dict) else {}
     try:
-        task = task_repo.create_task(db, user.id, task_type, payload)
+        # create_task 签名为 (db, task_type, payload, user_id=None)——
+        # 曾经把 user.id 误传到 task_type 位，导致任务类型非法且对所有用户可见。
+        task = task_repo.create_task(db, task_type, payload, user_id=user.id)
         return {"taskId": getattr(task, "id", None), "taskType": task_type}
     except Exception as exc:  # noqa: BLE001
         return {"error": f"任务创建失败：{exc}"}

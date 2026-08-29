@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { modelConfigStore } from "@/ai/model-center/models/store";
 import type { ProviderConfigInput } from "@/ai/model-center/types";
 import { getSessionUserId } from "@/auth/session";
+import { withModelStoreErrors } from "@/ai/model-center/models/route-guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /** PUT /api/models/[id] —— 更新模型（apiKey 留空表示不改）。 */
-export async function PUT(
+async function PUT_impl(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -40,7 +41,7 @@ export async function PUT(
 }
 
 /** DELETE /api/models/[id]?userId= —— 删除模型，返回自动回退的新默认 id。 */
-export async function DELETE(
+async function DELETE_impl(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -55,3 +56,7 @@ export async function DELETE(
   }
   return NextResponse.json({ removed: true, newDefaultId: result.newDefaultId });
 }
+
+export const PUT = withModelStoreErrors(PUT_impl);
+
+export const DELETE = withModelStoreErrors(DELETE_impl);

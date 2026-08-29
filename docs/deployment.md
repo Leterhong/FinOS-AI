@@ -64,9 +64,9 @@ cp .env.example .env
 | **缓存** | | | |
 | `REDIS_PASSWORD` | Redis 密码 | `finos_dev_redis` | **必改** |
 | **认证** | | | |
-| `JWT_SECRET` | JWT 签名密钥 | `CHANGE_ME_IN_ENV` | **必改** |
+| `JWT_SECRET` | JWT 签名密钥 | 无默认（示例为占位值，弱密钥守卫会拒绝启动） | **必改** |
 | `JWT_ALGORITHM` | 签名算法 | `HS256` | 否 |
-| `JWT_EXPIRE_MINUTES` | Access Token 有效期（分钟） | `10080`（7 天） | 否 |
+| `JWT_EXPIRE_MINUTES` | Access Token 有效期（分钟） | `15` | 否（短期令牌 + Refresh 静默续期） |
 | `JWT_REFRESH_EXPIRE_DAYS` | Refresh Token 有效期（天） | `30` | 否 |
 | **加密** | | | |
 | `ENCRYPTION_MASTER_KEY` | AES-256-GCM 主密钥 | 空 | **必设** |
@@ -76,7 +76,7 @@ cp .env.example .env
 | `AI_MAX_TOKENS` | 单次生成最大 token | `8192` | 否 |
 | `AI_MAX_INPUT_CHARS` | 单次输入最大字符 | `100000` | 否 |
 | **前端** | | | |
-| `NEXT_PUBLIC_BACKEND_URL` | 前端访问后端的地址 | `http://localhost:8300` | **是** |
+| `NEXT_PUBLIC_BACKEND_URL` | 前端访问后端的地址 | 空（同源 `/api`，经 nginx 转发） | 否 |
 | **运维** | | | |
 | `BACKUP_API_KEY` | 整库备份接口密钥 | 空 | **必设** |
 | `MIGRATE_LEGACY_DATA` | 启动期迁移历史数据 | `false` | 否 |

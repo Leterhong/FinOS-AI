@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.ai.gateway import GatewayError, generate as gw_generate
+from backend.ai.gateway import GatewayError, generate_sync as gw_generate_sync
 from backend.ai.models import AIModelConfig
 from backend.core import get_current_user, ok
 from backend.core.response import fail
@@ -70,7 +70,7 @@ def rag_query(body: QueryIn, user: User = Depends(get_current_user), db: Session
         else:
             api_key = decrypt_secret(cfg.api_key_encrypted)
             try:
-                gen = gw_generate(
+                gen = gw_generate_sync(
                     cfg.base_url,
                     api_key,
                     cfg.model_id,

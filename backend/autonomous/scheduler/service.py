@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import calendar
 import logging
+import threading
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
@@ -59,7 +60,13 @@ def compute_next_run(
     day_of_month: int = 1,
     base: datetime | None = None,
 ) -> datetime | None:
+    """计算下次运行时间。
+
+    存储/比较统一使用 UTC；但用户设定的「每日 8 点」按服务器本地时钟解释
+    （此前一律按 UTC 取整，导致东八区用户 16 点才收到日报）。
+    """
     now = (base or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    local_now = now.astimezone()
     hour = max(0, min(23, int(hour or 0)))
     freq = (frequency or "daily").lower()
 
@@ -68,31 +75,42 @@ def compute_next_run(
     if freq == "once":
         return now + timedelta(minutes=1)
 
-    candidate = now.replace(hour=hour, minute=0, second=0, microsecond=0)
+    def _local(hour_: int, day_offset: int = 0, *, day: int | None = None) -> datetime:
+        candidate = local_now + timedelta(days=day_offset)
+        if day is not None:
+            candidate = candidate.replace(day=day)
+        return candidate.replace(hour=hour_, minute=0, second=0, microsecond=0)
 
     if freq == "daily":
-        return candidate if candidate > now else candidate + timedelta(days=1)
+        candidate = _local(hour)
+        if candidate <= local_now:
+            candidate = _local(hour, 1)
+        return candidate.astimezone(timezone.utc)
 
     if freq == "weekly":
         target = max(0, min(6, int(weekday or 0)))
+        candidate = _local(hour)
         delta = (target - candidate.weekday()) % 7
-        candidate = candidate + timedelta(days=delta)
-        return candidate if candidate > now else candidate + timedelta(days=7)
+        if delta:
+            candidate = _local(hour, delta)
+        if candidate <= local_now:
+            candidate = _local(hour, delta + 7)
+        return candidate.astimezone(timezone.utc)
 
     if freq == "monthly":
         dom = max(1, min(31, int(day_of_month or 1)))
-        year, month = now.year, now.month
+        year, month = local_now.year, local_now.month
         day = min(dom, calendar.monthrange(year, month)[1])
-        candidate = now.replace(day=day, hour=hour, minute=0, second=0, microsecond=0)
-        if candidate <= now:
+        candidate = local_now.replace(day=day, hour=hour, minute=0, second=0, microsecond=0)
+        if candidate <= local_now:
             month += 1
             if month > 12:
                 month, year = 1, year + 1
             day = min(dom, calendar.monthrange(year, month)[1])
             candidate = candidate.replace(year=year, month=month, day=day)
-        return candidate
+        return candidate.astimezone(timezone.utc)
 
-    return candidate + timedelta(days=1)
+    return _local(hour, 1).astimezone(timezone.utc)
 
 
 def refresh_next_run(task: AutomationScheduled, base: datetime | None = None) -> None:
@@ -276,6 +294,45 @@ def tick(db: Session, limit: int = 20) -> list[dict]:
             except Exception:  # noqa: BLE001
                 pass
     return results
+
+
+# --------------------------------------------------------------------------- #
+# 守护线程（此前 tick() 从未被调用，定时自动化形同虚设）
+# --------------------------------------------------------------------------- #
+_SCHEDULER_INTERVAL_SECONDS = 60
+_scheduler_thread: threading.Thread | None = None
+_scheduler_stop = threading.Event()
+
+
+def _scheduler_loop() -> None:
+    from backend.database import SessionLocal
+
+    while not _scheduler_stop.wait(_SCHEDULER_INTERVAL_SECONDS):
+        try:
+            with SessionLocal() as db:
+                tick(db)
+        except Exception:  # noqa: BLE001
+            logger.exception("scheduler_loop_failed")
+
+
+def start_scheduler() -> None:
+    """应用启动时拉起调度守护线程（幂等）。"""
+    # 事件规则订阅同样需要在进程启动时挂载——此前只有手动 bootstrap/scan_now
+    # 才会注册订阅者，导致事件自动化在重启后静默失效。
+    from backend.autonomous.trigger.service import register_subscribers
+
+    register_subscribers()
+    global _scheduler_thread
+    if _scheduler_thread is not None and _scheduler_thread.is_alive():
+        return
+    _scheduler_stop.clear()
+    _scheduler_thread = threading.Thread(target=_scheduler_loop, name="finos-scheduler", daemon=True)
+    _scheduler_thread.start()
+    logger.info("scheduler_started", extra={"interval": _SCHEDULER_INTERVAL_SECONDS})
+
+
+def stop_scheduler() -> None:
+    _scheduler_stop.set()
 
 
 def serialize(task: AutomationScheduled) -> dict:

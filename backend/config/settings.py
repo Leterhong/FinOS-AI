@@ -28,9 +28,22 @@ WEAK_JWT_SECRETS = frozenset(
         "jwt_secret",
         "your-secret-key",
         "please-change-me",
+        # 仓库自带的 .env.example / backend/.env.example 占位值——长度够但人人可见，
+        # 同样必须视为「未配置」，否则示例文件直接抄进生产就能绕过本守卫。
+        "please-change-me-to-a-long-random-string",
+        "change_me_jwt_secret_at_least_32_bytes_long",
     }
 )
 MIN_JWT_SECRET_LENGTH = 32
+
+# 占位值特征：命中任意子串即视为未配置（防止未来新增模板值漏登记）。
+PLACEHOLDER_MARKERS = ("change_me", "change-me", "changeme", "placeholder", "your-", "<", ">" )
+
+# JWT 允许的算法白名单：禁止 none / RS-HS 混淆等配置引入的算法降级。
+ALLOWED_JWT_ALGORITHMS = frozenset({"HS256", "HS384", "HS512"})
+# Access Token 有效期上下限：短期令牌 + 静默续期是本项目的安全模型。
+MIN_JWT_EXPIRE_MINUTES = 1
+MAX_JWT_EXPIRE_MINUTES = 1440
 
 DEV_ENV_NAMES = frozenset({"dev", "development", "local", "test", "testing"})
 
@@ -77,6 +90,11 @@ class Settings(BaseSettings):
     # --- AES-256-GCM 主密钥：URL-safe Base64 编码的 32 字节随机值 ---
     encryption_master_key: str = ""
 
+    # --- 模型端点：是否允许本机/内网地址（自托管 Ollama 等场景） ---
+    # 支持 "true"/"false"/"1"/"0"；留空或未配置时按环境自动决定：
+    # 开发环境放行，生产环境默认禁止，云元数据段任何模式下都禁止。
+    ai_allow_private_endpoints: str | None = None
+
     # --- 安全限制 ---
     api_rate_limit_per_minute: int = 300
     ai_rate_limit_per_minute: int = 30
@@ -105,7 +123,19 @@ class Settings(BaseSettings):
             object.__setattr__(
                 self, "database_url", f"sqlite:///{(DATA_DIR / 'finos.db').as_posix()}"
             )
+        if self.ai_allow_private_endpoints is None:
+            object.__setattr__(self, "ai_allow_private_endpoints", is_dev_environment())
+        else:
+            raw = str(self.ai_allow_private_endpoints).strip().lower()
+            if raw in {"true", "1", "yes"}:
+                object.__setattr__(self, "ai_allow_private_endpoints", True)
+            elif raw in {"false", "0", "no"}:
+                object.__setattr__(self, "ai_allow_private_endpoints", False)
+            else:
+                object.__setattr__(self, "ai_allow_private_endpoints", is_dev_environment())
         self._guard_jwt_secret()
+        self._guard_jwt_algorithm()
+        self._guard_jwt_expire()
 
     def _guard_jwt_secret(self) -> None:
         """JWT 密钥强度守卫。
@@ -114,8 +144,11 @@ class Settings(BaseSettings):
         进程内随机密钥（重启即失效，仅供本地调试）。
         """
         current = (self.jwt_secret or "").strip()
+        lowered = current.lower()
         too_weak = (
-            current.lower() in WEAK_JWT_SECRETS or len(current) < MIN_JWT_SECRET_LENGTH
+            lowered in WEAK_JWT_SECRETS
+            or len(current) < MIN_JWT_SECRET_LENGTH
+            or any(marker in lowered for marker in PLACEHOLDER_MARKERS)
         )
         if not too_weak:
             return
@@ -136,6 +169,23 @@ class Settings(BaseSettings):
             RuntimeWarning,
             stacklevel=2,
         )
+
+    def _guard_jwt_algorithm(self) -> None:
+        """JWT 算法白名单守卫：拒绝 none / 非对称-对称混淆等危险配置。"""
+        if self.jwt_algorithm not in ALLOWED_JWT_ALGORITHMS:
+            raise RuntimeError(
+                f"JWT_ALGORITHM 仅允许 {sorted(ALLOWED_JWT_ALGORITHMS)}，"
+                f"当前配置 {self.jwt_algorithm!r} 会引入算法混淆/unsigned token 风险，拒绝启动。"
+            )
+
+    def _guard_jwt_expire(self) -> None:
+        """Access Token 有效期守卫：短期令牌 + Refresh 静默续期是既定安全模型。"""
+        if not (MIN_JWT_EXPIRE_MINUTES <= self.jwt_expire_minutes <= MAX_JWT_EXPIRE_MINUTES):
+            raise RuntimeError(
+                "JWT_EXPIRE_MINUTES 必须在 "
+                f"{MIN_JWT_EXPIRE_MINUTES}–{MAX_JWT_EXPIRE_MINUTES} 分钟之间"
+                "（超长 Access Token 会使刷新轮换与重放检测形同虚设），拒绝启动。"
+            )
 
 
 @lru_cache

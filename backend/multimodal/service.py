@@ -277,19 +277,26 @@ def _apply_one(db: Session, user: User, x: ExtractionResult) -> tuple[bool, str]
 
     if x.kind == KIND_INCOME:
         profile = _ensure_profile(db, user)
-        profile.income = round(float(x.amount or 0.0), 2)
+        amount = round(float(x.amount or 0.0), 2)
+        # 仅聚合口径（月薪/月收入/每月…）才覆盖月度收入画像；单笔流水
+        # （如一笔 5 万年终奖）不得把整个月收入改成这笔金额。
+        if payload.get("aggregate"):
+            monthly = payload.get("monthlyAvg")
+            profile.income = round(float(monthly), 2) if monthly else amount
         db.add(
-            Transaction(user_id=user.id, type="income", amount=round(float(x.amount or 0.0), 2),
-                        category="salary")
+            Transaction(user_id=user.id, type="income", amount=amount, category="salary")
         )
         db.flush()
         return True, profile.id
 
     if x.kind == KIND_EXPENSE:
         profile = _ensure_profile(db, user)
-        profile.expense = round(float(x.amount or 0.0), 2)
+        amount = round(float(x.amount or 0.0), 2)
+        if payload.get("aggregate"):
+            monthly = payload.get("monthlyAvg")
+            profile.expense = round(float(monthly), 2) if monthly else amount
         db.add(
-            Transaction(user_id=user.id, type="expense", amount=round(float(x.amount or 0.0), 2),
+            Transaction(user_id=user.id, type="expense", amount=amount,
                         category=payload.get("category", "other"))
         )
         db.flush()

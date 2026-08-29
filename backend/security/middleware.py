@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import hmac
 import time
 from collections import defaultdict, deque
 
@@ -14,9 +15,10 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from backend.config import get_settings
+from backend.security.audit import effective_client_ip
 
 # 严格限流的认证端点（防暴力破解 / 撞库）
-_STRICT_AUTH_PATHS = {"/api/auth/login", "/api/auth/register"}
+_STRICT_AUTH_PATHS = {"/api/auth/login", "/api/auth/register", "/api/auth/bootstrap"}
 _STRICT_AUTH_LIMIT = 10  # 次 / 分钟 / IP
 
 # CSRF 校验豁免（登录态尚未建立或使用 Refresh Token 的引导端点）
@@ -59,17 +61,14 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         # 非 Cookie 认证（既无 Bearer 也无认证 Cookie）交由后续鉴权处理，不在此拦截
         if not request.cookies.get("finos_token"):
             return True
-        # Cookie 认证的变更请求：双提交校验
-        cookie_token = request.cookies.get(_CSRF_COOKIE)
-        header_token = request.headers.get(_CSRF_HEADER)
-        return bool(cookie_token) and bool(header_token) and cookie_token == header_token
+        # Cookie 认证的变更请求：双提交校验（常量时间比较，避免时序侧信道）
+        cookie_token = request.cookies.get(_CSRF_COOKIE) or ""
+        header_token = request.headers.get(_CSRF_HEADER) or ""
+        return bool(cookie_token) and bool(header_token) and hmac.compare_digest(cookie_token, header_token)
 
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
-        peer_ip = request.client.host if request.client else "unknown"
-        forwarded = request.headers.get("x-forwarded-for", "").split(",", 1)[0].strip()
-        trusted = get_settings().trusted_proxy_ip_set
-        ip = forwarded if peer_ip in trusted and forwarded else peer_ip
+        ip = effective_client_ip(request)
 
         # --- 频率限制 ---
         now = time.monotonic()
@@ -80,6 +79,10 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         if len(bucket) >= limit:
             return JSONResponse(status_code=429, content={"success": False, "error": "请求过于频繁，请稍后重试"})
         bucket.append(now)
+        # 限制内存增长：桶数超阈值时清理空桶（唯一 IP / 伪造 XFF 的恶意刷子不再无限累积）。
+        if len(self._requests) > 10_000:
+            for stale_key in [k for k, v in self._requests.items() if not v]:
+                del self._requests[stale_key]
 
         # --- CSRF 校验 ---
         if not self._csrf_ok(request):

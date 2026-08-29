@@ -12,10 +12,14 @@ backend/data
 .dev-*.log
 .phase*.log
 
-# 环境与密钥
+# 环境与密钥（含子目录里的 backend/.env——绝不进镜像层）
 .env
-.env.local
-.env.*.local
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!backend/.env.example
+!.env.local.example
 
 # 版本控制与 IDE
 .git

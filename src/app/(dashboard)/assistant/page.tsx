@@ -13,8 +13,6 @@ interface Message {
   role: "user" | "assistant";
   content: string;
   model?: string;
-  latencyMs?: number;
-  totalTokens?: number;
   error?: boolean;
 }
 
@@ -29,19 +27,29 @@ export default function AssistantPage() {
   const documents = useEnterpriseStore((state) => state.documents);
   const rules = useEnterpriseStore((state) => state.rules);
   const risks = useEnterpriseStore((state) => state.risks);
+  const assistantMessages = useEnterpriseStore((state) => state.assistantMessages);
+  const appendAssistantMessage = useEnterpriseStore((state) => state.appendAssistantMessage);
+  const clearAssistantHistory = useEnterpriseStore((state) => state.clearAssistantHistory);
   const active = useModelStore((state) => state.active);
   const loadActive = useModelStore((state) => state.loadActive);
   const [query, setQuery] = useState("");
-  const [messages, setMessages] = useState<Message[]>([]);
   const [sending, setSending] = useState(false);
 
   useEffect(() => { void loadActive(); }, [loadActive]);
 
+  // 对话历史持久化在工作区 store：刷新/关闭浏览器后仍可回溯 AI 研判记录。
+  const messages: Message[] = assistantMessages.map((m) => ({
+    id: m.id,
+    role: m.role,
+    content: m.content,
+    model: m.model,
+    error: m.error,
+  }));
+
   const submit = async () => {
     const question = query.trim();
     if (!question || sending || !active?.configured) return;
-    const userMessage: Message = { id: `${Date.now()}-user`, role: "user", content: question };
-    setMessages((current) => [...current, userMessage]);
+    appendAssistantMessage({ role: "user", content: question });
     setQuery("");
     setSending(true);
     try {
@@ -50,21 +58,17 @@ export default function AssistantPage() {
         mode: "chat",
         context: { cases, documents, rules, risks },
       });
-      setMessages((current) => [...current, {
-        id: `${Date.now()}-assistant`,
+      appendAssistantMessage({
         role: "assistant",
         content: result.answer,
         model: result.model,
-        latencyMs: result.latencyMs,
-        totalTokens: result.usage.totalTokens,
-      }]);
+      });
     } catch (error) {
-      setMessages((current) => [...current, {
-        id: `${Date.now()}-error`,
+      appendAssistantMessage({
         role: "assistant",
         content: error instanceof Error ? error.message : "AI 调用失败，请检查模型连接。",
         error: true,
-      }]);
+      });
     } finally {
       setSending(false);
     }
@@ -76,14 +80,14 @@ export default function AssistantPage() {
       <Panel className="flex min-h-[650px] flex-col">
         {!active?.configured ? <EmptyStateCard icon={Cpu} className="flex-1" title="先连接一个 AI 大模型" description="助手不会使用本地模板或伪造回复。请在模型中心填写 Provider、Base URL、Model ID 和 API Key，并完成连接测试。" action={<Link href="/models" className="rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]">前往 AI 模型中心</Link>} /> : <>
           <div className="scrollbar-thin flex-1 overflow-y-auto p-4 sm:p-6">
-            {messages.length === 0 ? <div className="flex h-full min-h-80 flex-col items-center justify-center text-center"><div className="grid h-14 w-14 place-items-center rounded-2xl border border-cyan-400/15 bg-cyan-400/[0.06]"><Sparkles className="h-6 w-6 text-cyan-300" /></div><h2 className="mt-4 text-base font-semibold text-white">向真实模型发起企业研判</h2><p className="mt-2 max-w-lg text-xs leading-6 text-slate-500">当前上下文包含 {cases.length} 个项目、{documents.length} 份资料、{rules.length} 条规则和 {risks.length} 个风险信号。没有上下文时，模型会明确提示需要补充数据。</p><div className="mt-5 flex max-w-2xl flex-wrap justify-center gap-2">{promptStarters.map((prompt) => <button key={prompt} onClick={() => setQuery(prompt)} className="rounded-xl border border-white/[0.08] bg-white/[0.025] px-3 py-2 text-[10px] text-slate-400 hover:border-cyan-400/20 hover:text-cyan-200">{prompt}</button>)}</div></div> : <div className="mx-auto max-w-3xl space-y-5">{messages.map((message) => <div key={message.id} className={`flex gap-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}>{message.role === "assistant" && <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-cyan-400/15 bg-cyan-400/[0.07]"><Bot className="h-4 w-4 text-cyan-300" /></div>}<div className={`max-w-[88%] rounded-2xl px-4 py-3 ${message.role === "user" ? "rounded-tr-sm bg-white/[0.07] text-slate-200" : message.error ? "rounded-tl-sm border border-rose-400/15 bg-rose-400/[0.04] text-rose-100" : "rounded-tl-sm border border-white/[0.07] bg-[#0b1521] text-slate-300"}`}><p className="whitespace-pre-wrap text-sm leading-7">{message.content}</p>{message.role === "assistant" && !message.error && <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 border-t border-white/[0.06] pt-2 text-[9px] text-slate-600"><span>{message.model}</span><span>{message.latencyMs} ms</span><span>{message.totalTokens} tokens</span><span>需人工复核</span></div>}</div>{message.role === "user" && <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-white/10 bg-white/[0.04]"><UserRound className="h-4 w-4 text-slate-400" /></div>}</div>)}</div>}
+            {messages.length === 0 ? <div className="flex h-full min-h-80 flex-col items-center justify-center text-center"><div className="grid h-14 w-14 place-items-center rounded-2xl border border-cyan-400/15 bg-cyan-400/[0.06]"><Sparkles className="h-6 w-6 text-cyan-300" /></div><h2 className="mt-4 text-base font-semibold text-white">向真实模型发起企业研判</h2><p className="mt-2 max-w-lg text-xs leading-6 text-slate-500">当前上下文包含 {cases.length} 个项目、{documents.length} 份资料、{rules.length} 条规则和 {risks.length} 个风险信号。没有上下文时，模型会明确提示需要补充数据。</p><div className="mt-5 flex max-w-2xl flex-wrap justify-center gap-2">{promptStarters.map((prompt) => <button key={prompt} onClick={() => setQuery(prompt)} className="rounded-xl border border-white/[0.08] bg-white/[0.025] px-3 py-2 text-[10px] text-slate-400 hover:border-cyan-400/20 hover:text-cyan-200">{prompt}</button>)}</div></div> : <div className="mx-auto max-w-3xl space-y-5">{messages.map((message) => <div key={message.id} className={`flex gap-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}>{message.role === "assistant" && <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-cyan-400/15 bg-cyan-400/[0.07]"><Bot className="h-4 w-4 text-cyan-300" /></div>}<div className={`max-w-[88%] rounded-2xl px-4 py-3 ${message.role === "user" ? "rounded-tr-sm bg-white/[0.07] text-slate-200" : message.error ? "rounded-tl-sm border border-rose-400/15 bg-rose-400/[0.04] text-rose-100" : "rounded-tl-sm border border-white/[0.07] bg-[#0b1521] text-slate-300"}`}><p className="whitespace-pre-wrap text-sm leading-7">{message.content}</p>{message.role === "assistant" && !message.error && <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 border-t border-white/[0.06] pt-2 text-[9px] text-slate-600"><span>{message.model}</span><span>需人工复核</span></div>}</div>{message.role === "user" && <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-white/10 bg-white/[0.04]"><UserRound className="h-4 w-4 text-slate-400" /></div>}</div>)}</div>}
             {sending && <div className="mx-auto mt-5 flex max-w-3xl items-center gap-3"><div className="grid h-8 w-8 place-items-center rounded-lg border border-cyan-400/15 bg-cyan-400/[0.07]"><Bot className="h-4 w-4 text-cyan-300" /></div><div className="inline-flex items-center gap-2 rounded-2xl rounded-tl-sm border border-white/[0.07] bg-[#0b1521] px-4 py-3 text-xs text-slate-400"><Loader2 className="h-3.5 w-3.5 animate-spin text-cyan-300" />模型正在研判工作区上下文</div></div>}
           </div>
-          <div className="border-t border-white/[0.07] p-4"><div className="mx-auto max-w-3xl"><div className="flex items-end gap-2 rounded-2xl border border-white/[0.1] bg-white/[0.03] p-2 focus-within:border-cyan-400/30"><textarea value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void submit(); } }} rows={2} placeholder="询问当前企业项目、资料、规则、风险或研究问题…" className="min-h-12 flex-1 resize-none bg-transparent px-2 py-2 text-sm text-white outline-none placeholder:text-slate-600" /><button onClick={() => void submit()} disabled={!query.trim() || sending} aria-label="发送研判问题" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-cyan-300 text-[#041018] disabled:opacity-40"><CornerDownLeft className="h-4 w-4" /></button></div></div></div>
+          <div className="border-t border-white/[0.07] p-4"><div className="mx-auto max-w-3xl"><div className="flex items-end gap-2 rounded-2xl border border-white/[0.1] bg-white/[0.03] p-2 focus-within:border-cyan-400/30"><textarea value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void submit(); } }} rows={2} placeholder="询问当前企业项目、资料、规则、风险或研究问题…" className="min-h-12 flex-1 resize-none bg-transparent px-2 py-2 text-sm text-white outline-none placeholder:text-slate-600" /><button onClick={() => void submit()} disabled={!query.trim() || sending} aria-label="发送研判问题" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-cyan-300 text-[#041018] disabled:opacity-40"><CornerDownLeft className="h-4 w-4" /></button></div></div></div>
         </>}
       </Panel>
       <aside className="space-y-4">
-        <Panel className="p-4"><p className="text-xs font-semibold text-slate-200">当前上下文</p><div className="mt-4 grid grid-cols-2 gap-2 text-center"><div className="rounded-xl border border-white/[0.07] p-3"><p className="numeric text-lg text-white">{cases.length}</p><p className="mt-1 text-[9px] text-slate-600">项目</p></div><div className="rounded-xl border border-white/[0.07] p-3"><p className="numeric text-lg text-white">{documents.length}</p><p className="mt-1 text-[9px] text-slate-600">资料</p></div><div className="rounded-xl border border-white/[0.07] p-3"><p className="numeric text-lg text-white">{rules.length}</p><p className="mt-1 text-[9px] text-slate-600">规则</p></div><div className="rounded-xl border border-white/[0.07] p-3"><p className="numeric text-lg text-white">{risks.length}</p><p className="mt-1 text-[9px] text-slate-600">风险</p></div></div>{cases.length + documents.length + rules.length === 0 && <div className="mt-3 flex gap-2 rounded-xl border border-amber-400/10 bg-amber-400/[0.035] p-3"><DatabaseZap className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" /><p className="text-[10px] leading-5 text-amber-100/60">工作区暂无业务数据，模型只能提供通用框架，不能作出企业事实判断。</p></div>}</Panel>
+        <Panel className="p-4"><div className="flex items-center justify-between"><p className="text-xs font-semibold text-slate-200">当前上下文</p>{messages.length > 0 && <button onClick={clearAssistantHistory} className="text-[10px] text-slate-600 transition hover:text-rose-300">清空对话</button>}</div><div className="mt-4 grid grid-cols-2 gap-2 text-center"><div className="rounded-xl border border-white/[0.07] p-3"><p className="numeric text-lg text-white">{cases.length}</p><p className="mt-1 text-[9px] text-slate-600">项目</p></div><div className="rounded-xl border border-white/[0.07] p-3"><p className="numeric text-lg text-white">{documents.length}</p><p className="mt-1 text-[9px] text-slate-600">资料</p></div><div className="rounded-xl border border-white/[0.07] p-3"><p className="numeric text-lg text-white">{rules.length}</p><p className="mt-1 text-[9px] text-slate-600">规则</p></div><div className="rounded-xl border border-white/[0.07] p-3"><p className="numeric text-lg text-white">{risks.length}</p><p className="mt-1 text-[9px] text-slate-600">风险</p></div></div>{cases.length + documents.length + rules.length === 0 && <div className="mt-3 flex gap-2 rounded-xl border border-amber-400/10 bg-amber-400/[0.035] p-3"><DatabaseZap className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" /><p className="text-[10px] leading-5 text-amber-100/60">工作区暂无业务数据，模型只能提供通用框架，不能作出企业事实判断。</p></div>}</Panel>
         <Panel className="p-4"><div className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-cyan-300" /><p className="text-xs font-semibold text-slate-200">AI 回答边界</p></div><ul className="mt-3 space-y-2 text-[10px] leading-5 text-slate-600"><li>· 只使用当前工作区明确数据</li><li>· 区分事实、推断与数据缺口</li><li>· 不伪造证据、规则和外部来源</li><li>· 重大结论必须由人员复核</li></ul></Panel>
       </aside>
     </div>

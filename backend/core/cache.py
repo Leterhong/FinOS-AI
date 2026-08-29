@@ -16,6 +16,7 @@ from __future__ import annotations
 import hashlib
 import json
 import threading
+import time
 from collections import OrderedDict
 from typing import Any, Callable, Optional
 
@@ -26,20 +27,27 @@ settings = get_settings()
 
 class _InMemoryCache:
     def __init__(self, maxsize: int = 2048) -> None:
-        self._data: "OrderedDict[str, Any]" = OrderedDict()
+        # value -> (expires_at_monotonic, payload)；TTL 与 Redis 模式语义一致。
+        self._data: "OrderedDict[str, tuple[float, Any]]" = OrderedDict()
         self._maxsize = maxsize
         self._lock = threading.Lock()
 
     def get(self, key: str) -> Optional[Any]:
         with self._lock:
-            if key in self._data:
-                self._data.move_to_end(key)
-                return self._data[key]
-            return None
+            item = self._data.get(key)
+            if item is None:
+                return None
+            expires_at, value = item
+            if expires_at is not None and time.monotonic() >= expires_at:
+                del self._data[key]
+                return None
+            self._data.move_to_end(key)
+            return value
 
-    def set(self, key: str, value: Any) -> None:
+    def set(self, key: str, value: Any, ttl: int = 300) -> None:
         with self._lock:
-            self._data[key] = value
+            expires_at = (time.monotonic() + ttl) if ttl and ttl > 0 else None
+            self._data[key] = (expires_at, value)
             self._data.move_to_end(key)
             while len(self._data) > self._maxsize:
                 self._data.popitem(last=False)
@@ -117,7 +125,7 @@ class Cache:
                 return
             except Exception:
                 pass
-        self._mem.set(key, value)
+        self._mem.set(key, value, ttl)
 
     def delete(self, key: str) -> None:
         self._ensure()

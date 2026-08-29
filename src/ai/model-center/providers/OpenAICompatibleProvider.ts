@@ -172,10 +172,15 @@ export class OpenAICompatibleProvider {
       headers: this.headers(),
       body: JSON.stringify(this.body(request, false)),
       signal: request.signal,
+      // 禁止自动重定向：防止公网地址 30x 跳转内网绕过 Base URL 校验。
+      redirect: "manual",
     });
+    if (res.status >= 300 && res.status < 400) {
+      throw new Error(`[user:${this.m.providerType}] 请求被重定向（不允许），状态码 ${res.status}`);
+    }
     if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      throw new Error(`[user:${this.m.providerType}] 请求失败 (${res.status}): ${text.slice(0, 300)}`);
+      // 不回显上游响应体：错误信息可能反射内部服务内容（SSRF 探测 oracle）。
+      throw new Error(`[user:${this.m.providerType}] 请求失败 (${res.status})`);
     }
     const data = await res.json();
     return {
@@ -200,10 +205,13 @@ export class OpenAICompatibleProvider {
       headers: this.headers(),
       body: JSON.stringify(this.body(request, true)),
       signal: request.signal,
+      redirect: "manual",
     });
+    if (res.status >= 300 && res.status < 400) {
+      throw new Error(`[user:${this.m.providerType}] 请求被重定向（不允许），状态码 ${res.status}`);
+    }
     if (!res.ok || !res.body) {
-      const text = await res.text().catch(() => "");
-      throw new Error(`[user:${this.m.providerType}] 流式请求失败 (${res.status}): ${text.slice(0, 300)}`);
+      throw new Error(`[user:${this.m.providerType}] 流式请求失败 (${res.status})`);
     }
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
@@ -243,7 +251,11 @@ export class OpenAICompatibleProvider {
       method: "POST",
       headers: this.headers(),
       body: JSON.stringify({ model: this.m.modelId, input: texts }),
+      redirect: "manual",
     });
+    if (res.status >= 300 && res.status < 400) {
+      throw new Error(`[user:${this.m.providerType}] 请求被重定向（不允许），状态码 ${res.status}`);
+    }
     if (!res.ok) {
       throw new Error(`[user:${this.m.providerType}] embeddings 失败 (${res.status})`);
     }

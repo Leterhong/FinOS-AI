@@ -8,6 +8,8 @@ import "server-only";
  */
 
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "node:crypto";
+
+import { resolveSecretOrThrow } from "@/security/secret-guard";
 import type { EncryptedApiKey } from "../types";
 
 const DEV_FALLBACK_SECRET = "finos-dev-only-secret-do-not-use-in-prod";
@@ -18,22 +20,13 @@ let warned = false;
 
 function getKey(): Buffer {
   if (cachedKey) return cachedKey;
-  if (!process.env.FINOS_DATA_KEY) {
-    // 生产环境禁止用公开的开发密钥加密用户的模型 API Key。
-    if (process.env.NODE_ENV === "production") {
-      throw new Error(
-        "[model-center] 生产环境必须配置 FINOS_DATA_KEY 环境变量。" +
-          "开发默认密钥是公开的，用它加密用户 API Key 等同于明文存储。"
-      );
-    }
-    if (!warned) {
-      warned = true;
-      console.warn(
-        "[model-center] FINOS_DATA_KEY 未配置，API Key 使用开发默认密钥加密。生产环境必须配置！"
-      );
-    }
+  const secret = resolveSecretOrThrow(process.env.FINOS_DATA_KEY, "model-center", DEV_FALLBACK_SECRET);
+  if (!process.env.FINOS_DATA_KEY && process.env.NODE_ENV !== "production" && !warned) {
+    warned = true;
+    console.warn(
+      "[model-center] FINOS_DATA_KEY 未配置，API Key 使用开发默认密钥加密。生产环境必须配置！"
+    );
   }
-  const secret = process.env.FINOS_DATA_KEY || DEV_FALLBACK_SECRET;
   cachedKey = scryptSync(secret, SALT, 32);
   return cachedKey;
 }
