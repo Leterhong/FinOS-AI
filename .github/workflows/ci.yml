@@ -35,7 +35,7 @@ jobs:
       ENV: test
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"  # 与本地验证环境一致（README 要求 3.11+，3.12 满足）
           cache: pip
@@ -56,7 +56,7 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - run: npm ci --no-audit --no-fund
