@@ -29,6 +29,13 @@ const MOCK = `http://127.0.0.1:${MOCK_PORT}`;
 const children = [];
 const results = [];
 
+// 全局看门狗：任何形式的挂起（如 keep-alive 连接滞留）都在 10 分钟内强制退出。
+setTimeout(() => {
+  console.error("E2E 全局超时（10 分钟）——强制退出");
+  stopChildren();
+  process.exit(2);
+}, 600_000).unref();
+
 function ok(name, condition, detail = "") {
   results.push({ name, pass: Boolean(condition), detail });
   console.log(`${condition ? "✔" : "✖"} ${name}${condition ? "" : ` — ${detail}`}`);
@@ -62,7 +69,7 @@ async function waitReady(url, label, timeoutMs = 60_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
-      const resp = await fetch(url);
+      const resp = await fetch(url, { signal: AbortSignal.timeout(3_000) });
       if (resp.ok || resp.status === 404) return;
     } catch {
       // not ready

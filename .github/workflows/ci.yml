@@ -47,6 +47,7 @@ jobs:
   e2e:
     name: 端到端（主链路 / mock LLM）
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       ENV: test
       E2E_VERBOSE: "1"
