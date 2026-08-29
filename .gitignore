@@ -40,13 +40,15 @@ backend/data/
 *.db-shm
 *.dump
 *.sql.gz
-backup/
-backups/
+/backup/
+/backups/
 
 # ---------- 用户上传文件 ----------
-uploads/
+# 仅锚定根目录（不加 / 会匹配任意层级，误伤 src/**/storage 等源码目录）
+/uploads/
+/storage/
 backend/uploads/
-storage/
+backend/data/
 public/uploads/
 
 # ---------- 日志 ----------

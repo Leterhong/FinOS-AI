@@ -21,6 +21,7 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npm run typecheck
       - run: npm test
+      - run: npm run test:unit
       - run: npm run build
         env:
           # 构建期仅编译，不连接任何真实模型服务
@@ -36,7 +37,29 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"  # 与本地验证环境一致（README 要求 3.11+，3.12 满足）
           cache: pip
       - run: pip install -r backend/requirements.txt
+      - run: pip install ruff
+      - run: ruff check backend
       - run: npm run test:backend
+
+  e2e:
+    name: 端到端（主链路 / mock LLM）
+    runs-on: ubuntu-latest
+    env:
+      ENV: test
+      E2E_VERBOSE: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - run: pip install -r backend/requirements.txt
+      - run: node tests/e2e/main-chain.mjs

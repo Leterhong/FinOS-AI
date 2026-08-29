@@ -19,7 +19,7 @@ import logging
 import threading
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from backend.autonomous.models import AutomationRun, AutomationScheduled
@@ -277,13 +277,30 @@ def due_tasks(db: Session, limit: int = 20, now: datetime | None = None) -> list
 
 
 def tick(db: Session, limit: int = 20) -> list[dict]:
-    """守护线程的一次心跳：执行所有到期任务。"""
+    """守护线程的一次心跳：执行所有到期任务。
+
+    多 worker / 多实例部署下每个进程都会运行 tick——必须先原子认领
+    （把 next_run_at 推到远期，仅当仍读到原值时生效），认领失败的
+    心跳直接跳过，避免同一任务被双跑。认领后 run_scheduled_task 会
+    按 frequency 重算真正的 next_run_at。
+    """
     results: list[dict] = []
     for task in due_tasks(db, limit=limit):
         user = db.get(User, task.user_id)
         if user is None:
             task.enabled = False
             db.commit()
+            continue
+        claimed = db.execute(
+            update(AutomationScheduled)
+            .where(
+                AutomationScheduled.id == task.id,
+                AutomationScheduled.next_run_at == task.next_run_at,
+            )
+            .values(next_run_at=task.next_run_at + timedelta(days=365))
+        ).rowcount
+        db.commit()
+        if not claimed:
             continue
         try:
             results.append(run_scheduled_task(db, user, task))

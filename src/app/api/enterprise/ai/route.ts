@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUserId } from "@/auth/session";
 import { resolveActiveModel } from "@/ai/model-center/models/resolver";
+import { ModelStoreDecryptError } from "@/ai/model-center/models/store";
 import { OpenAICompatibleProvider } from "@/ai/model-center/providers/OpenAICompatibleProvider";
 
 export const runtime = "nodejs";
@@ -15,6 +16,7 @@ interface RequestBody {
   question?: unknown;
   mode?: unknown;
   context?: unknown;
+  stream?: unknown;
 }
 
 const BASE_SYSTEM_PROMPT = `你是 FinOS AI 的企业经营与风险研判助手。你的任务是辅助资料理解、规则匹配、风险提示、投研整理和流程规划。
@@ -67,7 +69,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `问题不能超过 ${MAX_QUESTION_CHARS} 个字符` }, { status: 413 });
   }
 
-  const model = await resolveActiveModel(userId);
+  let model;
+  try {
+    model = await resolveActiveModel(userId);
+  } catch (error) {
+    if (error instanceof ModelStoreDecryptError) {
+      return NextResponse.json({ error: error.message }, { status: 503 });
+    }
+    throw error;
+  }
   if (!model) {
     return NextResponse.json(
       { error: "尚未配置可用的大模型，请先前往 AI 模型中心完成配置。", code: "NO_MODEL" },
@@ -78,6 +88,50 @@ export async function POST(req: NextRequest) {
   const mode = normalizeMode(body.mode);
   const context = serializeContext(body.context);
   const provider = new OpenAICompatibleProvider(model);
+
+  // ── 流式模式：SSE 逐段转发（前端助手逐字渲染，等待感大幅下降）──
+  if (body.stream === true) {
+    const encoder = new TextEncoder();
+    const started = Date.now();
+    const sse = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        const send = (payload: Record<string, unknown>) => {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
+        };
+        try {
+          for await (const delta of provider.stream({
+            messages: [
+              { role: "system", content: `${BASE_SYSTEM_PROMPT}
+
+当前任务模式：${MODE_PROMPTS[mode]}` },
+              { role: "user", content: `【工作区上下文】
+${context}
+
+【用户任务】
+${question}` },
+            ],
+            model: model.modelId,
+            temperature: model.temperature ?? 0.3,
+            maxTokens: Math.min(model.maxTokens ?? 2048, 8192),
+          })) {
+            send({ delta });
+          }
+          send({ done: true, model: model.modelId, latencyMs: Date.now() - started });
+        } catch (error) {
+          send({ error: error instanceof Error ? error.message : "模型流式调用失败" });
+        } finally {
+          controller.close();
+        }
+      },
+    });
+    return new Response(sse, {
+      headers: {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-store",
+        Connection: "keep-alive",
+      },
+    });
+  }
 
   try {
     const response = await provider.generate({

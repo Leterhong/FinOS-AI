@@ -17,7 +17,7 @@ import hashlib
 import json
 import threading
 import time
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict, deque
 from typing import Any, Callable, Optional
 
 from backend.config import get_settings
@@ -74,6 +74,7 @@ class Cache:
         self._redis = None
         self._connected = False
         self._mem = _InMemoryCache()
+        self._rate: dict[str, deque] = defaultdict(deque)
         self._lock = threading.Lock()
 
     # --- 连接（懒加载，避免 import 时网络调用） ---
@@ -135,6 +136,40 @@ class Cache:
             except Exception:
                 pass
         self._mem.delete(key)
+
+    def hit(self, key: str, limit: int, window_seconds: int = 60) -> bool:
+        """滑动窗口限流：窗口内第 limit+1 次命中返回 False。
+
+        Redis 模式用 ZSET（多进程共享同一配额）；不可用时降级为进程内
+        deque——fail-open 设计：Redis 异常时放行请求，限流绝不放大故障。
+        """
+        self._ensure()
+        now = time.time()
+        window_start = now - window_seconds
+        if self._mode == "redis" and self._redis is not None:
+            try:
+                pipe = self._redis.pipeline()
+                zset = f"ratelimit:{key}"
+                pipe.zremrangebyscore(zset, "-inf", window_start)
+                pipe.zadd(zset, {str(now): now})
+                pipe.zcard(zset)
+                pipe.expire(zset, window_seconds)
+                _, _, count, _ = pipe.execute()
+                return int(count) <= limit
+            except Exception:
+                # Redis 故障时放行（fail-open），降级逻辑交由内存路径兜底。
+                pass
+        with self._lock:
+            bucket = self._rate[key]
+            while bucket and bucket[0] <= window_start:
+                bucket.popleft()
+            if len(bucket) >= limit:
+                return False
+            bucket.append(now)
+            if len(self._rate) > 10_000:
+                for stale in [k for k, v in self._rate.items() if not v]:
+                    del self._rate[stale]
+            return True
 
     def invalidate_prefix(self, prefix: str) -> int:
         self._ensure()

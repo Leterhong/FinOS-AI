@@ -67,6 +67,8 @@ export interface WorkflowTask {
   stage: "待处理" | "处理中" | "待复核" | "已完成";
 }
 
+import type { RuleCondition } from "@/lib/rule-engine";
+
 export interface EnterpriseRule {
   id: string;
   code: string;
@@ -76,6 +78,8 @@ export interface EnterpriseRule {
   coverage: string;
   /** 覆盖度百分比（0-100）：由「标记为已测试」动作驱动，不再用中文字符串当宽度。 */
   coverageRate: number;
+  /** 结构化触发条件（可选）：填写后资料研判会由确定性规则引擎评估命中。 */
+  conditions?: RuleCondition[];
   updated: string;
 }
 

@@ -22,15 +22,21 @@ logger = get_logger("finos.metrics")
 
 router = APIRouter()
 
-# 路径中的 ID 段（UUID / 十六进制 / 长数字）归一化为 :id，
-# 防止逐资源路径把进程内统计表撑成无界内存。
-_ID_SEGMENT = re.compile(r"^[0-9a-fA-F]{8,}|\d{4,}$")
+# 路径中的 ID 段归一化为 :id，防止逐资源路径把进程内统计表撑成无界内存。
+# 覆盖三类：纯 hex（uuid）/ 纯长数字 / 带连字符前缀的资源 ID
+# （doc-ms5nx3nvf990ec、user-ms5nwyko90d397 等——要求后缀含数字，
+# 避免把 ai-generate 之类的普通词组误归一化）。
+_ID_SEGMENT = re.compile(
+    r"^[0-9a-fA-F]{8,}$|^\d{4,}$|^[a-z]{1,12}-[0-9a-z]*[0-9][0-9a-z]*$|^(?:[0-9a-fA-F]{4,}-)+[0-9a-fA-F]{4,}$",
+    re.I,
+)
 
 _stats: dict[str, dict] = defaultdict(
     lambda: {"count": 0, "errors": 0, "total_ms": 0.0, "max_ms": 0.0}
 )
 _lock = Lock()
 _MAX_ENDPOINTS = 500
+_dropped_endpoints = 0
 
 
 def normalize_endpoint(path: str) -> str:
@@ -39,11 +45,19 @@ def normalize_endpoint(path: str) -> str:
 
 
 def record(endpoint: str, ms: float, error: bool) -> None:
+    global _dropped_endpoints
     with _lock:
         s = _stats.get(endpoint)
         if s is None:
-            # 硬上限兜底：达到容量后丢弃新维度而不是无限增长。
+            # 硬上限兜底：达到容量后丢弃新维度而不是无限增长；
+            # 丢弃必须可观测（否则指标会静默缺失）。
             if len(_stats) >= _MAX_ENDPOINTS:
+                _dropped_endpoints += 1
+                if _dropped_endpoints % 100 == 1:
+                    logger.warning(
+                        "metrics_capacity_reached",
+                        extra={"dropped_total": _dropped_endpoints, "latest": endpoint},
+                    )
                 return
             s = _stats[endpoint] = {"count": 0, "errors": 0, "total_ms": 0.0, "max_ms": 0.0}
         s["count"] += 1
@@ -56,7 +70,7 @@ def record(endpoint: str, ms: float, error: bool) -> None:
 
 def snapshot() -> dict:
     with _lock:
-        out: dict[str, dict] = {}
+        out: dict[str, dict] = {"_dropped_endpoints": _dropped_endpoints} if _dropped_endpoints else {}
         for ep, s in _stats.items():
             avg = (s["total_ms"] / s["count"]) if s["count"] else 0.0
             out[ep] = {

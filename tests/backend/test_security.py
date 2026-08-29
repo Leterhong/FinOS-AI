@@ -5,6 +5,7 @@ import uuid
 
 from tests.conftest import API, assert_envelope
 from backend.security.middleware import SecurityMiddleware
+from backend.core.cache import cache
 
 
 # ---------------------------------------------------------------- 安全响应头
@@ -41,7 +42,7 @@ def test_validation_error_does_not_leak_internals(client):
 # ---------------------------------------------------------------- 限流
 def test_auth_endpoints_are_rate_limited(client):
     """登录端点严格限流 10 次/分钟/IP，防暴力破解。"""
-    SecurityMiddleware._requests.clear()
+    cache._rate.clear()
     statuses = []
     for _ in range(14):
         r = client.post(f"{API}/auth/login",
@@ -49,7 +50,7 @@ def test_auth_endpoints_are_rate_limited(client):
                               "password": "WrongPass123!"})
         statuses.append(r.status_code)
     assert 429 in statuses, f"登录端点未触发限流，实际状态码序列: {statuses}"
-    SecurityMiddleware._requests.clear()
+    cache._rate.clear()
 
 
 # ---------------------------------------------------------------- 密钥零泄露

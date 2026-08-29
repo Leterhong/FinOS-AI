@@ -1,0 +1,6 @@
+# Python 静态检查基线：先守住语法错误与未定义名，后续逐步收紧规则集。
+line-length = 120
+target-version = "py311"
+
+[lint]
+select = ["E9", "F63", "F7", "F82"]

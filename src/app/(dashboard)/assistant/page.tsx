@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Bot, CornerDownLeft, Cpu, DatabaseZap, Loader2, ShieldCheck, Sparkles, UserRound } from "lucide-react";
 import { EmptyStateCard, PageIntro, Panel } from "@/components/enterprise/EnterpriseUI";
-import { callEnterpriseAI } from "@/lib/enterprise-ai";
+import { callEnterpriseAI, streamEnterpriseAI } from "@/lib/enterprise-ai";
 import { useEnterpriseStore } from "@/store/enterprise-store";
 import { useModelStore } from "@/store/model-store";
 
@@ -34,6 +34,9 @@ export default function AssistantPage() {
   const loadActive = useModelStore((state) => state.loadActive);
   const [query, setQuery] = useState("");
   const [sending, setSending] = useState(false);
+  // 流式进行中的临时气泡：完成后才落入持久化 store（避免每个 token 触发持久化）。
+  const [streamText, setStreamText] = useState("");
+  const [streamModel, setStreamModel] = useState("");
 
   useEffect(() => { void loadActive(); }, [loadActive]);
 
@@ -52,25 +55,36 @@ export default function AssistantPage() {
     appendAssistantMessage({ role: "user", content: question });
     setQuery("");
     setSending(true);
+    setStreamText("");
+    setStreamModel("");
     try {
-      const result = await callEnterpriseAI({
-        question,
-        mode: "chat",
-        context: { cases, documents, rules, risks },
-      });
+      const result = await streamEnterpriseAI(
+        {
+          question,
+          mode: "chat",
+          context: { cases, documents, rules, risks },
+        },
+        (delta) => setStreamText((current) => current + delta)
+      );
+      setStreamModel(result.model);
       appendAssistantMessage({
         role: "assistant",
         content: result.answer,
         model: result.model,
       });
     } catch (error) {
+      // 流式中途失败：把已生成的部分保留为错误消息，不静默丢弃。
+      const partial = streamText ? `（流式中断，已生成部分如下）
+
+${streamText}` : undefined;
       appendAssistantMessage({
         role: "assistant",
-        content: error instanceof Error ? error.message : "AI 调用失败，请检查模型连接。",
-        error: true,
+        content: partial ?? (error instanceof Error ? error.message : "AI 调用失败，请检查模型连接。"),
+        error: !partial,
       });
     } finally {
       setSending(false);
+      setStreamText("");
     }
   };
 
@@ -81,7 +95,7 @@ export default function AssistantPage() {
         {!active?.configured ? <EmptyStateCard icon={Cpu} className="flex-1" title="先连接一个 AI 大模型" description="助手不会使用本地模板或伪造回复。请在模型中心填写 Provider、Base URL、Model ID 和 API Key，并完成连接测试。" action={<Link href="/models" className="rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]">前往 AI 模型中心</Link>} /> : <>
           <div className="scrollbar-thin flex-1 overflow-y-auto p-4 sm:p-6">
             {messages.length === 0 ? <div className="flex h-full min-h-80 flex-col items-center justify-center text-center"><div className="grid h-14 w-14 place-items-center rounded-2xl border border-cyan-400/15 bg-cyan-400/[0.06]"><Sparkles className="h-6 w-6 text-cyan-300" /></div><h2 className="mt-4 text-base font-semibold text-white">向真实模型发起企业研判</h2><p className="mt-2 max-w-lg text-xs leading-6 text-slate-500">当前上下文包含 {cases.length} 个项目、{documents.length} 份资料、{rules.length} 条规则和 {risks.length} 个风险信号。没有上下文时，模型会明确提示需要补充数据。</p><div className="mt-5 flex max-w-2xl flex-wrap justify-center gap-2">{promptStarters.map((prompt) => <button key={prompt} onClick={() => setQuery(prompt)} className="rounded-xl border border-white/[0.08] bg-white/[0.025] px-3 py-2 text-[10px] text-slate-400 hover:border-cyan-400/20 hover:text-cyan-200">{prompt}</button>)}</div></div> : <div className="mx-auto max-w-3xl space-y-5">{messages.map((message) => <div key={message.id} className={`flex gap-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}>{message.role === "assistant" && <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-cyan-400/15 bg-cyan-400/[0.07]"><Bot className="h-4 w-4 text-cyan-300" /></div>}<div className={`max-w-[88%] rounded-2xl px-4 py-3 ${message.role === "user" ? "rounded-tr-sm bg-white/[0.07] text-slate-200" : message.error ? "rounded-tl-sm border border-rose-400/15 bg-rose-400/[0.04] text-rose-100" : "rounded-tl-sm border border-white/[0.07] bg-[#0b1521] text-slate-300"}`}><p className="whitespace-pre-wrap text-sm leading-7">{message.content}</p>{message.role === "assistant" && !message.error && <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 border-t border-white/[0.06] pt-2 text-[9px] text-slate-600"><span>{message.model}</span><span>需人工复核</span></div>}</div>{message.role === "user" && <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-white/10 bg-white/[0.04]"><UserRound className="h-4 w-4 text-slate-400" /></div>}</div>)}</div>}
-            {sending && <div className="mx-auto mt-5 flex max-w-3xl items-center gap-3"><div className="grid h-8 w-8 place-items-center rounded-lg border border-cyan-400/15 bg-cyan-400/[0.07]"><Bot className="h-4 w-4 text-cyan-300" /></div><div className="inline-flex items-center gap-2 rounded-2xl rounded-tl-sm border border-white/[0.07] bg-[#0b1521] px-4 py-3 text-xs text-slate-400"><Loader2 className="h-3.5 w-3.5 animate-spin text-cyan-300" />模型正在研判工作区上下文</div></div>}
+            {sending && <div className="mx-auto mt-5 max-w-3xl"><div className="flex gap-3"><div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-cyan-400/15 bg-cyan-400/[0.07]"><Bot className="h-4 w-4 text-cyan-300" /></div><div className="max-w-[88%] rounded-2xl rounded-tl-sm border border-white/[0.07] bg-[#0b1521] px-4 py-3 text-sm leading-7 text-slate-300">{streamText ? <p className="whitespace-pre-wrap">{streamText}<span className="ml-0.5 inline-block h-4 w-[2px] animate-pulse bg-cyan-300 align-middle" /></p> : <span className="inline-flex items-center gap-2 text-xs text-slate-400"><Loader2 className="h-3.5 w-3.5 animate-spin text-cyan-300" />模型正在研判工作区上下文</span>}</div></div></div>}
           </div>
           <div className="border-t border-white/[0.07] p-4"><div className="mx-auto max-w-3xl"><div className="flex items-end gap-2 rounded-2xl border border-white/[0.1] bg-white/[0.03] p-2 focus-within:border-cyan-400/30"><textarea value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void submit(); } }} rows={2} placeholder="询问当前企业项目、资料、规则、风险或研究问题…" className="min-h-12 flex-1 resize-none bg-transparent px-2 py-2 text-sm text-white outline-none placeholder:text-slate-600" /><button onClick={() => void submit()} disabled={!query.trim() || sending} aria-label="发送研判问题" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-cyan-300 text-[#041018] disabled:opacity-40"><CornerDownLeft className="h-4 w-4" /></button></div></div></div>
         </>}

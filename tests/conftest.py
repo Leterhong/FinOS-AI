@@ -45,6 +45,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from backend.database import Base, engine, init_db  # noqa: E402
 from backend.main import app  # noqa: E402
+from backend.core.cache import cache
 from backend.security.middleware import SecurityMiddleware  # noqa: E402
 
 API = "/api"
@@ -66,7 +67,7 @@ def client() -> TestClient:
             conn.exec_driver_sql(f'DELETE FROM "{table.name}"')
 
     # 复位限流窗口，避免跨用例累计触发 429
-    SecurityMiddleware._requests.clear()
+    cache._rate.clear()  # 限流窗口在 cache 内（Redis/内存双模式）
 
     with TestClient(app) as c:
         yield c

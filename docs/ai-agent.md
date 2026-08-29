@@ -1,3 +1,5 @@
+> ⚠️ **本文档撰写于 1.x 个人财富版时期（2026-08-01 前后），部分内容与 2.0 企业版不一致，仅供历史参考；请以 README 与 docs/security.md 为准。**
+
 # AI 与 Agent 体系 · AI & Agent Architecture
 
 > FinOS AI 的智能层由四部分组成：LLM 网关、财富智能引擎、Agent 生态、RAG 知识检索。本文档描述它们的设计、协作方式与扩展方法。

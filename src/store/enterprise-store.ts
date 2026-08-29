@@ -2,6 +2,12 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import {
+  pushDelete,
+  pushEntity,
+  pullSnapshot,
+  type EnterpriseKind,
+} from "@/lib/enterprise-sync";
 import type {
   AgentRun,
   AnalysisDocument,
@@ -37,12 +43,12 @@ interface EnterpriseState {
   createCase: (input: NewCase) => EnterpriseCase;
   updateCase: (id: string, patch: Partial<Pick<EnterpriseCase, "status" | "nextAction">>) => void;
   addDocument: (file: File, caseId: string) => AnalysisDocument;
-  completeDocumentAnalysis: (id: string, analysis: string, model: string) => void;
+  completeDocumentAnalysis: (id: string, analysis: string, model: string, factsCount?: number, ruleHitsCount?: number) => void;
   failDocumentAnalysis: (id: string, error: string) => void;
   addRisk: (input: NewRisk) => RiskSignal;
   verifyRisk: (id: string) => void;
   mitigateRisk: (id: string) => void;
-  addRule: (input: Pick<EnterpriseRule, "code" | "name" | "domain">) => void;
+  addRule: (input: Pick<EnterpriseRule, "code" | "name" | "domain"> & { conditions?: EnterpriseRule["conditions"] }) => void;
   testRule: (id: string) => void;
   deleteRule: (id: string) => void;
   addTask: (input: NewTask) => void;
@@ -53,7 +59,71 @@ interface EnterpriseState {
   addBrief: (input: Omit<ResearchBrief, "id" | "createdAt">) => ResearchBrief;
   appendAssistantMessage: (message: Omit<AssistantMessage, "id" | "at">) => void;
   clearAssistantHistory: () => void;
+  /** 从服务端拉取快照并合并（跨设备恢复/备份；后端不可达时静默跳过）。 */
+  syncFromServer: () => Promise<{ pulled: boolean; merged: number }>;
   clearWorkspace: () => void;
+}
+
+/** 各实体的服务端推送通道与载荷映射（字段对齐 backend/enterprise/router.py）。 */
+const syncMap = {
+  cases: {
+    api: "cases" as EnterpriseKind,
+    payload: (item: EnterpriseCase) => ({
+      id: item.id, company: item.company, title: item.title, industry: item.industry,
+      amount: item.amount, status: item.status, risk: item.risk, progress: item.progress,
+      owner: item.owner, nextAction: item.nextAction,
+    }),
+  },
+  documents: {
+    api: "documents" as EnterpriseKind,
+    payload: (item: AnalysisDocument) => ({
+      id: item.id, caseId: item.caseId, name: item.name, kind: item.kind,
+      status: item.status, facts: item.facts, ruleHits: item.ruleHits,
+      analysis: item.analysis, model: item.model, error: item.error,
+    }),
+  },
+  risks: {
+    api: "risks" as EnterpriseKind,
+    payload: (item: RiskSignal) => ({
+      id: item.id, caseId: item.caseId, company: item.company, title: item.title,
+      level: item.level, evidence: item.evidence, rule: item.rule, impact: item.impact,
+      status: item.status,
+    }),
+  },
+  rules: {
+    api: "rules" as EnterpriseKind,
+    payload: (item: EnterpriseRule) => ({
+      id: item.id, code: item.code, name: item.name, domain: item.domain,
+      version: item.version, coverage: item.coverage, coverageRate: item.coverageRate,
+      conditions: item.conditions,
+    }),
+  },
+  tasks: {
+    api: "tasks" as EnterpriseKind,
+    payload: (item: WorkflowTask) => ({
+      id: item.id, title: item.title, caseName: item.caseName, assignee: item.assignee,
+      due: item.due, priority: item.priority, stage: item.stage,
+    }),
+  },
+  briefs: {
+    api: "briefs" as EnterpriseKind,
+    payload: (item: ResearchBrief) => ({
+      id: item.id, title: item.title, summary: item.summary, topic: item.topic,
+      model: item.model,
+    }),
+  },
+} as const;
+
+type SyncKind = keyof typeof syncMap;
+
+/** 服务端同步状态；fire-and-forget，绝不让同步问题阻塞本地交互。 */
+let pushFailureCount = 0;
+
+function notePushFailure(): void {
+  pushFailureCount += 1;
+  if (pushFailureCount === 1 || pushFailureCount % 20 === 0) {
+    console.warn(`[enterprise-sync] 服务端推送失败 ${pushFailureCount} 次（本地数据不受影响）`);
+  }
 }
 
 const emptyWorkspace = () => ({
@@ -118,7 +188,10 @@ function deriveCaseProgress(state: {
   return { cases: nextCases, documents: state.documents };
 }
 
-/** 经 deriveCaseProgress 包裹的 set，保证任何业务变更后项目进度都是真实值。 */
+/**
+ * 经 deriveCaseProgress 包裹的 set，保证任何业务变更后项目进度都是真实值。
+ * set 是同步应用的，返回后通过 getState() 读取最新状态再做服务端推送。
+ */
 function withProgress(
   set: (fn: (state: EnterpriseState) => Partial<EnterpriseState>) => void,
   updater: (state: EnterpriseState) => Partial<EnterpriseState>,
@@ -132,7 +205,7 @@ function withProgress(
 
 export const useEnterpriseStore = create<EnterpriseState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       ...emptyWorkspace(),
       createCase: (input) => {
         const item: EnterpriseCase = {
@@ -145,11 +218,16 @@ export const useEnterpriseStore = create<EnterpriseState>()(
           nextAction: "上传企业资料并配置适用规则",
         };
         set((state) => ({ cases: [item, ...state.cases] }));
+        pushEntity("cases", syncMap.cases.payload(item));
         return item;
       },
-      updateCase: (id, patch) => withProgress(set, (state) => ({
-        cases: state.cases.map((item) => (item.id === id ? { ...item, ...patch } : item)),
-      })),
+      updateCase: (id, patch) => {
+        withProgress(set, (state) => ({
+          cases: state.cases.map((item) => (item.id === id ? { ...item, ...patch } : item)),
+        }));
+        const updated = get().cases.find((item) => item.id === id);
+        if (updated) pushEntity("cases", syncMap.cases.payload(updated));
+      },
       addDocument: (file, caseId) => {
         const extension = file.name.split(".").pop()?.toLowerCase();
         const item: AnalysisDocument = {
@@ -165,51 +243,95 @@ export const useEnterpriseStore = create<EnterpriseState>()(
           uploadedAt: "刚刚",
         };
         set((state) => ({ documents: [item, ...state.documents] }));
+        pushEntity("documents", syncMap.documents.payload(item));
         return item;
       },
-      completeDocumentAnalysis: (id, analysis, model) => withProgress(set, (state) => ({
-        documents: state.documents.map((document) => document.id === id
-          ? { ...document, status: "已解析", analysis, model, error: undefined }
-          : document),
-      })),
-      failDocumentAnalysis: (id, error) => withProgress(set, (state) => ({
-        documents: state.documents.map((document) => document.id === id
-          ? { ...document, status: "待复核", error }
-          : document),
-      })),
+      completeDocumentAnalysis: (id, analysis, model, factsCount, ruleHitsCount) => {
+        withProgress(set, (state) => ({
+          documents: state.documents.map((document) => document.id === id
+            ? { ...document, status: "已解析", analysis, model, error: undefined,
+                facts: typeof factsCount === "number" ? factsCount : document.facts,
+                ruleHits: typeof ruleHitsCount === "number" ? ruleHitsCount : document.ruleHits }
+            : document),
+        }));
+        const doc = get().documents.find((d) => d.id === id);
+        if (doc) pushEntity("documents", syncMap.documents.payload(doc));
+      },
+      failDocumentAnalysis: (id, error) => {
+        withProgress(set, (state) => ({
+          documents: state.documents.map((document) => document.id === id
+            ? { ...document, status: "待复核", error }
+            : document),
+        }));
+        const doc = get().documents.find((d) => d.id === id);
+        if (doc) pushEntity("documents", syncMap.documents.payload(doc));
+      },
       addRisk: (input) => {
         const risk: RiskSignal = { ...input, id: uid("RISK"), status: "待核验" };
         withProgress(set, (state) => ({ risks: [risk, ...state.risks] }));
+        pushEntity("risks", syncMap.risks.payload(risk));
         return risk;
       },
-      verifyRisk: (id) => withProgress(set, (state) => ({
-        risks: state.risks.map((risk) => risk.id === id ? { ...risk, status: "已确认" } : risk),
-      })),
-      mitigateRisk: (id) => withProgress(set, (state) => ({
-        risks: state.risks.map((risk) => risk.id === id ? { ...risk, status: "已缓释" } : risk),
-      })),
-      addRule: (input) => set((state) => ({
-        rules: [{ ...input, id: uid("RULE"), version: "v1.0", coverage: "待测试", coverageRate: 0, updated: today() }, ...state.rules],
-      })),
-      testRule: (id) => set((state) => ({
-        rules: state.rules.map((rule) => rule.id === id
-          ? { ...rule, coverage: "已测试", coverageRate: 100, updated: today() }
-          : rule),
-      })),
-      deleteRule: (id) => set((state) => ({
-        rules: state.rules.filter((rule) => rule.id !== id),
-      })),
-      addTask: (input) => withProgress(set, (state) => ({
-        tasks: [{ ...input, id: uid("TASK"), stage: "待处理" }, ...state.tasks],
-      })),
-      advanceTask: (id) => withProgress(set, (state) => {
-        const stages: WorkflowTask["stage"][] = ["待处理", "处理中", "待复核", "已完成"];
-        return {
-          tasks: state.tasks.map((task) => task.id === id
-            ? { ...task, stage: stages[Math.min(stages.indexOf(task.stage) + 1, stages.length - 1)] }
-            : task),
+      verifyRisk: (id) => {
+        withProgress(set, (state) => ({
+          risks: state.risks.map((risk) => risk.id === id ? { ...risk, status: "已确认" } : risk),
+        }));
+        const risk = get().risks.find((r) => r.id === id);
+        if (risk) pushEntity("risks", syncMap.risks.payload(risk));
+      },
+      mitigateRisk: (id) => {
+        withProgress(set, (state) => ({
+          risks: state.risks.map((risk) => risk.id === id ? { ...risk, status: "已缓释" } : risk),
+        }));
+        const risk = get().risks.find((r) => r.id === id);
+        if (risk) pushEntity("risks", syncMap.risks.payload(risk));
+      },
+      addRule: (input) => {
+        const item: EnterpriseRule = {
+          ...input,
+          id: uid("RULE"),
+          version: "v1.0",
+          coverage: "待测试",
+          coverageRate: 0,
+          updated: today(),
         };
-      }),
+        set((state) => ({ rules: [item, ...state.rules] }));
+        pushEntity("rules", syncMap.rules.payload(item));
+      },
+      testRule: (id) => {
+        set((state) => ({
+          rules: state.rules.map((rule) => rule.id === id
+            ? { ...rule, coverage: "已测试", coverageRate: 100, updated: today() }
+            : rule),
+        }));
+        const rule = get().rules.find((r) => r.id === id);
+        if (rule) pushEntity("rules", syncMap.rules.payload(rule));
+      },
+      deleteRule: (id) => {
+        set((state) => ({
+          rules: state.rules.filter((rule) => rule.id !== id),
+        }));
+        pushDelete("rules", id);
+      },
+      addTask: (input) => {
+        withProgress(set, (state) => ({
+          tasks: [{ ...input, id: uid("TASK"), stage: "待处理" }, ...state.tasks],
+        }));
+        const task = get().tasks.find((t) => t.title === input.title && t.assignee === input.assignee);
+        if (task) pushEntity("tasks", syncMap.tasks.payload(task));
+      },
+      advanceTask: (id) => {
+        withProgress(set, (state) => {
+          const stages: WorkflowTask["stage"][] = ["待处理", "处理中", "待复核", "已完成"];
+          return {
+            tasks: state.tasks.map((task) => task.id === id
+              ? { ...task, stage: stages[Math.min(stages.indexOf(task.stage) + 1, stages.length - 1)] }
+              : task),
+          };
+        });
+        const task = get().tasks.find((t) => t.id === id);
+        if (task) pushEntity("tasks", syncMap.tasks.payload(task));
+      },
       beginAgentRun: ({ task, model }) => {
         const run: AgentRun = {
           id: uid("RUN"),
@@ -238,6 +360,7 @@ export const useEnterpriseStore = create<EnterpriseState>()(
       addBrief: (input) => {
         const brief: ResearchBrief = { ...input, id: uid("BRIEF"), createdAt: "刚刚" };
         set((state) => ({ briefs: [brief, ...state.briefs] }));
+        pushEntity("briefs", syncMap.briefs.payload(brief));
         return brief;
       },
       appendAssistantMessage: (message) => set((state) => ({
@@ -247,6 +370,77 @@ export const useEnterpriseStore = create<EnterpriseState>()(
         ],
       })),
       clearAssistantHistory: () => set({ assistantMessages: [] }),
+      syncFromServer: async () => {
+        const snapshot = await pullSnapshot();
+        if (!snapshot) return { pulled: false, merged: 0 };
+        let merged = 0;
+        set((state) => {
+          // 合并策略：本地已有同 id 记录时本地优先（本会话是活动源）；
+          // 服务端多出的记录按 id 补入——实现换设备恢复与服务端备份。
+          const mergeById = <T extends { id: string }>(local: T[], remote: Array<Record<string, unknown>>, adapt: (row: Record<string, unknown>) => T): T[] => {
+            const ids = new Set(local.map((item) => item.id));
+            let count = 0;
+            const additions: T[] = [];
+            for (const row of remote) {
+              const item = adapt(row);
+              if (item?.id && !ids.has(item.id)) {
+                additions.push(item);
+                ids.add(item.id);
+                count += 1;
+              }
+            }
+            merged += count;
+            return [...additions, ...local];
+          };
+          return {
+            cases: deriveCaseProgress({
+              cases: mergeById(state.cases, snapshot.cases, (row) => ({
+                id: String(row.id), company: String(row.company ?? ""), title: String(row.title ?? ""),
+                industry: String(row.industry ?? ""), amount: String(row.amount ?? ""),
+                status: (row.status as EnterpriseCase["status"]) ?? "研判中",
+                risk: (row.risk as EnterpriseCase["risk"]) ?? "medium",
+                progress: Number(row.progress ?? 0), owner: String(row.owner ?? ""),
+                updatedAt: "从云端恢复", nextAction: String(row.nextAction ?? ""),
+              })),
+              documents: state.documents,
+              risks: state.risks,
+              tasks: state.tasks,
+            }).cases,
+            documents: mergeById(state.documents, snapshot.documents, (row) => ({
+              id: String(row.id), caseId: String(row.caseId ?? ""), name: String(row.name ?? ""),
+              kind: String(row.kind ?? "企业资料"), pages: 0,
+              status: (row.status as AnalysisDocument["status"]) ?? "已解析",
+              confidence: 0, facts: Number(row.facts ?? 0), ruleHits: Number(row.ruleHits ?? 0),
+              uploadedAt: "从云端恢复", analysis: (row.analysis as string | undefined),
+              model: (row.model as string | undefined), error: (row.error as string | undefined),
+            })),
+            risks: mergeById(state.risks, snapshot.risks, (row) => ({
+              id: String(row.id), caseId: String(row.caseId ?? ""), company: String(row.company ?? ""),
+              title: String(row.title ?? ""), level: (row.level as RiskSignal["level"]) ?? "medium",
+              evidence: String(row.evidence ?? ""), rule: String(row.rule ?? ""),
+              impact: String(row.impact ?? ""), status: (row.status as RiskSignal["status"]) ?? "待核验",
+            })),
+            rules: mergeById(state.rules, snapshot.rules, (row) => ({
+              id: String(row.id), code: String(row.code ?? ""), name: String(row.name ?? ""),
+              domain: String(row.domain ?? ""), version: String(row.version ?? "v1.0"),
+              coverage: String(row.coverage ?? "待测试"), coverageRate: Number(row.coverageRate ?? 0),
+              conditions: row.conditions as EnterpriseRule["conditions"], updated: "从云端恢复",
+            })),
+            tasks: mergeById(state.tasks, snapshot.tasks, (row) => ({
+              id: String(row.id), title: String(row.title ?? ""), caseName: String(row.caseName ?? ""),
+              assignee: String(row.assignee ?? ""), due: String(row.due ?? ""),
+              priority: (row.priority as WorkflowTask["priority"]) ?? "medium",
+              stage: (row.stage as WorkflowTask["stage"]) ?? "待处理",
+            })),
+            briefs: mergeById(state.briefs, snapshot.briefs, (row) => ({
+              id: String(row.id), title: String(row.title ?? ""), summary: String(row.summary ?? ""),
+              topic: String(row.topic ?? ""), model: (row.model as string | undefined),
+              createdAt: "从云端恢复",
+            })),
+          };
+        });
+        return { pulled: true, merged };
+      },
       clearWorkspace: () => set(emptyWorkspace()),
     }),
     {
@@ -272,3 +466,5 @@ export const useEnterpriseStore = create<EnterpriseState>()(
     },
   ),
 );
+
+export { notePushFailure };

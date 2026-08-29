@@ -1,15 +1,15 @@
 """安全中间件（Phase 7.6 需求十二）：
 
-- 频率限制：登录/注册严格限流、AI 接口独立限流、其余接口通用限流（进程内滑动窗口）。
+- 频率限制：登录/注册严格限流、AI 接口独立限流、其余接口通用限流
+  （Redis 滑动窗口，多进程共享配额；不可用时降级进程内窗口）。
 - CSRF：双提交 Cookie 模式，仅对「Cookie 认证 + 变更请求」校验，Bearer(SPA) 免校验。
 - 安全响应头：CSP / X-Content-Type-Options / X-Frame-Options / Referrer-Policy 等。
 """
 from __future__ import annotations
 
 import hmac
-import time
-from collections import defaultdict, deque
 
+from backend.core.cache import cache
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -38,8 +38,6 @@ _API_CSP = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"
 
 
 class SecurityMiddleware(BaseHTTPMiddleware):
-    _requests: dict[str, deque[float]] = defaultdict(deque)
-
     def _rate_key(self, ip: str, path: str) -> tuple[str, int]:
         settings = get_settings()
         if path in _STRICT_AUTH_PATHS:
@@ -71,18 +69,11 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         ip = effective_client_ip(request)
 
         # --- 频率限制 ---
-        now = time.monotonic()
-        key, limit = self._rate_key(ip, path)
-        bucket = self._requests[key]
-        while bucket and now - bucket[0] > 60:
-            bucket.popleft()
-        if len(bucket) >= limit:
+        # cache.hit：Redis 可用时为跨进程共享配额（修复多 worker 下限流阈值
+        # 实际 ×2 的问题），不可用时自动降级为进程内滑动窗口（fail-open）。
+        rate_key, limit = self._rate_key(ip, path)
+        if not cache.hit(rate_key, limit):
             return JSONResponse(status_code=429, content={"success": False, "error": "请求过于频繁，请稍后重试"})
-        bucket.append(now)
-        # 限制内存增长：桶数超阈值时清理空桶（唯一 IP / 伪造 XFF 的恶意刷子不再无限累积）。
-        if len(self._requests) > 10_000:
-            for stale_key in [k for k, v in self._requests.items() if not v]:
-                del self._requests[stale_key]
 
         # --- CSRF 校验 ---
         if not self._csrf_ok(request):

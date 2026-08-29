@@ -6,7 +6,9 @@
 | --- | --- | --- | --- |
 | 后端 API | `tests/backend/` | pytest + FastAPI TestClient | 鉴权、用户隔离、数据正确性、错误契约 |
 | AI 质量 | `tests/ai/` | pytest | 无模型时的本地确定性算法、零数据欢迎态、合规口径 |
-| 前端契约 | `tests/frontend/` | Node 内置 test runner | 品牌红线、安全红线、白屏风险、开源定位 |
+| 前端契约 | `tests/frontend/` | Node 内置 test runner | 品牌红线、安全红线、部署契约（nginx 孤岛路由/compose 令牌）、开源定位 |
+| 纯函数单测 | `tests/unit/` | tsx + node:test | 规则引擎等核心算法 |
+| 端到端 | `tests/e2e/` | Node 脚本 + mock LLM | 真实前后端进程下的主链路（会话/模型/研判/持久化/隔离） |
 
 ## 快速开始
 
@@ -19,6 +21,9 @@ node --test tests/frontend/contract.test.mjs
 
 # 全部
 PYTHONPATH=. pytest && node --test tests/frontend/contract.test.mjs
+npm run test:unit
+# e2e（先 npm run build；用 E2E_PYTHON 指定 Python 3.11+ 解释器）
+node tests/e2e/main-chain.mjs
 ```
 
 首次运行需安装测试依赖：

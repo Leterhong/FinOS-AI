@@ -18,7 +18,14 @@ export default function RulesPage() {
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
-    addRule({ code: String(data.get("code")), name: String(data.get("name")), domain: String(data.get("domain")) });
+    // 可选触发条件：填写「指标 + 阈值」后，资料研判由确定性规则引擎评估命中
+    //（比较算子固定，避免自由文本条件无法判定）。
+    const metric = String(data.get("metric") || "").trim();
+    const value = Number(data.get("value"));
+    const conditions = metric && Number.isFinite(value) && value !== 0
+      ? [{ metric, op: String(data.get("op") || "lt") as "lt" | "lte" | "gt" | "gte" | "eq", value }]
+      : undefined;
+    addRule({ code: String(data.get("code")), name: String(data.get("name")), domain: String(data.get("domain")), conditions });
     setOpen(false);
   };
   const metrics = [
@@ -39,7 +46,7 @@ export default function RulesPage() {
       </div>
     </Panel>
     <EnterpriseDialog open={open} onClose={() => setOpen(false)} title="新建业务规则" description="规则将先进入待测试状态">
-      <form onSubmit={submit} className="space-y-4">{[["code", "规则编号", "填写内部规则编号"], ["name", "规则名称", "填写制度或审查要求"], ["domain", "业务领域", "填写规则适用业务"]].map(([name, label, placeholder]) => <label key={name} className="block"><span className="mb-1.5 block text-[11px] text-slate-400">{label}</span><input required name={name} placeholder={placeholder} className="field-control" /></label>)}<div className="flex justify-end gap-2 pt-2"><button type="button" onClick={() => setOpen(false)} className="rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-400">取消</button><button type="submit" className="rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]">保存规则</button></div></form>
+      <form onSubmit={submit} className="space-y-4">{[["code", "规则编号", "填写内部规则编号"], ["name", "规则名称", "填写制度或审查要求"], ["domain", "业务领域", "填写规则适用业务"]].map(([name, label, placeholder]) => <label key={name} className="block"><span className="mb-1.5 block text-[11px] text-slate-400">{label}</span><input required name={name} placeholder={placeholder} className="field-control" /></label>)}<div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3"><p className="text-[11px] font-semibold text-slate-300">触发条件（可选，填写后由规则引擎自动判定命中）</p><div className="mt-3 grid grid-cols-3 gap-2"><label className="block"><span className="mb-1 block text-[10px] text-slate-500">事实指标</span><input name="metric" placeholder="如 货币资金" className="field-control" /></label><label className="block"><span className="mb-1 block text-[10px] text-slate-500">比较</span><select name="op" className="field-control"><option value="lt">低于</option><option value="lte">不高于</option><option value="gt">高于</option><option value="gte">不低于</option></select></label><label className="block"><span className="mb-1 block text-[10px] text-slate-500">阈值（元）</span><input name="value" type="number" placeholder="2000000" className="field-control" /></label></div></div><div className="flex justify-end gap-2 pt-2"><button type="button" onClick={() => setOpen(false)} className="rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-400">取消</button><button type="submit" className="rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]">保存规则</button></div></form>
     </EnterpriseDialog>
   </div>;
 }

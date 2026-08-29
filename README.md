@@ -7,7 +7,7 @@
 让企业资料、经营事实、业务规则与外部研究进入同一条可追溯的研判链路，辅助团队完成资料理解、规则匹配、风险提示、投研整理和流程协作。
 
 [![CI](https://github.com/Leterhong/FinOS-AI/actions/workflows/ci.yml/badge.svg)](https://github.com/Leterhong/FinOS-AI/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/badge/release-2.0.1-38bdf8.svg)](./CHANGELOG.md)
+[![Release](https://img.shields.io/badge/release-2.1.0-38bdf8.svg)](./CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-22c55e.svg)](./LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6.svg)](https://www.typescriptlang.org/)
 [![Security Policy](https://img.shields.io/badge/security-policy-f59e0b.svg)](./SECURITY.md)
@@ -47,7 +47,8 @@ FinOS AI 2.0 已完成企业金融信息架构、可配置模型中心和 AI 研
 | 企业工作台、模型中心与九大业务模块 | 可用，支持完整页面交互 |
 | OpenAI、DeepSeek、通义千问、Claude、Gemini、智谱、Moonshot、Ollama 与自定义兼容接口 | 可配置、可测试、可切换默认模型 |
 | 智能助手、资料研判、Agent 与投研生成 | 调用当前默认模型，返回实际模型、耗时与 Token 用量 |
-| 项目、资料、风险、规则、任务与 Agent 状态 | 零预置数据，浏览器本地持久化，可一键清空 |
+| 项目、资料、风险、规则、任务与投研底稿 | 零预置数据；本地即时持久化 + 服务端同步（可跨设备恢复），可一键清空 |
+| 资料研判 | 两段式：结构化事实抽取（逐条原文引用）→ 确定性规则引擎命中 → 叙述生成；支持 SSE 流式输出 |
 | FastAPI、数据库、认证、文件与模型基础设施 | 已提供并具有自动化测试 |
 | 真实企业数据全链路服务端持久化 | 规划中 |
 | 企业组织、RBAC、审批权限与完整审计 | 规划中 |
@@ -199,11 +200,13 @@ docker compose up --build -d
 ```bash
 npm run typecheck       # TypeScript 类型检查
 npm test                # 前端契约与安全回归
+npm run test:unit       # 规则引擎等纯函数单测
 npm run build           # Next.js 生产构建
-npm run test:backend    # 后端与 AI 回归
+npm run test:backend    # 后端与 AI 回归（pytest）
+node tests/e2e/main-chain.mjs   # 端到端主链路（本地 mock LLM，需先 build）
 ```
 
-以上四条门禁同时由 GitHub Actions（`.github/workflows/ci.yml`）在 push 与 PR 时自动执行。测试使用隔离数据，不连接真实模型服务。更多信息见 [`tests/README.md`](./tests/README.md)。
+以上门禁同时由 GitHub Actions（CI + CodeQL + Dependabot）自动执行。测试使用隔离数据与本地 mock 模型，不连接任何真实模型服务。更多信息见 [`tests/README.md`](./tests/README.md)。
 
 ## 安全与责任边界
 

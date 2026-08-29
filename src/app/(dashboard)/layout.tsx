@@ -5,6 +5,7 @@ import { MotionConfig } from "framer-motion";
 import { usePathname } from "next/navigation";
 import Sidebar from "@/components/dashboard/Sidebar";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
+import { useEnterpriseStore } from "@/store/enterprise-store";
 
 export default function DashboardLayout({
   children,
@@ -17,6 +18,12 @@ export default function DashboardLayout({
   useEffect(() => {
     setMobileNavOpen(false);
   }, [pathname]);
+
+  // 服务端持久化：进入工作区后拉取云端快照做跨设备恢复/备份
+  //（后端不可达时静默跳过，localStorage 仍是第一真相）。
+  useEffect(() => {
+    void useEnterpriseStore.getState().syncFromServer();
+  }, []);
 
   useEffect(() => {
     if (!mobileNavOpen) return;

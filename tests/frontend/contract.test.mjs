@@ -231,3 +231,27 @@ test("列表渲染前须做空值兜底（?? [] 或显式判空）", () => {
     `后端字段缺失时会直接白屏，请改用 (data.xxx ?? []).map:\n${offenders.join("\n")}`,
   );
 });
+
+// ---------------------------------------------------------------- 部署契约
+test("nginx 孤岛路由必须包含 2.0 企业 AI 前缀（缺失 = Docker 部署全线 404）", () => {
+  for (const conf of [
+    join(ROOT, "deploy", "nginx", "conf.d", "default.conf"),
+    join(ROOT, "deploy", "nginx", "conf.d-tls", "default.conf"),
+  ]) {
+    if (!existsSync(conf)) continue;
+    const text = read(conf);
+    for (const prefix of ["/api/workspace", "/api/enterprise", "/api/models"]) {
+      assert.ok(
+        text.includes(`location ${prefix}`),
+        `${rel(conf)} 缺少 ${prefix} 孤岛路由——Docker 部署下企业 AI 主链路会 404`,
+      );
+    }
+  }
+});
+
+test("compose 的 Access Token 默认有效期必须为 15 分钟（安全模型：短期令牌）", () => {
+  const compose = read(join(ROOT, "docker-compose.yml"));
+  const m = compose.match(/JWT_EXPIRE_MINUTES:\s*\$\{JWT_EXPIRE_MINUTES:-(\d+)\}/);
+  assert.ok(m, "compose 缺少 JWT_EXPIRE_MINUTES 配置");
+  assert.equal(m[1], "15", `compose 默认 Access Token 有效期应为 15 分钟，实际 ${m[1]}`);
+});
