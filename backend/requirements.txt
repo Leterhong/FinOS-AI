@@ -19,4 +19,4 @@ pytest>=8.3
 # PostgreSQL 生产环境驱动
 psycopg2-binary>=2.9
 # 可选：Prometheus 指标暴露（部署监控时启用）
-prometheus-client>=0.20
+prometheus-client>=0.26.0
