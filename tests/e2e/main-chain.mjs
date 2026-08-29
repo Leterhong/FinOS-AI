@@ -261,9 +261,9 @@ async function main() {
 
   const failed = results.filter((r) => !r.pass);
   console.log(`\nE2E 完成：${results.length - failed.length}/${results.length} 通过`);
-  if (failed.length) {
-    process.exit(1);
-  }
+  stopChildren();
+  // 显式退出：mock 服务的 keep-alive 空闲连接可能让事件循环迟迟不排空。
+  process.exit(failed.length ? 1 : 0);
 }
 
 main().catch((error) => {
