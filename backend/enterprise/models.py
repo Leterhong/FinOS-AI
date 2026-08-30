@@ -100,6 +100,7 @@ class EnterpriseTask(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     user_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(64), nullable=False, default="")
     title: Mapped[str] = mapped_column(String(300), nullable=False)
     case_name: Mapped[str] = mapped_column(String(300), nullable=False, default="")
     assignee: Mapped[str] = mapped_column(String(120), nullable=False, default="")
@@ -117,6 +118,7 @@ class EnterpriseBrief(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     user_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(64), nullable=False, default="")
     title: Mapped[str] = mapped_column(String(300), nullable=False)
     summary: Mapped[str] = mapped_column(Text, nullable=False, default="")
     topic: Mapped[str] = mapped_column(String(300), nullable=False, default="")

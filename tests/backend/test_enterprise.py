@@ -121,6 +121,43 @@ def test_rule_conditions_roundtrip(client, auth):
     assert rule["conditions"] == [{"metric": "货币资金", "op": "lt", "value": 2_000_000}]
 
 
+def test_task_and_brief_keep_enterprise_case_scope(client, auth):
+    """任务与 AI 底稿必须保留项目 ID，前端才能阻止跨企业上下文混用。"""
+    case_id = f"CASE-{uuid.uuid4().hex[:8]}"
+    task_id = f"TASK-{uuid.uuid4().hex[:8]}"
+    brief_id = f"BRIEF-{uuid.uuid4().hex[:8]}"
+    assert client.post(
+        "/api/enterprise/tasks",
+        json={
+            "id": task_id,
+            "caseId": case_id,
+            "title": "复核应收账款",
+            "caseName": "测试制造有限公司 · 尽调",
+            "assignee": "李四",
+            "due": "2026-09-10",
+        },
+        headers=auth,
+    ).status_code == 200
+    assert client.post(
+        "/api/enterprise/briefs",
+        json={
+            "id": brief_id,
+            "caseId": case_id,
+            "title": "客户集中度研究",
+            "topic": "客户集中度",
+            "summary": "待复核的 AI 研究底稿",
+            "model": "gpt-test",
+        },
+        headers=auth,
+    ).status_code == 200
+
+    snap = client.get("/api/enterprise/snapshot", headers=auth).json()["data"]
+    task = next(item for item in snap["tasks"] if item["id"] == task_id)
+    brief = next(item for item in snap["briefs"] if item["id"] == brief_id)
+    assert task["caseId"] == case_id
+    assert brief["caseId"] == case_id
+
+
 def test_snapshot_requires_auth(client):
     resp = client.get("/api/enterprise/snapshot")
     assert resp.status_code == 401

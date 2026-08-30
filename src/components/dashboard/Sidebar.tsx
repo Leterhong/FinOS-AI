@@ -33,7 +33,7 @@ export default function Sidebar({ open = false, onClose }: { open?: boolean; onC
     <aside className={cn("fixed inset-y-0 left-0 z-50 flex w-[min(17rem,88vw)] flex-col border-r border-white/[0.07] bg-[#060c14]/98 shadow-2xl transition-transform duration-300 lg:w-64 lg:translate-x-0 lg:bg-[#060c14]/92", open ? "translate-x-0" : "-translate-x-full")}>
       <div className="flex h-[76px] shrink-0 items-center border-b border-white/[0.07] px-5">
         <Logo size={39} showWordmark />
-        <button type="button" onClick={onClose} className="ml-auto grid h-9 w-9 place-items-center rounded-lg text-slate-400 hover:bg-white/[0.06] lg:hidden"><X className="h-4 w-4" /></button>
+        <button type="button" aria-label="关闭导航" onClick={onClose} className="ml-auto grid h-9 w-9 place-items-center rounded-lg text-slate-400 hover:bg-white/[0.06] lg:hidden"><X className="h-4 w-4" /></button>
       </div>
       <div className="mx-4 mt-4 rounded-xl border border-cyan-400/15 bg-cyan-400/[0.055] px-3.5 py-3">
         <div className="flex items-center gap-2 text-xs font-medium text-cyan-100"><Activity className="h-3.5 w-3.5 text-cyan-300" />企业研判空间</div>

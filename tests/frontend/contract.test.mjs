@@ -137,6 +137,22 @@ test("企业 AI 页面必须调用服务端模型网关", () => {
   assert.ok(existsSync(join(SRC, "app", "api", "enterprise", "ai", "document", "route.ts")));
 });
 
+test("企业 AI 上下文和产出必须按项目隔离", () => {
+  const assistant = read(join(SRC, "app", "(dashboard)", "assistant", "page.tsx"));
+  const agents = read(join(SRC, "app", "(dashboard)", "agents", "page.tsx"));
+  const research = read(join(SRC, "app", "(dashboard)", "research", "page.tsx"));
+  const documents = read(join(SRC, "app", "(dashboard)", "documents", "page.tsx"));
+  const store = read(join(SRC, "store", "enterprise-store.ts"));
+  for (const [name, source] of [["助手", assistant], ["Agent", agents], ["投研", research]]) {
+    assert.match(source, /activeCaseId/, `${name}必须使用当前项目 ID`);
+    assert.match(source, /caseDocuments/, `${name}必须只传当前项目资料`);
+    assert.match(source, /cases:\s*\[activeCase/, `${name}必须只传当前企业项目`);
+  }
+  assert.match(documents, /projectDocuments/);
+  assert.match(store, /activeCaseId:\s*string/);
+  assert.match(store, /caseId:\s*activeCase\.id|caseId:\s*relatedCase\.id|caseId, company/);
+});
+
 test("企业 AI 流式协议必须转发文本内容且拒绝空回复", () => {
   const route = read(join(SRC, "app", "api", "enterprise", "ai", "route.ts"));
   const client = read(join(SRC, "lib", "enterprise-ai.ts"));

@@ -55,6 +55,9 @@ export interface AgentRun {
   output?: string;
   error?: string;
   createdAt: string;
+  /** Agent 运行所属项目；缺失表示升级前的未归属历史记录。 */
+  caseId?: string;
+  company?: string;
 }
 
 export interface WorkflowTask {
@@ -65,6 +68,7 @@ export interface WorkflowTask {
   due: string;
   priority: RiskLevel;
   stage: "待处理" | "处理中" | "待复核" | "已完成";
+  caseId?: string;
 }
 
 import type { RuleCondition } from "@/lib/rule-engine";
@@ -90,4 +94,5 @@ export interface ResearchBrief {
   topic: string;
   createdAt: string;
   model?: string;
+  caseId?: string;
 }

@@ -61,6 +61,7 @@ def init_db() -> None:
     # Phase 7.6：既有库（如 ai_usage_logs）在模型扩展后缺新列，
     # create_all 不会给已存在表加列，这里幂等补列自愈。
     _ensure_ai_usage_logs_columns(engine)
+    _ensure_enterprise_scope_columns(engine)
 
 
 def _ensure_ai_usage_logs_columns(engine) -> None:
@@ -95,3 +96,29 @@ def _ensure_ai_usage_logs_columns(engine) -> None:
                 else f"ALTER TABLE ai_usage_logs ADD COLUMN IF NOT EXISTS {col} {typ}"
             )
             conn.execute(text(stmt))
+
+
+def _ensure_enterprise_scope_columns(engine) -> None:
+    """开发库自愈：为任务和投研底稿补齐项目归属列。"""
+    from sqlalchemy import inspect, text
+
+    insp = inspect(engine)
+    targets = {
+        "enterprise_tasks": {"case_id": "VARCHAR(64) NOT NULL DEFAULT ''"},
+        "enterprise_briefs": {"case_id": "VARCHAR(64) NOT NULL DEFAULT ''"},
+    }
+    is_sqlite = engine.dialect.name == "sqlite"
+    with engine.begin() as conn:
+        for table, needed in targets.items():
+            if not insp.has_table(table):
+                continue
+            existing = {column["name"] for column in insp.get_columns(table)}
+            for column, definition in needed.items():
+                if column in existing:
+                    continue
+                statement = (
+                    f"ALTER TABLE {table} ADD COLUMN {column} {definition}"
+                    if is_sqlite
+                    else f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {definition}"
+                )
+                conn.execute(text(statement))

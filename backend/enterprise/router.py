@@ -121,6 +121,7 @@ class RuleIn(BaseModel):
 
 class TaskIn(BaseModel):
     id: str = Field(min_length=1, max_length=_ID_LEN)
+    caseId: str = Field(default="", max_length=_ID_LEN)
     title: str = Field(min_length=1, max_length=300)
     caseName: str = Field(default="", max_length=300)
     assignee: str = Field(default="", max_length=120)
@@ -131,6 +132,7 @@ class TaskIn(BaseModel):
 
 class BriefIn(BaseModel):
     id: str = Field(min_length=1, max_length=_ID_LEN)
+    caseId: str = Field(default="", max_length=_ID_LEN)
     title: str = Field(min_length=1, max_length=300)
     summary: str = Field(default="", max_length=20000)
     topic: str = Field(default="", max_length=300)
@@ -174,7 +176,7 @@ def _rule_out(r: EnterpriseRule) -> dict:
 
 def _task_out(t: EnterpriseTask) -> dict:
     return {
-        "id": t.id, "title": t.title, "caseName": t.case_name, "assignee": t.assignee,
+        "id": t.id, "caseId": t.case_id, "title": t.title, "caseName": t.case_name, "assignee": t.assignee,
         "due": t.due, "priority": t.priority, "stage": t.stage,
         "updatedAt": t.updated_at.isoformat(),
     }
@@ -182,7 +184,7 @@ def _task_out(t: EnterpriseTask) -> dict:
 
 def _brief_out(b: EnterpriseBrief) -> dict:
     return {
-        "id": b.id, "title": b.title, "summary": b.summary, "topic": b.topic,
+        "id": b.id, "caseId": b.case_id, "title": b.title, "summary": b.summary, "topic": b.topic,
         "model": b.model, "updatedAt": b.updated_at.isoformat(),
     }
 
@@ -233,6 +235,7 @@ def _apply_rule(row: EnterpriseRule, body: RuleIn) -> None:
 
 
 def _apply_task(row: EnterpriseTask, body: TaskIn) -> None:
+    row.case_id = _id(body.caseId)
     row.title = _clip(body.title, 300)
     row.case_name = _clip(body.caseName, 300)
     row.assignee = _clip(body.assignee, 120)
@@ -242,6 +245,7 @@ def _apply_task(row: EnterpriseTask, body: TaskIn) -> None:
 
 
 def _apply_brief(row: EnterpriseBrief, body: BriefIn) -> None:
+    row.case_id = _id(body.caseId)
     row.title = _clip(body.title, 300)
     row.summary = _clip(body.summary, 20000)
     row.topic = _clip(body.topic, 300)

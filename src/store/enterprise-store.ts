@@ -19,7 +19,7 @@ import type {
 } from "@/types/enterprise";
 
 type NewCase = Pick<EnterpriseCase, "company" | "title" | "industry" | "amount" | "owner">;
-type NewTask = Pick<WorkflowTask, "title" | "caseName" | "assignee" | "due" | "priority">;
+type NewTask = Pick<WorkflowTask, "title" | "caseName" | "assignee" | "due" | "priority"> & { caseId?: string };
 type NewRisk = Omit<RiskSignal, "id" | "status">;
 
 export interface AssistantMessage {
@@ -29,6 +29,7 @@ export interface AssistantMessage {
   at: string;
   model?: string;
   error?: boolean;
+  caseId?: string;
 }
 
 interface EnterpriseState {
@@ -40,6 +41,8 @@ interface EnterpriseState {
   rules: EnterpriseRule[];
   briefs: ResearchBrief[];
   assistantMessages: AssistantMessage[];
+  activeCaseId: string;
+  setActiveCaseId: (id: string) => void;
   createCase: (input: NewCase) => EnterpriseCase;
   updateCase: (id: string, patch: Partial<Pick<EnterpriseCase, "status" | "nextAction">>) => void;
   addDocument: (file: File, caseId: string) => AnalysisDocument;
@@ -53,12 +56,12 @@ interface EnterpriseState {
   deleteRule: (id: string) => void;
   addTask: (input: NewTask) => void;
   advanceTask: (id: string) => void;
-  beginAgentRun: (input: { task: string; model?: string }) => AgentRun;
+  beginAgentRun: (input: { task: string; model?: string; caseId: string; company: string }) => AgentRun;
   completeAgentRun: (id: string, output: string, duration: string) => void;
   failAgentRun: (id: string, error: string, duration: string) => void;
   addBrief: (input: Omit<ResearchBrief, "id" | "createdAt">) => ResearchBrief;
   appendAssistantMessage: (message: Omit<AssistantMessage, "id" | "at">) => void;
-  clearAssistantHistory: () => void;
+  clearAssistantHistory: (caseId?: string) => void;
   /** 从服务端拉取快照并合并（跨设备恢复/备份；后端不可达时静默跳过）。 */
   syncFromServer: () => Promise<{ pulled: boolean; merged: number }>;
   clearWorkspace: () => void;
@@ -101,14 +104,14 @@ const syncMap = {
   tasks: {
     api: "tasks" as EnterpriseKind,
     payload: (item: WorkflowTask) => ({
-      id: item.id, title: item.title, caseName: item.caseName, assignee: item.assignee,
+      id: item.id, caseId: item.caseId, title: item.title, caseName: item.caseName, assignee: item.assignee,
       due: item.due, priority: item.priority, stage: item.stage,
     }),
   },
   briefs: {
     api: "briefs" as EnterpriseKind,
     payload: (item: ResearchBrief) => ({
-      id: item.id, title: item.title, summary: item.summary, topic: item.topic,
+      id: item.id, caseId: item.caseId, title: item.title, summary: item.summary, topic: item.topic,
       model: item.model,
     }),
   },
@@ -135,6 +138,7 @@ const emptyWorkspace = () => ({
   rules: [] as EnterpriseRule[],
   briefs: [] as ResearchBrief[],
   assistantMessages: [] as AssistantMessage[],
+  activeCaseId: "",
 });
 
 /** 同毫秒内创建两个实体也不会碰撞（Date.now().toString(36) 会）。 */
@@ -162,7 +166,8 @@ function deriveCaseProgress(state: {
     const docRatio = docs.length ? docs.filter((d) => d.status === "已解析").length / docs.length : 0;
     const risks = state.risks.filter((r) => r.caseId === item.id);
     const riskRatio = risks.length ? risks.filter((r) => RISK_DONE.has(r.status)).length / risks.length : 0;
-    const tasks = state.tasks.filter((t) => t.caseName === `${item.company} · ${item.title}` || t.caseName === item.company);
+    const tasks = state.tasks.filter((t) => t.caseId === item.id
+      || (!t.caseId && (t.caseName === `${item.company} · ${item.title}` || t.caseName === item.company)));
     const taskRatio = tasks.length ? tasks.filter((t) => t.stage === "已完成").length / tasks.length : 0;
 
     const hasAny = docs.length + risks.length + tasks.length > 0;
@@ -207,6 +212,7 @@ export const useEnterpriseStore = create<EnterpriseState>()(
   persist(
     (set, get) => ({
       ...emptyWorkspace(),
+      setActiveCaseId: (id) => set({ activeCaseId: id }),
       createCase: (input) => {
         const item: EnterpriseCase = {
           ...input,
@@ -217,7 +223,7 @@ export const useEnterpriseStore = create<EnterpriseState>()(
           updatedAt: "刚刚",
           nextAction: "上传企业资料并配置适用规则",
         };
-        set((state) => ({ cases: [item, ...state.cases] }));
+        set((state) => ({ cases: [item, ...state.cases], activeCaseId: item.id }));
         pushEntity("cases", syncMap.cases.payload(item));
         return item;
       },
@@ -332,7 +338,7 @@ export const useEnterpriseStore = create<EnterpriseState>()(
         const task = get().tasks.find((t) => t.id === id);
         if (task) pushEntity("tasks", syncMap.tasks.payload(task));
       },
-      beginAgentRun: ({ task, model }) => {
+      beginAgentRun: ({ task, model, caseId, company }) => {
         const run: AgentRun = {
           id: uid("RUN"),
           name: "企业风险研判 Agent",
@@ -343,6 +349,8 @@ export const useEnterpriseStore = create<EnterpriseState>()(
           duration: "--",
           model,
           createdAt: new Date().toISOString(),
+          caseId,
+          company,
         };
         set((state) => ({ agents: [run, ...state.agents] }));
         return run;
@@ -369,7 +377,11 @@ export const useEnterpriseStore = create<EnterpriseState>()(
           { ...message, id: uid("MSG"), at: new Date().toISOString() },
         ],
       })),
-      clearAssistantHistory: () => set({ assistantMessages: [] }),
+      clearAssistantHistory: (caseId) => set((state) => ({
+        assistantMessages: caseId
+          ? state.assistantMessages.filter((message) => message.caseId !== caseId)
+          : [],
+      })),
       syncFromServer: async () => {
         const snapshot = await pullSnapshot();
         if (!snapshot) return { pulled: false, merged: 0 };
@@ -427,13 +439,15 @@ export const useEnterpriseStore = create<EnterpriseState>()(
               conditions: row.conditions as EnterpriseRule["conditions"], updated: "从云端恢复",
             })),
             tasks: mergeById(state.tasks, snapshot.tasks, (row) => ({
-              id: String(row.id), title: String(row.title ?? ""), caseName: String(row.caseName ?? ""),
+              id: String(row.id), caseId: String(row.caseId ?? "") || undefined,
+              title: String(row.title ?? ""), caseName: String(row.caseName ?? ""),
               assignee: String(row.assignee ?? ""), due: String(row.due ?? ""),
               priority: (row.priority as WorkflowTask["priority"]) ?? "medium",
               stage: (row.stage as WorkflowTask["stage"]) ?? "待处理",
             })),
             briefs: mergeById(state.briefs, snapshot.briefs, (row) => ({
-              id: String(row.id), title: String(row.title ?? ""), summary: String(row.summary ?? ""),
+              id: String(row.id), caseId: String(row.caseId ?? "") || undefined,
+              title: String(row.title ?? ""), summary: String(row.summary ?? ""),
               topic: String(row.topic ?? ""), model: (row.model as string | undefined),
               createdAt: "从云端恢复",
             })),
