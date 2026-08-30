@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import Sidebar from "@/components/dashboard/Sidebar";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import { useEnterpriseStore } from "@/store/enterprise-store";
+import { useModelStore } from "@/store/model-store";
 
 export default function DashboardLayout({
   children,
@@ -23,6 +24,7 @@ export default function DashboardLayout({
   //（后端不可达时静默跳过，localStorage 仍是第一真相）。
   useEffect(() => {
     void useEnterpriseStore.getState().syncFromServer();
+    void useModelStore.getState().loadActive();
   }, []);
 
   useEffect(() => {

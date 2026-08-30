@@ -125,6 +125,7 @@ export async function streamEnterpriseAI(
   if (buffer) handleEvent(buffer.trim());
 
   if (streamError) throw new Error(streamError);
+  if (!answer.trim()) throw new Error("模型返回了空回复，请检查模型网关的流式响应兼容性");
   return { answer, model, provider: "user", latencyMs, usage };
 }
 

@@ -99,7 +99,7 @@ export async function POST(req: NextRequest) {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
         };
         try {
-          for await (const delta of provider.stream({
+          for await (const chunk of provider.stream({
             messages: [
               { role: "system", content: `${BASE_SYSTEM_PROMPT}
 
@@ -114,7 +114,7 @@ ${question}` },
             temperature: model.temperature ?? 0.3,
             maxTokens: Math.min(model.maxTokens ?? 2048, 8192),
           })) {
-            send({ delta });
+            if (chunk.content) send({ delta: chunk.content });
           }
           send({ done: true, model: model.modelId, latencyMs: Date.now() - started });
         } catch (error) {

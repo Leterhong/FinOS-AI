@@ -18,6 +18,7 @@ export default function ModelFormDialog({ open, onClose, editing }: Props) {
   const addModel = useModelStore((s) => s.addModel);
   const updateModel = useModelStore((s) => s.updateModel);
   const testDraft = useModelStore((s) => s.testDraft);
+  const testModel = useModelStore((s) => s.testModel);
   const isTesting = useModelStore((s) => s.isTesting);
   const isSaving = useModelStore((s) => s.isSaving);
 
@@ -103,12 +104,23 @@ export default function ModelFormDialog({ open, onClose, editing }: Props) {
   }
 
   async function handleSave() {
+    let savedId: string;
     if (editing) {
       await updateModel(editing.id, draft());
       if (useModelStore.getState().error) return;
+      savedId = editing.id;
     } else {
       const created = await addModel(draft());
       if (!created) return;
+      savedId = created.id;
+    }
+    // 草稿连接已验证时，把验证状态同步到最终配置，避免保存后又显示“尚未测试”。
+    if (testState?.ok) {
+      const persisted = await testModel(savedId);
+      if (!persisted?.ok) {
+        setTestState({ ok: false, msg: persisted?.error ?? "配置已保存，但连接复测失败" });
+        return;
+      }
     }
     onClose();
   }
@@ -127,6 +139,9 @@ export default function ModelFormDialog({ open, onClose, editing }: Props) {
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
           <motion.div
             className="relative z-10 w-full max-w-lg rounded-2xl glass border border-white/10 p-6 text-white max-h-[90vh] overflow-y-auto"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="model-form-title"
             initial={{ scale: 0.95, y: 20 }}
             animate={{ scale: 1, y: 0 }}
             exit={{ scale: 0.95, y: 20 }}
@@ -136,11 +151,11 @@ export default function ModelFormDialog({ open, onClose, editing }: Props) {
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-brand">
                   <Plug className="h-4 w-4 text-white" />
                 </span>
-                <h3 className="text-lg font-semibold">
+                <h3 id="model-form-title" className="text-lg font-semibold">
                   {editing ? "编辑 AI 模型" : "添加 AI 模型"}
                 </h3>
               </div>
-              <button onClick={onClose} className="text-white/40 hover:text-white">
+              <button type="button" onClick={onClose} aria-label="关闭" className="text-white/40 hover:text-white">
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -348,9 +363,9 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <div>
-      <label className="block text-xs text-white/50 mb-1.5">{label}</label>
+    <label className="block">
+      <span className="mb-1.5 block text-xs text-white/50">{label}</span>
       {children}
-    </div>
+    </label>
   );
 }

@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { Bot, CornerDownLeft, Cpu, DatabaseZap, Loader2, ShieldCheck, Sparkles, UserRound } from "lucide-react";
 import { EmptyStateCard, PageIntro, Panel } from "@/components/enterprise/EnterpriseUI";
-import { callEnterpriseAI, streamEnterpriseAI } from "@/lib/enterprise-ai";
+import { streamEnterpriseAI } from "@/lib/enterprise-ai";
 import { useEnterpriseStore } from "@/store/enterprise-store";
 import { useModelStore } from "@/store/model-store";
 
@@ -31,14 +31,10 @@ export default function AssistantPage() {
   const appendAssistantMessage = useEnterpriseStore((state) => state.appendAssistantMessage);
   const clearAssistantHistory = useEnterpriseStore((state) => state.clearAssistantHistory);
   const active = useModelStore((state) => state.active);
-  const loadActive = useModelStore((state) => state.loadActive);
   const [query, setQuery] = useState("");
   const [sending, setSending] = useState(false);
   // 流式进行中的临时气泡：完成后才落入持久化 store（避免每个 token 触发持久化）。
   const [streamText, setStreamText] = useState("");
-  const [streamModel, setStreamModel] = useState("");
-
-  useEffect(() => { void loadActive(); }, [loadActive]);
 
   // 对话历史持久化在工作区 store：刷新/关闭浏览器后仍可回溯 AI 研判记录。
   const messages: Message[] = assistantMessages.map((m) => ({
@@ -56,7 +52,6 @@ export default function AssistantPage() {
     setQuery("");
     setSending(true);
     setStreamText("");
-    setStreamModel("");
     try {
       const result = await streamEnterpriseAI(
         {
@@ -66,7 +61,6 @@ export default function AssistantPage() {
         },
         (delta) => setStreamText((current) => current + delta)
       );
-      setStreamModel(result.model);
       appendAssistantMessage({
         role: "assistant",
         content: result.answer,

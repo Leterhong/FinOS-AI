@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { BookOpenCheck, Cpu, FileSearch, Loader2, SearchCheck, Sparkles } from "lucide-react";
 import { EmptyStateCard, PageIntro, Panel, PanelHeader } from "@/components/enterprise/EnterpriseUI";
@@ -17,12 +17,9 @@ export default function ResearchPage() {
   const briefs = useEnterpriseStore((state) => state.briefs);
   const addBrief = useEnterpriseStore((state) => state.addBrief);
   const active = useModelStore((state) => state.active);
-  const loadActive = useModelStore((state) => state.loadActive);
   const [open, setOpen] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState("");
-
-  useEffect(() => { void loadActive(); }, [loadActive]);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

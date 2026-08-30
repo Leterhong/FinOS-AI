@@ -213,10 +213,38 @@ export class OpenAICompatibleProvider {
     if (!res.ok || !res.body) {
       throw new Error(`[user:${this.m.providerType}] 流式请求失败 (${res.status})`);
     }
+    // 部分 OpenAI 兼容网关会忽略 stream=true，并直接返回普通 JSON。
+    // 若继续按 SSE 解析会静默得到空回复，因此在这里可靠降级为整段输出。
+    const contentType = res.headers.get("content-type")?.toLowerCase() ?? "";
+    if (!contentType.includes("text/event-stream")) {
+      const data = await res.json();
+      const content = this.parseContent(data);
+      if (!content) {
+        throw new Error(`[user:${this.m.providerType}] 模型返回了空内容`);
+      }
+      yield { content, done: true, model: request.model ?? this.m.modelId };
+      return;
+    }
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
     const model = request.model ?? this.m.modelId;
+    let receivedContent = false;
+    const parseLine = (line: string): AIStreamChunk | null => {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("data:")) return null;
+      const payload = trimmed.slice(5).trim();
+      if (payload === "[DONE]") return { content: "", done: true, model };
+      try {
+        const json = JSON.parse(payload) as {
+          choices?: { delta?: { content?: string }; message?: { content?: string } }[];
+        };
+        const content = json.choices?.[0]?.delta?.content ?? json.choices?.[0]?.message?.content;
+        return content ? { content, done: false, model } : null;
+      } catch {
+        return null;
+      }
+    };
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -224,23 +252,22 @@ export class OpenAICompatibleProvider {
       const lines = buffer.split("\n");
       buffer = lines.pop() ?? "";
       for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed.startsWith("data:")) continue;
-        const payload = trimmed.slice(5).trim();
-        if (payload === "[DONE]") {
-          yield { content: "", done: true, model };
-          return;
-        }
-        try {
-          const json = JSON.parse(payload) as {
-            choices?: { delta?: { content?: string } }[];
-          };
-          const delta = json.choices?.[0]?.delta?.content;
-          if (delta) yield { content: delta, done: false, model };
-        } catch {
-          // 忽略非 JSON 心跳行
-        }
+        const chunk = parseLine(line);
+        if (!chunk) continue;
+        if (chunk.done) return;
+        receivedContent = true;
+        yield chunk;
       }
+    }
+    if (buffer.trim()) {
+      const chunk = parseLine(buffer);
+      if (chunk && !chunk.done) {
+        receivedContent = true;
+        yield chunk;
+      }
+    }
+    if (!receivedContent) {
+      throw new Error(`[user:${this.m.providerType}] 流式响应中没有可用内容`);
     }
     yield { content: "", done: true, model };
   }

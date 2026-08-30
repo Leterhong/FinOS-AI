@@ -41,6 +41,10 @@ interface ModelState {
   clearTestResult: () => void;
 }
 
+// Dashboard 与模型中心可能在首屏同时请求默认模型；共享同一个在途请求，
+// 避免重复会话建立和重复网络往返拖慢页面切换。
+let activeLoadPromise: Promise<void> | null = null;
+
 export const useModelStore = create<ModelState>((set, get) => ({
   userId: "default-user",
   models: [],
@@ -75,16 +79,22 @@ export const useModelStore = create<ModelState>((set, get) => ({
   },
 
   loadActive: async (userId) => {
+    if (activeLoadPromise) return activeLoadPromise;
     const uid = userId ?? get().userId;
-    try {
-      await ensureWorkspaceSession();
-      const res = await fetch(`/api/models/active?userId=${encodeURIComponent(uid)}`, { cache: "no-store" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "加载模型状态失败");
-      set({ active: data.active ?? null, health: data.health ?? [] });
-    } catch (error) {
-      set({ error: error instanceof Error ? error.message : "加载模型状态失败" });
-    }
+    activeLoadPromise = (async () => {
+      try {
+        await ensureWorkspaceSession();
+        const res = await fetch(`/api/models/active?userId=${encodeURIComponent(uid)}`, { cache: "no-store" });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "加载模型状态失败");
+        set({ active: data.active ?? null, health: data.health ?? [] });
+      } catch (error) {
+        set({ error: error instanceof Error ? error.message : "加载模型状态失败" });
+      } finally {
+        activeLoadPromise = null;
+      }
+    })();
+    return activeLoadPromise;
   },
 
   addModel: async (input) => {

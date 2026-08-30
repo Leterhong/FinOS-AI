@@ -441,7 +441,14 @@ export const useEnterpriseStore = create<EnterpriseState>()(
         });
         return { pulled: true, merged };
       },
-      clearWorkspace: () => set(emptyWorkspace()),
+      clearWorkspace: () => {
+        const current = get();
+        // 同步清理服务端备份；否则刷新页面会把刚清空的数据重新恢复回来。
+        for (const key of Object.keys(syncMap) as SyncKind[]) {
+          for (const item of current[key]) pushDelete(syncMap[key].api, item.id);
+        }
+        set(emptyWorkspace());
+      },
     }),
     {
       name: "finos-enterprise-workspace-v2",

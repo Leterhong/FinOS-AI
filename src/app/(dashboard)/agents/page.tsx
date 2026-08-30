@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { Bot, Braces, CheckCircle2, Clock3, Cpu, FileSearch, GitBranch, Loader2, Play, ShieldCheck, XCircle } from "lucide-react";
 import { EmptyStateCard, PageIntro, Panel, PanelHeader } from "@/components/enterprise/EnterpriseUI";
@@ -20,6 +20,7 @@ export default function AgentsPage() {
   const documents = useEnterpriseStore((state) => state.documents);
   const rules = useEnterpriseStore((state) => state.rules);
   const risks = useEnterpriseStore((state) => state.risks);
+  const tasks = useEnterpriseStore((state) => state.tasks);
   const runs = useEnterpriseStore((state) => state.agents);
   const beginAgentRun = useEnterpriseStore((state) => state.beginAgentRun);
   const completeAgentRun = useEnterpriseStore((state) => state.completeAgentRun);
@@ -27,11 +28,8 @@ export default function AgentsPage() {
   const addRisk = useEnterpriseStore((state) => state.addRisk);
   const addTask = useEnterpriseStore((state) => state.addTask);
   const active = useModelStore((state) => state.active);
-  const loadActive = useModelStore((state) => state.loadActive);
   const [running, setRunning] = useState(false);
   const [notice, setNotice] = useState("");
-
-  useEffect(() => { void loadActive(); }, [loadActive]);
 
   const canRun = Boolean(active?.configured && cases.length > 0 && documents.length > 0);
 
@@ -60,10 +58,16 @@ export default function AgentsPage() {
   /** 把 Agent 研判输出一键转为待核验风险信号（需人工补全等级与规则依据）。 */
   const promoteToRisk = (run: (typeof runs)[number]) => {
     if (!cases.length) return;
+    const title = `Agent 研判发现：${run.task}`.slice(0, 80);
+    const existing = risks.find((risk) => risk.caseId === cases[0].id && risk.title === title);
+    if (existing) {
+      setNotice(`运行 ${run.id} 已登记为风险 ${existing.id}，不会重复创建`);
+      return;
+    }
     const risk = addRisk({
       caseId: cases[0].id,
       company: cases[0].company,
-      title: `Agent 研判发现：${run.task}`.slice(0, 80),
+      title,
       level: "medium",
       evidence: (run.output || "").slice(0, 500),
       rule: "待人工补充命中规则",
@@ -75,10 +79,16 @@ export default function AgentsPage() {
   /** 把 Agent 研判输出转为流程中心的补充/核验任务。 */
   const promoteToTask = (run: (typeof runs)[number]) => {
     if (!cases.length) return;
+    const title = `人工核验 Agent 研判：${run.task}`.slice(0, 80);
+    const caseName = `${cases[0].company} · ${cases[0].title}`;
+    if (tasks.some((task) => task.title === title && task.caseName === caseName)) {
+      setNotice(`运行 ${run.id} 已创建过流程任务，不会重复创建`);
+      return;
+    }
     const dueDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     addTask({
-      title: `人工核验 Agent 研判：${run.task}`.slice(0, 80),
-      caseName: `${cases[0].company} · ${cases[0].title}`,
+      title,
+      caseName,
       assignee: cases[0].owner || "待指派",
       due: dueDate,
       priority: "medium",

@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect } from "react";
 import Link from "next/link";
 import { ArrowRight, Bot, CheckCircle2, Cpu, FileSearch, FolderPlus, Scale, Sparkles } from "lucide-react";
 import { EmptyStateCard, MetricCard, PageIntro, Panel, PanelHeader, RiskBadge } from "@/components/enterprise/EnterpriseUI";
@@ -14,9 +13,6 @@ export default function EnterpriseCommandCenter() {
   const documents = useEnterpriseStore((state) => state.documents);
   const rules = useEnterpriseStore((state) => state.rules);
   const activeModel = useModelStore((state) => state.active);
-  const loadActive = useModelStore((state) => state.loadActive);
-
-  useEffect(() => { void loadActive(); }, [loadActive]);
 
   const highRisks = risks.filter((item) => item.level === "critical" || item.level === "high");
   const completedSetup = [cases.length > 0, documents.length > 0, Boolean(activeModel?.configured)].filter(Boolean).length;

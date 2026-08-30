@@ -6,11 +6,11 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint src tests scripts",
     "typecheck": "tsc --noEmit",
     "test": "node --test tests/frontend/contract.test.mjs",
     "test:backend": "pytest tests/backend tests/ai -q",
-    "test:unit": "node --import tsx --test tests/unit/rule-engine.test.ts"
+    "test:unit": "node --require ./scripts/register-os-user.cjs --import tsx --test tests/unit/rule-engine.test.ts"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.2",

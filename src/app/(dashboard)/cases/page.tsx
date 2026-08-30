@@ -2,12 +2,15 @@
 
 import { type FormEvent, useMemo, useState } from "react";
 import { ArrowRight, CheckCircle2, Filter, Plus, Search } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { EmptyStateCard, PageIntro, Panel, RiskBadge } from "@/components/enterprise/EnterpriseUI";
 import EnterpriseDialog from "@/components/enterprise/EnterpriseDialog";
 import { useEnterpriseStore } from "@/store/enterprise-store";
 import type { EnterpriseCase } from "@/types/enterprise";
 
 export default function CasesPage() {
+  const router = useRouter();
   const items = useEnterpriseStore((state) => state.cases);
   const createCase = useEnterpriseStore((state) => state.createCase);
   const [query, setQuery] = useState("");
@@ -25,7 +28,7 @@ export default function CasesPage() {
     const data = new FormData(event.currentTarget);
     const item = createCase({ company: String(data.get("company")), title: String(data.get("title")), industry: String(data.get("industry")), amount: String(data.get("amount")), owner: String(data.get("owner")) });
     setCreateOpen(false);
-    setSelected(item);
+    router.push(`/documents?caseId=${encodeURIComponent(item.id)}`);
   };
 
   return <div className="page-shell">
@@ -45,7 +48,7 @@ export default function CasesPage() {
       <form onSubmit={submit} className="space-y-4">{[["company", "企业名称", "填写企业全称"], ["title", "研判任务", "填写本次研判目标"], ["industry", "所属行业", "填写企业所属行业"], ["amount", "融资金额", "填写金额或注明不适用"], ["owner", "负责人", "填写项目负责人"]].map(([name, label, placeholder]) => <label key={name} className="block"><span className="mb-1.5 block text-[11px] text-slate-400">{label}</span><input required name={name} placeholder={placeholder} className="field-control" /></label>)}<div className="flex justify-end gap-2 pt-2"><button type="button" onClick={() => setCreateOpen(false)} className="rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-400">取消</button><button type="submit" className="rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]">创建并进入研判</button></div></form>
     </EnterpriseDialog>
     <EnterpriseDialog open={Boolean(selected)} onClose={() => setSelected(null)} title={selected?.company ?? "项目详情"} description={selected?.id}>
-      {selected && <div><div className="flex items-center gap-2"><RiskBadge level={selected.risk} /><span className="rounded-md bg-white/[0.05] px-2 py-1 text-[10px] text-slate-400">{selected.status}</span></div><h3 className="mt-4 text-base font-semibold text-white">{selected.title}</h3><div className="mt-4 grid grid-cols-2 gap-3 text-xs"><div className="rounded-xl border border-white/[0.07] p-3"><p className="text-slate-600">融资金额</p><p className="numeric mt-2 text-slate-200">{selected.amount}</p></div><div className="rounded-xl border border-white/[0.07] p-3"><p className="text-slate-600">负责人</p><p className="mt-2 text-slate-200">{selected.owner}</p></div></div><div className="mt-4 rounded-xl border border-cyan-400/15 bg-cyan-400/[0.04] p-3 text-xs text-cyan-100/70"><CheckCircle2 className="mr-2 inline h-4 w-4" />下一步：{selected.nextAction}</div></div>}
+      {selected && <div><div className="flex items-center gap-2"><RiskBadge level={selected.risk} /><span className="rounded-md bg-white/[0.05] px-2 py-1 text-[10px] text-slate-400">{selected.status}</span></div><h3 className="mt-4 text-base font-semibold text-white">{selected.title}</h3><div className="mt-4 grid grid-cols-2 gap-3 text-xs"><div className="rounded-xl border border-white/[0.07] p-3"><p className="text-slate-600">融资金额</p><p className="numeric mt-2 text-slate-200">{selected.amount}</p></div><div className="rounded-xl border border-white/[0.07] p-3"><p className="text-slate-600">负责人</p><p className="mt-2 text-slate-200">{selected.owner}</p></div></div><div className="mt-4 rounded-xl border border-cyan-400/15 bg-cyan-400/[0.04] p-3 text-xs text-cyan-100/70"><CheckCircle2 className="mr-2 inline h-4 w-4" />下一步：{selected.nextAction}</div><div className="mt-5 flex justify-end"><Link href={`/documents?caseId=${encodeURIComponent(selected.id)}`} onClick={() => setSelected(null)} className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]">进入资料研判<ArrowRight className="h-3.5 w-3.5" /></Link></div></div>}
     </EnterpriseDialog>
   </div>;
 }

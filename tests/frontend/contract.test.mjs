@@ -129,12 +129,21 @@ test("企业 AI 页面必须调用服务端模型网关", () => {
   const agents = read(join(SRC, "app", "(dashboard)", "agents", "page.tsx"));
   const research = read(join(SRC, "app", "(dashboard)", "research", "page.tsx"));
   const documents = read(join(SRC, "app", "(dashboard)", "documents", "page.tsx"));
-  assert.match(assistant, /callEnterpriseAI/);
+  assert.match(assistant, /(?:call|stream)EnterpriseAI/);
   assert.match(agents, /callEnterpriseAI/);
   assert.match(research, /callEnterpriseAI/);
   assert.match(documents, /analyzeEnterpriseDocument/);
   assert.ok(existsSync(join(SRC, "app", "api", "enterprise", "ai", "route.ts")));
   assert.ok(existsSync(join(SRC, "app", "api", "enterprise", "ai", "document", "route.ts")));
+});
+
+test("企业 AI 流式协议必须转发文本内容且拒绝空回复", () => {
+  const route = read(join(SRC, "app", "api", "enterprise", "ai", "route.ts"));
+  const client = read(join(SRC, "lib", "enterprise-ai.ts"));
+  const provider = read(join(SRC, "ai", "model-center", "providers", "OpenAICompatibleProvider.ts"));
+  assert.match(route, /delta:\s*chunk\.content/, "SSE 路由必须转发 chunk.content，不能把整个对象塞进 delta");
+  assert.match(client, /!answer\.trim\(\)/, "客户端必须拦截空白 AI 回复");
+  assert.match(provider, /content-type[\s\S]*text\/event-stream/, "兼容网关返回普通 JSON 时必须降级解析");
 });
 
 test("模型中心必须可见且模型 API 只信任服务端工作区会话", () => {
