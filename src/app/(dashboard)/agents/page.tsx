@@ -74,14 +74,27 @@ export default function AgentsPage() {
       setNotice(`运行 ${run.id} 已登记为风险 ${existing.id}，不会重复创建`);
       return;
     }
+    const hitOutcomes = caseDocuments.flatMap((document) => document.ruleOutcomes ?? []).filter((outcome) => outcome.hit);
+    const citedFactIds = hitOutcomes.flatMap((outcome) => caseDocuments
+      .flatMap((document) => document.factItems ?? [])
+      .filter((fact) => fact.reviewStatus !== "已驳回" && outcome.matchedQuote && fact.quote === outcome.matchedQuote)
+      .map((fact) => fact.id));
+    const versionedRuleCodes = hitOutcomes.map((outcome) => {
+      const rule = rules.find((item) => item.code === outcome.code);
+      return rule ? `${rule.code}@${rule.version}` : outcome.code;
+    });
     const risk = addRisk({
       caseId: relatedCase.id,
       company: relatedCase.company,
       title,
       level: "medium",
       evidence: (run.output || "").slice(0, 500),
-      rule: "待人工补充命中规则",
+      rule: "Agent 生成候选风险，需结合已验证规则人工确认",
       impact: "待人工核验后补充",
+      origin: "AI线索",
+      factIds: [...new Set(citedFactIds)],
+      ruleCodes: [...new Set(versionedRuleCodes)],
+      sourceRunId: run.id,
     });
     setNotice(`已将运行 ${run.id} 的输出登记为待核验风险 ${risk.id}，请在风险中心补全并核验`);
   };

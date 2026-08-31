@@ -1,4 +1,4 @@
-> ⚠️ **本文档撰写于 1.x 个人财富版时期（2026-08-01 前后），部分内容与 2.0 企业版不一致，仅供历史参考；请以 README 与 docs/security.md 为准。**
+> 本文档仍包含兼容旧部署所保留的历史表。当前企业产品面以 `enterprise_*` 表、AI 模型配置与审计安全表为主；历史个人财富表不进入新 UI 或企业 AI 上下文。
 
 # 数据库设计 · Database Schema
 
@@ -19,7 +19,7 @@
 ### 1.1 建表策略
 
 - **开发**：`lifespan` → `init_db()` → `Base.metadata.create_all`，零配置自动建表
-- **生产**：Alembic 迁移（链路 `0808e2a909f1 → 7f03security → 7f04perf → 7f11intel → 7f12mm → 7f13pos`）
+- **生产**：Alembic 单链迁移（当前 head：`7f16evidence`；依次包含 `7f14ent → 7f15scope → 7f16evidence` 企业工作区、项目隔离与证据链变更）
 - **扩展已有表**：`create_all` 不会给已存在表加列。新增列时必须在 `init_db()` 末尾追加**幂等补列自愈**逻辑：
 
 ```python

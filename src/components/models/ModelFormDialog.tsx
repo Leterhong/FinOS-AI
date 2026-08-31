@@ -5,7 +5,15 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, Plug, Loader2, CheckCircle2, XCircle, KeyRound } from "lucide-react";
 import { useModelStore } from "@/store/model-store";
 import { PROVIDER_PRESETS, ALL_PRESETS } from "@/ai/model-center/providers/presets";
-import type { ProviderType, PublicProviderConfig } from "@/ai/model-center/types";
+import type { ModelRole, ProviderType, PublicProviderConfig } from "@/ai/model-center/types";
+
+const MODEL_ROLES: Array<{ value: ModelRole; label: string; description: string }> = [
+  { value: "default", label: "通用默认", description: "未指定任务类型时使用" },
+  { value: "chat", label: "对话助手", description: "问答与项目协作" },
+  { value: "reasoning", label: "复杂研判", description: "规则匹配与风险分析" },
+  { value: "vision", label: "图像理解", description: "扫描件与图表理解" },
+  { value: "long-context", label: "长文档", description: "长篇资料归纳" },
+];
 
 interface Props {
   open: boolean;
@@ -30,6 +38,7 @@ export default function ModelFormDialog({ open, onClose, editing }: Props) {
   const [apiKey, setApiKey] = useState("");
   const [temperature, setTemperature] = useState("0.7");
   const [maxTokens, setMaxTokens] = useState("4096");
+  const [roles, setRoles] = useState<ModelRole[]>(["default"]);
   const [testState, setTestState] = useState<{
     ok: boolean;
     msg: string;
@@ -49,6 +58,7 @@ export default function ModelFormDialog({ open, onClose, editing }: Props) {
       setBaseUrl(editing.baseUrl);
       setTemperature(editing.temperature != null ? String(editing.temperature) : "0.7");
       setMaxTokens(editing.maxTokens != null ? String(editing.maxTokens) : "4096");
+      setRoles(editing.roles?.length ? editing.roles : ["default"]);
       setApiKey(""); // 编辑时留空表示不改
       setTestState(null);
     } else {
@@ -66,6 +76,7 @@ export default function ModelFormDialog({ open, onClose, editing }: Props) {
     setModelName(first?.name ?? "");
     setTemperature("0.7");
     setMaxTokens("4096");
+    setRoles(["default"]);
     setApiKey("");
     setTestState(null);
   }
@@ -84,6 +95,7 @@ export default function ModelFormDialog({ open, onClose, editing }: Props) {
       modelId,
       baseUrl,
       apiKey: apiKey || undefined,
+      roles,
       temperature: parseNum(temperature),
       maxTokens: parseNum(maxTokens),
     };
@@ -253,6 +265,35 @@ export default function ModelFormDialog({ open, onClose, editing }: Props) {
                   className="input font-mono"
                 />
               </Field>
+
+              <fieldset className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-3">
+                <legend className="px-1 text-xs text-white/55">任务角色</legend>
+                <p className="mb-3 text-[11px] leading-5 text-white/35">
+                  Agent 会优先选择匹配角色的在线模型；没有匹配项时才回退到默认模型。
+                </p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {MODEL_ROLES.map((role) => {
+                    const checked = roles.includes(role.value);
+                    return (
+                      <label key={role.value} className={`flex cursor-pointer items-start gap-2 rounded-lg border p-2.5 ${checked ? "border-cyan-400/25 bg-cyan-400/[0.06]" : "border-white/[0.06]"}`}>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(event) => setRoles((current) => event.target.checked
+                            ? [...current, role.value]
+                            : current.filter((item) => item !== role.value))}
+                          className="mt-0.5 accent-cyan-300"
+                        />
+                        <span>
+                          <span className="block text-[11px] text-slate-200">{role.label}</span>
+                          <span className="mt-0.5 block text-[9px] leading-4 text-slate-500">{role.description}</span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+                {roles.length === 0 && <p className="mt-2 text-[10px] text-amber-300">未选择角色时，此模型只能被明确指定调用。</p>}
+              </fieldset>
 
               {/* 模型参数（Phase 6.2：用户可自助调节采样温度与最大 Token） */}
               <div className="grid grid-cols-2 gap-3">

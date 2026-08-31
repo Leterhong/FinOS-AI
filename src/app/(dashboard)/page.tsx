@@ -17,6 +17,7 @@ export default function EnterpriseCommandCenter() {
   const highRisks = risks.filter((item) => item.level === "critical" || item.level === "high");
   const completedSetup = [cases.length > 0, documents.length > 0, Boolean(activeModel?.configured)].filter(Boolean).length;
   const averageProgress = cases.length ? Math.round(cases.reduce((sum, item) => sum + item.progress, 0) / cases.length) : 0;
+  const setupReady = completedSetup === 3;
 
   return <div className="page-shell">
     <PageIntro
@@ -38,18 +39,18 @@ export default function EnterpriseCommandCenter() {
       <div className="relative grid gap-6 p-5 lg:grid-cols-[1.2fr_.8fr] lg:p-6">
         <div>
           <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[.18em] text-cyan-300/70"><Bot className="h-4 w-4" />AI readiness</div>
-          <h2 className="mt-3 text-xl font-semibold tracking-tight text-white">建立真实研判链路</h2>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">先创建项目并上传资料，再配置模型。AI 只基于当前工作区明确提供的上下文回答；没有资料时会指出数据缺口。</p>
+          <h2 className="mt-3 text-xl font-semibold tracking-tight text-white">{setupReady ? "推进当前项目复核" : "建立真实研判链路"}</h2>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">{setupReady ? "基础链路已建立。下一步进入项目工作台，复核结构化事实、规则命中和候选风险，再形成可交付报告。" : "按创建项目、配置模型、上传资料的顺序建立链路。AI 只基于当前企业项目明确提供的上下文回答。"}</p>
           <div className="mt-5 flex flex-wrap gap-2">
             <Link href="/cases" className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-slate-300"><FolderPlus className="h-3.5 w-3.5" />创建项目</Link>
-            <Link href="/documents" className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-slate-300"><FileSearch className="h-3.5 w-3.5" />上传资料</Link>
             <Link href="/models" className="inline-flex items-center gap-2 rounded-lg border border-cyan-400/20 bg-cyan-400/[0.07] px-3 py-2 text-xs text-cyan-200"><Cpu className="h-3.5 w-3.5" />接入模型</Link>
+            <Link href="/documents" className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-slate-300"><FileSearch className="h-3.5 w-3.5" />上传资料</Link>
           </div>
         </div>
         <div className="rounded-xl border border-white/[0.07] bg-black/15 p-4">
           <div className="flex items-center justify-between"><p className="text-xs font-medium text-slate-300">启动进度</p><span className="numeric text-xs text-cyan-300">{completedSetup}/3</span></div>
           <div className="mt-4 space-y-3">
-            {[["创建企业项目", cases.length > 0], ["上传真实资料", documents.length > 0], ["配置默认模型", Boolean(activeModel?.configured)]].map(([label, done]) => <div key={String(label)} className="flex items-center gap-3 rounded-lg border border-white/[0.05] px-3 py-2.5">{done ? <CheckCircle2 className="h-4 w-4 text-emerald-400" /> : <span className="h-4 w-4 rounded-full border border-white/15" />}<span className={`text-xs ${done ? "text-slate-300" : "text-slate-600"}`}>{String(label)}</span></div>)}
+            {[["创建企业项目", cases.length > 0], ["配置默认模型", Boolean(activeModel?.configured)], ["上传真实资料", documents.length > 0]].map(([label, done]) => <div key={String(label)} className="flex items-center gap-3 rounded-lg border border-white/[0.05] px-3 py-2.5">{done ? <CheckCircle2 className="h-4 w-4 text-emerald-400" /> : <span className="h-4 w-4 rounded-full border border-white/15" />}<span className={`text-xs ${done ? "text-slate-300" : "text-slate-600"}`}>{String(label)}</span></div>)}
           </div>
         </div>
       </div>
@@ -60,7 +61,7 @@ export default function EnterpriseCommandCenter() {
         <PanelHeader eyebrow="Case queue" title="项目队列" description="仅展示你创建的企业项目" action={<Link href="/cases" className="flex items-center gap-1 text-xs text-cyan-300">项目中心<ArrowRight className="h-3 w-3" /></Link>} />
         {cases.length === 0
           ? <EmptyStateCard icon={FolderPlus} title="还没有企业项目" description="创建第一个融资、尽调或经营分析项目，之后才能关联资料、规则和 AI 研判。" action={<Link href="/cases" className="rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]">新建项目</Link>} />
-          : <div className="divide-y divide-white/[0.06]">{cases.slice(0, 4).map((item) => <Link href="/cases" key={item.id} className="grid gap-3 px-5 py-4 transition hover:bg-white/[0.025] sm:grid-cols-[1.4fr_.65fr_.6fr] sm:items-center">
+          : <div className="divide-y divide-white/[0.06]">{cases.slice(0, 4).map((item) => <Link href={`/cases/${encodeURIComponent(item.id)}`} key={item.id} className="grid gap-3 px-5 py-4 transition hover:bg-white/[0.025] sm:grid-cols-[1.4fr_.65fr_.6fr] sm:items-center">
             <div className="min-w-0"><div className="flex items-center gap-2"><p className="truncate text-sm font-medium text-slate-100">{item.company}</p><RiskBadge level={item.risk} /></div><p className="mt-1.5 truncate text-xs text-slate-500">{item.title} · {item.id}</p></div>
             <div><p className="numeric text-sm text-slate-200">{item.amount}</p><p className="mt-1 text-[11px] text-slate-600">负责人 {item.owner}</p></div>
             <div><div className="flex justify-between text-[10px] text-slate-500"><span>{item.status}</span><span>{item.progress}%</span></div><div className="mt-2 h-1 overflow-hidden rounded-full bg-white/[0.07]"><div className="h-full rounded-full bg-cyan-300" style={{ width: `${item.progress}%` }} /></div></div>
@@ -78,7 +79,7 @@ export default function EnterpriseCommandCenter() {
     <div className="grid gap-4 lg:grid-cols-2">
       <Panel>
         <PanelHeader eyebrow="Agent operations" title="Agent 运行记录" description="真实模型调用结果会记录在这里" action={<Link href="/agents" className="text-xs text-cyan-300">Agent 中心</Link>} />
-        {agents.length === 0 ? <EmptyStateCard icon={Bot} title="尚无 Agent 运行记录" description="完成项目、资料和模型配置后，可从 Agent 中心发起一次真实研判。" /> : <div className="divide-y divide-white/[0.06]">{agents.slice(0, 3).map((run) => <div key={run.id} className="p-4"><div className="flex items-center justify-between"><p className="text-xs font-medium text-slate-200">{run.task}</p><span className={`text-[10px] ${run.status === "已完成" ? "text-emerald-300" : run.status === "失败" ? "text-rose-300" : "text-cyan-300"}`}>{run.status}</span></div><p className="mt-2 line-clamp-2 text-[10px] leading-5 text-slate-600">{run.output || run.error || "模型正在处理工作区上下文"}</p></div>)}</div>}
+        {agents.filter((run) => run.caseId).length === 0 ? <EmptyStateCard icon={Bot} title="尚无已归属项目的 Agent 运行" description="完成项目、模型和资料配置后，从 Agent 中心发起研判；升级前未记录项目归属的历史运行不会参与当前项目判断。" /> : <div className="divide-y divide-white/[0.06]">{agents.filter((run) => run.caseId).slice(0, 3).map((run) => <div key={run.id} className="p-4"><div className="flex items-center justify-between"><p className="text-xs font-medium text-slate-200">{run.task}</p><span className={`text-[10px] ${run.status === "已完成" ? "text-emerald-300" : run.status === "失败" ? "text-rose-300" : "text-cyan-300"}`}>{run.status}</span></div><p className="mt-2 line-clamp-2 text-[10px] leading-5 text-slate-600">{run.output || run.error || "模型正在处理当前项目上下文"}</p></div>)}</div>}
       </Panel>
       <Panel>
         <PanelHeader eyebrow="Rule readiness" title="规则与证据" description="AI 不替代规则，也不把推断伪装成事实" />

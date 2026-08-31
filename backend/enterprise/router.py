@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -68,6 +68,35 @@ def _conditions_from_json(raw: str | None) -> list:
         return []
 
 
+def _json_list(raw: str | None) -> list:
+    if not raw:
+        return []
+    try:
+        value = json.loads(raw)
+        return value if isinstance(value, list) else []
+    except json.JSONDecodeError:
+        return []
+
+
+def _json_dict(raw: str | None) -> dict:
+    if not raw:
+        return {}
+    try:
+        value = json.loads(raw)
+        return value if isinstance(value, dict) else {}
+    except json.JSONDecodeError:
+        return {}
+
+
+def _dump_json(value: object, limit: int) -> str | None:
+    if value is None:
+        return None
+    encoded = json.dumps(value, ensure_ascii=False)
+    if len(encoded) > limit:
+        raise HTTPException(status_code=422, detail=f"结构化字段超过 {limit} 字符限制")
+    return encoded
+
+
 # ---------------------------------------------------------------- 入参模型
 class CaseIn(BaseModel):
     id: str = Field(min_length=1, max_length=_ID_LEN)
@@ -81,6 +110,8 @@ class CaseIn(BaseModel):
     owner: str = Field(default="", max_length=120)
     nextAction: str = Field(default="", max_length=300)
     updatedAt: str | None = None
+    createdAt: str | None = None
+    archivedAt: str | None = Field(default=None, max_length=40)
 
 
 class DocumentIn(BaseModel):
@@ -94,6 +125,9 @@ class DocumentIn(BaseModel):
     analysis: str | None = None
     model: str | None = Field(default=None, max_length=200)
     error: str | None = None
+    factItems: list | None = Field(default=None, max_length=1000)
+    ruleOutcomes: list | None = Field(default=None, max_length=500)
+    uncertainties: list | None = Field(default=None, max_length=200)
 
 
 class RiskIn(BaseModel):
@@ -106,6 +140,14 @@ class RiskIn(BaseModel):
     rule: str = Field(default="", max_length=300)
     impact: str = Field(default="", max_length=4000)
     status: str = Field(default="待核验", max_length=40)
+    origin: str | None = Field(default=None, max_length=40)
+    factIds: list[str] | None = Field(default=None, max_length=1000)
+    ruleCodes: list[str] | None = Field(default=None, max_length=500)
+    sourceRunId: str | None = Field(default=None, max_length=_ID_LEN)
+    verificationNote: str | None = Field(default=None, max_length=4000)
+    verifiedBy: str | None = Field(default=None, max_length=120)
+    verifiedAt: str | None = Field(default=None, max_length=40)
+    mitigationNote: str | None = Field(default=None, max_length=4000)
 
 
 class RuleIn(BaseModel):
@@ -116,7 +158,8 @@ class RuleIn(BaseModel):
     version: str = Field(default="v1.0", max_length=40)
     coverage: str = Field(default="待测试", max_length=40)
     coverageRate: float = Field(default=0.0, ge=0, le=100)
-    conditions: list | None = None
+    conditions: list | None = Field(default=None, max_length=100)
+    testRecords: list | None = Field(default=None, max_length=1000)
 
 
 class TaskIn(BaseModel):
@@ -128,6 +171,8 @@ class TaskIn(BaseModel):
     due: str = Field(default="", max_length=40)
     priority: str = Field(default="medium", max_length=20)
     stage: str = Field(default="待处理", max_length=40)
+    note: str | None = Field(default=None, max_length=4000)
+    history: list | None = Field(default=None, max_length=2000)
 
 
 class BriefIn(BaseModel):
@@ -144,7 +189,8 @@ def _case_out(c: EnterpriseCase) -> dict:
     return {
         "id": c.id, "company": c.company, "title": c.title, "industry": c.industry,
         "amount": c.amount, "status": c.status, "risk": c.risk, "progress": c.progress,
-        "owner": c.owner, "nextAction": c.next_action, "updatedAt": c.updated_at.isoformat(),
+        "owner": c.owner, "nextAction": c.next_action, "createdAt": c.created_at.isoformat(),
+        "updatedAt": c.updated_at.isoformat(), "archivedAt": c.archived_at or None,
     }
 
 
@@ -153,6 +199,7 @@ def _document_out(d: EnterpriseDocument) -> dict:
         "id": d.id, "caseId": d.case_id, "name": d.name, "kind": d.kind,
         "status": d.status, "facts": d.facts, "ruleHits": d.rule_hits,
         "analysis": d.analysis, "model": d.model, "error": d.error,
+        **_json_dict(d.evidence_json),
         "updatedAt": d.updated_at.isoformat(),
     }
 
@@ -161,7 +208,7 @@ def _risk_out(r: EnterpriseRisk) -> dict:
     return {
         "id": r.id, "caseId": r.case_id, "company": r.company, "title": r.title,
         "level": r.level, "evidence": r.evidence, "rule": r.rule, "impact": r.impact,
-        "status": r.status, "updatedAt": r.updated_at.isoformat(),
+        "status": r.status, **_json_dict(r.review_json), "updatedAt": r.updated_at.isoformat(),
     }
 
 
@@ -169,6 +216,7 @@ def _rule_out(r: EnterpriseRule) -> dict:
     return {
         "id": r.id, "code": r.code, "name": r.name, "domain": r.domain,
         "version": r.version, "conditions": _conditions_from_json(r.conditions),
+        "testRecords": _json_list(r.tests_json),
         "coverage": r.coverage, "coverageRate": r.coverage_rate,
         "updatedAt": r.updated_at.isoformat(),
     }
@@ -177,7 +225,8 @@ def _rule_out(r: EnterpriseRule) -> dict:
 def _task_out(t: EnterpriseTask) -> dict:
     return {
         "id": t.id, "caseId": t.case_id, "title": t.title, "caseName": t.case_name, "assignee": t.assignee,
-        "due": t.due, "priority": t.priority, "stage": t.stage,
+        "due": t.due, "priority": t.priority, "stage": t.stage, "note": t.note,
+        "history": _json_list(t.history_json),
         "updatedAt": t.updated_at.isoformat(),
     }
 
@@ -199,6 +248,7 @@ def _apply_case(row: EnterpriseCase, body: CaseIn) -> None:
     row.progress = float(body.progress)
     row.owner = _clip(body.owner, 120)
     row.next_action = _clip(body.nextAction, 300)
+    row.archived_at = _clip(body.archivedAt, 40)
 
 
 def _apply_document(row: EnterpriseDocument, body: DocumentIn) -> None:
@@ -211,6 +261,11 @@ def _apply_document(row: EnterpriseDocument, body: DocumentIn) -> None:
     row.analysis = (body.analysis or None)
     row.model = (body.model or None)
     row.error = (body.error or None)
+    row.evidence_json = _dump_json({
+        "factItems": body.factItems or [],
+        "ruleOutcomes": body.ruleOutcomes or [],
+        "uncertainties": body.uncertainties or [],
+    }, 200_000)
 
 
 def _apply_risk(row: EnterpriseRisk, body: RiskIn) -> None:
@@ -222,6 +277,16 @@ def _apply_risk(row: EnterpriseRisk, body: RiskIn) -> None:
     row.rule = _clip(body.rule, 300)
     row.impact = _clip(body.impact, 4000)
     row.status = _clip(body.status, 40)
+    row.review_json = _dump_json({
+        "origin": body.origin,
+        "factIds": body.factIds or [],
+        "ruleCodes": body.ruleCodes or [],
+        "sourceRunId": body.sourceRunId,
+        "verificationNote": body.verificationNote,
+        "verifiedBy": body.verifiedBy,
+        "verifiedAt": body.verifiedAt,
+        "mitigationNote": body.mitigationNote,
+    }, 30_000)
 
 
 def _apply_rule(row: EnterpriseRule, body: RuleIn) -> None:
@@ -232,6 +297,7 @@ def _apply_rule(row: EnterpriseRule, body: RuleIn) -> None:
     row.conditions = _conditions_to_json(body.conditions)
     row.coverage = _clip(body.coverage, 40)
     row.coverage_rate = float(body.coverageRate)
+    row.tests_json = _dump_json(body.testRecords or [], 100_000)
 
 
 def _apply_task(row: EnterpriseTask, body: TaskIn) -> None:
@@ -242,6 +308,8 @@ def _apply_task(row: EnterpriseTask, body: TaskIn) -> None:
     row.due = _clip(body.due, 40)
     row.priority = _clip(body.priority, 20)
     row.stage = _clip(body.stage, 40)
+    row.note = _clip(body.note, 4000)
+    row.history_json = _dump_json(body.history or [], 100_000)
 
 
 def _apply_brief(row: EnterpriseBrief, body: BriefIn) -> None:

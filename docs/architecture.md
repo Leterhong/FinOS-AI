@@ -1,8 +1,6 @@
-> ⚠️ **本文档撰写于 1.x 个人财富版时期（2026-08-01 前后），部分内容与 2.0 企业版不一致，仅供历史参考；请以 README 与 docs/security.md 为准。**
-
 # 系统架构 · Architecture
 
-> FinOS AI —— 开源的个人财富操作系统。本文档描述系统的整体分层、模块边界、数据流与关键设计决策。
+> FinOS AI —— 面向企业经营与风险研判的开源金融服务 Agent。本文档描述当前企业产品面的分层、数据边界、AI 调用和部署架构。
 
 ## 1. 架构总览
 
@@ -13,7 +11,7 @@ FinOS AI 采用**前后端分离 + 单体后端多模块**的架构。前端是 
 │                          浏览器 (Client)                           │
 │  Next.js 15 App Router · React 19 · Zustand · React Query v5      │
 │  ┌──────────┬──────────┬──────────┬──────────┬─────────────────┐  │
-│  │ 财富驾驶舱│ 财富实验室│  AI 助手 │ 自动化中心│ 时间线/知识中心  │  │
+│  │ 项目工作台│ 资料/事实 │ 规则/风险│ Agent/投研│ 人工流程/报告   │  │
 │  └──────────┴──────────┴──────────┴──────────┴─────────────────┘  │
 │                              │                                     │
 │              src/lib/backend-client.ts (唯一后端通道)              │
@@ -27,12 +25,10 @@ FinOS AI 采用**前后端分离 + 单体后端多模块**的架构。前端是 
 │  │            → CORSMiddleware → 统一异常处理器                    │ │
 │  └───────────────────────────────────────────────────────────────┘ │
 │  ┌─────────────┬─────────────┬─────────────┬────────────────────┐  │
-│  │  基础域      │  智能域      │  自主域      │  个人 OS 域        │  │
-│  │ auth/user   │ intelligence│ autonomous  │ personal_os        │  │
-│  │ financial   │ ai/gateway  │ (46 端点)   │ (24 端点)          │  │
-│  │ document    │ agents      │ 规则/定时    │ 分身/时间线/知识    │  │
-│  │ memory      │ multimodal  │ 工作流/计划  │ 日报/决策/搜索      │  │
-│  │ notification│ report      │ 行动中心     │ 隐私中心           │  │
+│  │ 企业项目域   │ AI 模型域    │ 证据与规则域  │ 安全与运维域        │  │
+│  │ enterprise │ ai/gateway  │ document    │ auth/security      │  │
+│  │ cases/tasks│ model center│ rules/risks │ audit/metrics      │  │
+│  │ briefs     │ agents/RAG  │ reports     │ backup/health      │  │
 │  └─────────────┴─────────────┴─────────────┴────────────────────┘  │
 │  ┌───────────────────────────────────────────────────────────────┐ │
 │  │  横切层  security (AES-256-GCM 字段加密 · 审计 · 所有权校验)     │ │
@@ -44,7 +40,7 @@ FinOS AI 采用**前后端分离 + 单体后端多模块**的架构。前端是 
     ┌──────────▼──────────┐        ┌──────────▼──────────────────┐
     │  PostgreSQL (生产)   │        │  任意 OpenAI 兼容 LLM 服务   │
     │  SQLite (本地开发)   │        │  用户自带 API Key (加密入库) │
-    │  44 张业务表         │        │  失败自动降级为本地确定性算法 │
+    │  企业表 + 兼容历史表  │        │  失败明确报错；不伪造 AI 输出 │
     └─────────────────────┘        └─────────────────────────────┘
 ```
 
@@ -54,36 +50,30 @@ FinOS AI 采用**前后端分离 + 单体后端多模块**的架构。前端是 
 
 | 目录 | 职责 |
 |---|---|
-| `src/app/(dashboard)/` | 所有受保护业务页面（25 个路由） |
-| `src/app/login`, `register` | 公开认证页面 |
-| `src/lib/backend-client.ts` | **唯一**后端通道，禁止绕过直接 `fetch` 后端 |
-| `src/hooks/use-backend.ts` | React Query hooks，统一 `enabled: hasBackendToken()` 守卫 |
-| `src/store/` | Zustand 全局状态（auth、UI 偏好） |
-| `src/components/` | UI 组件库（dashboard / ui / charts） |
+| `src/app/(dashboard)/` | 企业决策台、项目、资料、风险、规则、模型、Agent、流程、投研、助手与部署边界 |
+| `src/app/api/models/` | 工作区会话隔离的模型配置、测试、健康与 Playground |
+| `src/app/api/enterprise/ai/` | 项目级助手、Agent、投研和资料研判模型网关 |
+| `src/lib/backend-client.ts` | FastAPI 后端唯一通道，禁止业务代码直接拼接后端地址 |
+| `src/store/enterprise-store.ts` | 零预置企业工作区、乐观更新与服务端同步 |
+| `src/components/enterprise/` | 企业 UI、上下文选择器、对话框与状态组件 |
 | `src/auth/session.ts` | Next 服务端 session cookie 读写 |
 | `middleware.ts` | 路由守卫，校验 `finos_session` cookie |
 
-**关键约束**：前端所有后端请求必须经过 `backendApi`。它负责自动拼接 `/api` 前缀、注入 `Authorization: Bearer <finos_token>`、解开响应信封（`{success, data}` → `data`）、以及在 401 时清除本地 token。
+**关键约束**：调用 FastAPI 必须经过 `backendApi`；Next Route Handler 使用 HttpOnly 工作区会话管理模型凭据。任何企业 AI 请求必须携带明确项目上下文，旧版无 `caseId` 记录不得进入当前项目。
 
 ### 2.2 后端层（FastAPI 模块化单体）
 
 后端不是微服务，而是**按业务域强边界切分的单体**。每个模块自带 `models.py`（数据模型）、`router.py`/`api.py`（HTTP 层）、`service.py`（业务逻辑），互相之间只通过函数调用协作，不共享内部状态。
 
-| 域 | 模块 | 端点数 | 说明 |
-|---|---|---|---|
-| 认证 | `auth`, `user` | 8 | JWT 签发/轮换/吊销、CSRF、用户资料 |
-| 财务 | `financial`, `services/financial`, `services/twin` | 14 | 资产、交易、财富画像、Financial Twin |
-| 文档 | `document`, `services/document` | 7 | 上传、解析、候选记录确认 |
-| AI | `ai`, `services/rag`, `services/cfo` | 17 | 模型配置、生成、流式、向量检索、CFO 分析 |
-| 智能 | `intelligence` | 18 | 预测、六维评分、情景模拟、策略、对话 |
-| 多模态 | `multimodal` | 10 | 图片/文件/音频/文本统一摄入与识别 |
-| Agent | `agents`, `services/agent` | 10 | Agent 市场、工具调用、工作流编排 |
-| 报告 | `report` | 6 | 财富报告生成与多格式导出 |
-| 个人 OS | `personal_os` | 24 | 财富分身、时间线、知识、日报、全局搜索 |
-| 自动化 | `autonomous` | 46 | 规则、定时、工作流、长期计划、行动中心 |
-| 安全 | `security`, `backup` | 5 | 审计日志、安全事件、账户注销、数据导出 |
-| 运维 | `tasks`, `health`, `metrics`, `notification` | 9 | 异步任务、健康检查、指标、通知 |
-| **合计** | | **178** | |
+| 域 | 模块 | 当前职责 |
+|---|---|---|
+| 企业工作区 | `enterprise` | 项目、资料证据、风险复核、规则测试、任务审计、研究底稿与快照隔离 |
+| 认证与会话 | `auth`, `user` | 完整后端 JWT；开源 UI 使用随机工作区会话直达体验 |
+| 文档 | `document`, `services/document` | 文件安全、文本解析与服务端文档能力 |
+| AI | `ai`, `services/rag`, `agents` | 模型网关、流式输出、RAG 与 Agent 基础设施 |
+| 安全 | `security`, `backup` | 所有权校验、审计、安全事件、备份与数据导出 |
+| 运维 | `tasks`, `health`, `metrics`, `notification` | 异步任务、健康检查、指标与通知 |
+| 历史兼容 | 早期财务/个人模块 | 仅保留数据库升级兼容和旧部署安全修复，不进入当前 UI 与企业 AI 上下文 |
 
 ### 2.3 数据层
 
@@ -118,25 +108,19 @@ FinOS AI 采用**前后端分离 + 单体后端多模块**的架构。前端是 
 [ok(data)]            ── {"success": true, "data": ..., "message": ""}
 ```
 
-### 3.2 Financial Twin（财富数字分身）
+### 3.2 企业项目证据链
 
-Twin 是全系统的**数据中枢**。用户的资产、交易、画像被聚合计算为一个结构化快照，供所有智能模块消费：
+企业项目是当前产品的数据边界。资料、结构化事实、风险、任务、底稿和 Agent 运行必须携带 `caseId`；无项目归属的旧记录不会进入当前项目的 AI 上下文或判断。
 
-```
-assets + transactions + financial_profiles
-              │
-              ▼  services/twin/service.py
-       ┌─────────────────┐
-       │ Financial Twin  │  净资产 / 现金流 / 风险分 / 健康分 / 目标进度
-       └────────┬────────┘
-                │ 被以下模块读取
-   ┌────────────┼────────────┬──────────────┬─────────────┐
-   ▼            ▼            ▼              ▼             ▼
-预测引擎     六维评分     Agent 上下文    自动化快照     日报生成
-intelligence intelligence   agents        autonomous   personal_os
+```text
+enterprise_cases
+      ├─ enterprise_documents → factItems / ruleOutcomes / uncertainties
+      ├─ enterprise_risks     → factIds / ruleCodes / sourceRunId / 人工复核
+      ├─ enterprise_tasks     → 阶段 / 负责人 / 操作历史
+      └─ enterprise_briefs    → 项目研究底稿
 ```
 
-Twin 在资产/交易变更后重算，快照写入 `financial_twins` 表保留历史，用于趋势对比与事件触发。
+前端工作区提供即时操作，FastAPI 快照与 upsert 接口负责服务端恢复和用户隔离。生产环境使用 PostgreSQL 与 Alembic；浏览器单机体验不等同于企业多租户。
 
 ### 3.3 AI 调用与降级链
 
@@ -157,17 +141,17 @@ backend/ai/gateway/provider.py (全 async)
 统一结构化结果
 ```
 
-**设计原则**：AI 永远是增强项而非依赖项。任何 LLM 不可用的情况下，系统必须仍能返回有意义的确定性结果（`tier="local"`），页面不得白屏或报错。
+**设计原则**：确定性计算可以在没有 LLM 时继续工作，但企业助手、资料理解、Agent 和投研不会用模板伪造 AI 输出；模型不可用时必须给出可恢复错误。旧后端模块中的 `tier="local"` 只代表确定性算法结果，不能被展示成模型结论。
 
 ## 4. 关键设计决策
 
 ### 4.1 为什么是模块化单体而非微服务
 
-个人财富 OS 的数据高度耦合（几乎所有模块都要读 Twin），拆微服务会引入大量跨服务查询与分布式事务。模块化单体在保持清晰边界的同时，避免了运维复杂度。单实例即可服务，Docker 一键部署。
+企业项目、资料、规则、风险、任务与报告需要一致事务边界和清晰的项目隔离。模块化单体便于在早期保持证据链一致性，并降低自托管运维复杂度；未来只有在性能、团队归属或隔离需求形成明确边界时才拆分服务。
 
 ### 4.2 用户隔离铁律
 
-**所有**数据库查询必须强制携带 `user_id` 过滤。越权访问一律返回 404（而非 403），不泄露资源是否存在。资源所有权校验统一走 `require_owned_resource()`。新用户零数据时返回引导态「欢迎创建你的财富数字分身」，而不是空数组或报错。
+**所有**数据库查询必须强制携带 `user_id` 过滤。越权访问一律返回 404（而非 403），不泄露资源是否存在。资源所有权校验统一走 `require_owned_resource()`。新工作区返回零数据和“创建企业项目”的可恢复引导，不创建演示企业或虚构风险。
 
 ### 4.3 敏感字段透明加密
 

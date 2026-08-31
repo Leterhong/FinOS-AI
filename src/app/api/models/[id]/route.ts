@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { modelConfigStore } from "@/ai/model-center/models/store";
-import type { ProviderConfigInput } from "@/ai/model-center/types";
+import { MODEL_ROLES, type ProviderConfigInput } from "@/ai/model-center/types";
 import { getSessionUserId } from "@/auth/session";
 import { withModelStoreErrors } from "@/ai/model-center/models/route-guard";
 
@@ -22,6 +22,9 @@ async function PUT_impl(
     body = (await req.json()) as Partial<ProviderConfigInput> & { userId?: string };
   } catch {
     return NextResponse.json({ error: "请求体不是合法 JSON" }, { status: 400 });
+  }
+  if (body?.roles !== undefined && (!Array.isArray(body.roles) || body.roles.length > MODEL_ROLES.length || body.roles.some((role) => !MODEL_ROLES.includes(role)))) {
+    return NextResponse.json({ error: "模型任务角色不合法" }, { status: 400 });
   }
   const updated = await modelConfigStore.update(userId, id, {
     providerName: body?.providerName,

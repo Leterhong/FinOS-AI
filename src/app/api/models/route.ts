@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { modelConfigStore } from "@/ai/model-center/models/store";
 import { getActiveModelSummary } from "@/ai/model-center/models/resolver";
-import type { ProviderConfigInput, ProviderType } from "@/ai/model-center/types";
+import { MODEL_ROLES, type ProviderConfigInput, type ProviderType } from "@/ai/model-center/types";
 import { getSessionUserId } from "@/auth/session";
 import { withModelStoreErrors } from "@/ai/model-center/models/route-guard";
 
@@ -38,6 +38,9 @@ async function POST_impl(req: NextRequest) {
       { error: "缺少 providerName 或 modelId" },
       { status: 400 }
     );
+  }
+  if (body.roles !== undefined && (!Array.isArray(body.roles) || body.roles.length > MODEL_ROLES.length || body.roles.some((role) => !MODEL_ROLES.includes(role)))) {
+    return NextResponse.json({ error: "模型任务角色不合法" }, { status: 400 });
   }
   const created = await modelConfigStore.add(userId, {
     providerName: body.providerName as ProviderType,

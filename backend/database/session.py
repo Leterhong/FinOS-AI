@@ -104,7 +104,15 @@ def _ensure_enterprise_scope_columns(engine) -> None:
 
     insp = inspect(engine)
     targets = {
-        "enterprise_tasks": {"case_id": "VARCHAR(64) NOT NULL DEFAULT ''"},
+        "enterprise_cases": {"archived_at": "VARCHAR(40) NOT NULL DEFAULT ''"},
+        "enterprise_documents": {"evidence_json": "TEXT"},
+        "enterprise_risks": {"review_json": "TEXT"},
+        "enterprise_rules": {"tests_json": "TEXT"},
+        "enterprise_tasks": {
+            "case_id": "VARCHAR(64) NOT NULL DEFAULT ''",
+            "note": "TEXT NOT NULL DEFAULT ''",
+            "history_json": "TEXT",
+        },
         "enterprise_briefs": {"case_id": "VARCHAR(64) NOT NULL DEFAULT ''"},
     }
     is_sqlite = engine.dialect.name == "sqlite"

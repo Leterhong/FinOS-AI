@@ -31,6 +31,7 @@ class EnterpriseCase(Base):
     progress: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     owner: Mapped[str] = mapped_column(String(120), nullable=False, default="")
     next_action: Mapped[str] = mapped_column(String(300), nullable=False, default="")
+    archived_at: Mapped[str] = mapped_column(String(40), nullable=False, default="")
     created_at: Mapped[datetime] = mapped_column(default=_now)
     updated_at: Mapped[datetime] = mapped_column(default=_now, onupdate=_now)
 
@@ -51,6 +52,7 @@ class EnterpriseDocument(Base):
     analysis: Mapped[str | None] = mapped_column(Text, nullable=True)
     model: Mapped[str | None] = mapped_column(String(200), nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    evidence_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=_now)
     updated_at: Mapped[datetime] = mapped_column(default=_now, onupdate=_now)
 
@@ -70,6 +72,7 @@ class EnterpriseRisk(Base):
     rule: Mapped[str] = mapped_column(String(300), nullable=False, default="")
     impact: Mapped[str] = mapped_column(Text, nullable=False, default="")
     status: Mapped[str] = mapped_column(String(40), nullable=False, default="待核验")
+    review_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=_now)
     updated_at: Mapped[datetime] = mapped_column(default=_now, onupdate=_now)
 
@@ -89,6 +92,7 @@ class EnterpriseRule(Base):
     conditions: Mapped[str | None] = mapped_column(Text, nullable=True)
     coverage: Mapped[str] = mapped_column(String(40), nullable=False, default="待测试")
     coverage_rate: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    tests_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=_now)
     updated_at: Mapped[datetime] = mapped_column(default=_now, onupdate=_now)
 
@@ -107,6 +111,8 @@ class EnterpriseTask(Base):
     due: Mapped[str] = mapped_column(String(40), nullable=False, default="")
     priority: Mapped[str] = mapped_column(String(20), nullable=False, default="medium")
     stage: Mapped[str] = mapped_column(String(40), nullable=False, default="待处理")
+    note: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    history_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=_now)
     updated_at: Mapped[datetime] = mapped_column(default=_now, onupdate=_now)
 

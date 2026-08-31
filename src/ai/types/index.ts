@@ -214,8 +214,6 @@ export type WorkflowEvent =
   | { type: "task-complete"; task: AITask; result: AgentAnalysisOutput }
   | { type: "summary"; summary: AgentAnalysisOutput }
   | { type: "tool-calls"; records: import("../tools/types").ToolCallRecord[] }
-  | { type: "twin-update"; snapshot: import("@/twin/engine").TwinSnapshot }
-  | { type: "task-create"; tasks: import("@/wealth/tasks").WealthTask[] }
   | { type: "done"; state: WorkflowState }
   | { type: "error"; message: string }
   // Phase 5.9.6：轻量直达回复（greeting / model_info / general_question / profile_update 提示），

@@ -13,6 +13,28 @@ export interface EnterpriseCase {
   owner: string;
   updatedAt: string;
   nextAction: string;
+  createdAt?: string;
+  archivedAt?: string;
+}
+
+export type ReviewStatus = "待复核" | "已确认" | "已驳回";
+
+export interface EvidenceFact {
+  id: string;
+  caseId: string;
+  documentId: string;
+  documentName: string;
+  topic: string;
+  value: number;
+  unit: string;
+  quote: string;
+  location?: string;
+  period?: string;
+  confidence?: number;
+  reviewStatus: ReviewStatus;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  reviewNote?: string;
 }
 
 export interface RiskSignal {
@@ -25,6 +47,14 @@ export interface RiskSignal {
   rule: string;
   impact: string;
   status: "待核验" | "已确认" | "已缓释";
+  origin?: "AI线索" | "人工登记";
+  factIds?: string[];
+  ruleCodes?: string[];
+  sourceRunId?: string;
+  verificationNote?: string;
+  verifiedBy?: string;
+  verifiedAt?: string;
+  mitigationNote?: string;
 }
 
 export interface AnalysisDocument {
@@ -41,6 +71,15 @@ export interface AnalysisDocument {
   analysis?: string;
   model?: string;
   error?: string;
+  factItems?: EvidenceFact[];
+  ruleOutcomes?: Array<{
+    code: string;
+    name: string;
+    hit: boolean;
+    reason: string;
+    matchedQuote?: string;
+  }>;
+  uncertainties?: string[];
 }
 
 export interface AgentRun {
@@ -69,6 +108,18 @@ export interface WorkflowTask {
   priority: RiskLevel;
   stage: "待处理" | "处理中" | "待复核" | "已完成";
   caseId?: string;
+  note?: string;
+  history?: WorkflowEvent[];
+}
+
+export interface WorkflowEvent {
+  id: string;
+  action: string;
+  actor: string;
+  note?: string;
+  at: string;
+  fromStage?: WorkflowTask["stage"];
+  toStage?: WorkflowTask["stage"];
 }
 
 import type { RuleCondition } from "@/lib/rule-engine";
@@ -85,6 +136,20 @@ export interface EnterpriseRule {
   /** 结构化触发条件（可选）：填写后资料研判会由确定性规则引擎评估命中。 */
   conditions?: RuleCondition[];
   updated: string;
+  testRecords?: RuleTestRecord[];
+}
+
+export interface RuleTestRecord {
+  id: string;
+  metric: string;
+  actualValue: number;
+  unit: "元" | "万元" | "亿元" | "%";
+  expectedHit: boolean;
+  actualHit: boolean;
+  passed: boolean;
+  quote: string;
+  tester: string;
+  testedAt: string;
 }
 
 export interface ResearchBrief {

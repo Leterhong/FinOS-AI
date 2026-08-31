@@ -72,6 +72,13 @@ def test_document_and_risk_upsert_with_counts(client, auth):
             "ruleHits": 3,
             "analysis": "AI 分析正文",
             "model": "gpt-test",
+            "factItems": [{
+                "id": "FACT-1", "documentId": doc_id, "documentName": "审计报告.pdf",
+                "caseId": "CASE-x", "topic": "营业收入", "value": 800,
+                "unit": "万元", "quote": "营业收入800万元", "location": "第8页",
+                "period": "2025", "confidence": 0.94, "reviewStatus": "已确认",
+            }],
+            "uncertainties": ["应收账款账龄缺失"],
         },
         headers=auth,
     )
@@ -89,6 +96,13 @@ def test_document_and_risk_upsert_with_counts(client, auth):
             "rule": "客户集中度不超过 60%",
             "impact": "回款风险上升",
             "status": "待核验",
+            "origin": "AI候选",
+            "factIds": ["FACT-1"],
+            "ruleCodes": ["LR-001"],
+            "sourceRunId": "RUN-1",
+            "verifiedBy": "王复核",
+            "verifiedAt": "2026-08-31T09:00:00Z",
+            "verificationNote": "已对照原报告",
         },
         headers=auth,
     )
@@ -96,8 +110,12 @@ def test_document_and_risk_upsert_with_counts(client, auth):
     snap = client.get("/api/enterprise/snapshot", headers=auth).json()["data"]
     doc = next(d for d in snap["documents"] if d["id"] == doc_id)
     assert doc["facts"] == 12 and doc["ruleHits"] == 3
+    assert doc["factItems"][0]["id"] == "FACT-1"
+    assert doc["uncertainties"] == ["应收账款账龄缺失"]
     risk = next(r for r in snap["risks"] if r["id"] == risk_id)
     assert risk["level"] == "high"
+    assert risk["factIds"] == ["FACT-1"]
+    assert risk["verifiedBy"] == "王复核"
 
 
 def test_rule_conditions_roundtrip(client, auth):
@@ -112,6 +130,7 @@ def test_rule_conditions_roundtrip(client, auth):
             "coverage": "已测试",
             "coverageRate": 100,
             "conditions": [{"metric": "货币资金", "op": "lt", "value": 2_000_000}],
+            "testRecords": [{"id": "TEST-1", "tester": "合规经理", "testedAt": "2026-08-31T09:00:00Z", "inputValue": 100, "inputUnit": "万元", "expectedHit": True, "actualHit": True, "passed": True, "evidence": "历史样本A"}],
         },
         headers=auth,
     )
@@ -119,6 +138,7 @@ def test_rule_conditions_roundtrip(client, auth):
     snap = client.get("/api/enterprise/snapshot", headers=auth).json()["data"]
     rule = next(r for r in snap["rules"] if r["id"] == rule_id)
     assert rule["conditions"] == [{"metric": "货币资金", "op": "lt", "value": 2_000_000}]
+    assert rule["testRecords"][0]["passed"] is True
 
 
 def test_task_and_brief_keep_enterprise_case_scope(client, auth):
@@ -135,6 +155,8 @@ def test_task_and_brief_keep_enterprise_case_scope(client, auth):
             "caseName": "测试制造有限公司 · 尽调",
             "assignee": "李四",
             "due": "2026-09-10",
+            "note": "对照原合同和发票",
+            "history": [{"id": "EVT-1", "action": "创建任务", "actor": "李四", "at": "2026-08-31T09:00:00Z"}],
         },
         headers=auth,
     ).status_code == 200
@@ -155,6 +177,7 @@ def test_task_and_brief_keep_enterprise_case_scope(client, auth):
     task = next(item for item in snap["tasks"] if item["id"] == task_id)
     brief = next(item for item in snap["briefs"] if item["id"] == brief_id)
     assert task["caseId"] == case_id
+    assert task["history"][0]["id"] == "EVT-1"
     assert brief["caseId"] == case_id
 
 

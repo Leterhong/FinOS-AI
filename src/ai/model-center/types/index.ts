@@ -19,7 +19,8 @@ export type ProviderType =
 export type ModelStatus = "untested" | "online" | "offline" | "error";
 
 /** 模型可承担的任务角色（用于 Model Router 任务→模型选择）。 */
-export type ModelRole = "default" | "chat" | "reasoning" | "vision" | "long-context";
+export const MODEL_ROLES = ["default", "chat", "reasoning", "vision", "long-context"] as const;
+export type ModelRole = typeof MODEL_ROLES[number];
 
 /**
  * 用户 AI 模型配置（Phase 5.5 三）。

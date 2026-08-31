@@ -11,15 +11,17 @@ import {
 import type {
   AgentRun,
   AnalysisDocument,
+  EvidenceFact,
   EnterpriseCase,
   EnterpriseRule,
   ResearchBrief,
   RiskSignal,
+  RuleTestRecord,
   WorkflowTask,
 } from "@/types/enterprise";
 
 type NewCase = Pick<EnterpriseCase, "company" | "title" | "industry" | "amount" | "owner">;
-type NewTask = Pick<WorkflowTask, "title" | "caseName" | "assignee" | "due" | "priority"> & { caseId?: string };
+type NewTask = Pick<WorkflowTask, "title" | "caseName" | "assignee" | "due" | "priority"> & { caseId?: string; note?: string };
 type NewRisk = Omit<RiskSignal, "id" | "status">;
 
 export interface AssistantMessage {
@@ -44,18 +46,20 @@ interface EnterpriseState {
   activeCaseId: string;
   setActiveCaseId: (id: string) => void;
   createCase: (input: NewCase) => EnterpriseCase;
-  updateCase: (id: string, patch: Partial<Pick<EnterpriseCase, "status" | "nextAction">>) => void;
+  updateCase: (id: string, patch: Partial<Pick<EnterpriseCase, "company" | "title" | "industry" | "amount" | "owner" | "status" | "risk" | "nextAction" | "archivedAt">>) => void;
   addDocument: (file: File, caseId: string) => AnalysisDocument;
-  completeDocumentAnalysis: (id: string, analysis: string, model: string, factsCount?: number, ruleHitsCount?: number) => void;
+  completeDocumentAnalysis: (id: string, analysis: string, model: string, detail?: { facts?: Array<Omit<EvidenceFact, "id" | "caseId" | "documentId" | "documentName" | "reviewStatus">>; ruleOutcomes?: AnalysisDocument["ruleOutcomes"]; uncertainties?: string[] }) => void;
+  reviewFact: (documentId: string, factId: string, input: { status: EvidenceFact["reviewStatus"]; reviewer: string; note?: string }) => void;
   failDocumentAnalysis: (id: string, error: string) => void;
   addRisk: (input: NewRisk) => RiskSignal;
-  verifyRisk: (id: string) => void;
-  mitigateRisk: (id: string) => void;
-  addRule: (input: Pick<EnterpriseRule, "code" | "name" | "domain"> & { conditions?: EnterpriseRule["conditions"] }) => void;
-  testRule: (id: string) => void;
+  verifyRisk: (id: string, input: { reviewer: string; note: string }) => void;
+  mitigateRisk: (id: string, input: { reviewer: string; note: string }) => void;
+  addRule: (input: Pick<EnterpriseRule, "code" | "name" | "domain"> & { version?: string; conditions?: EnterpriseRule["conditions"] }) => void;
+  testRule: (id: string, record: Omit<RuleTestRecord, "id" | "testedAt">) => void;
   deleteRule: (id: string) => void;
   addTask: (input: NewTask) => void;
-  advanceTask: (id: string) => void;
+  updateTask: (id: string, patch: Partial<Pick<WorkflowTask, "title" | "assignee" | "due" | "priority" | "note" | "stage">>, actor: string, note?: string) => void;
+  advanceTask: (id: string, actor: string, note?: string) => void;
   beginAgentRun: (input: { task: string; model?: string; caseId: string; company: string }) => AgentRun;
   completeAgentRun: (id: string, output: string, duration: string) => void;
   failAgentRun: (id: string, error: string, duration: string) => void;
@@ -74,7 +78,7 @@ const syncMap = {
     payload: (item: EnterpriseCase) => ({
       id: item.id, company: item.company, title: item.title, industry: item.industry,
       amount: item.amount, status: item.status, risk: item.risk, progress: item.progress,
-      owner: item.owner, nextAction: item.nextAction,
+      owner: item.owner, nextAction: item.nextAction, createdAt: item.createdAt, archivedAt: item.archivedAt,
     }),
   },
   documents: {
@@ -83,6 +87,7 @@ const syncMap = {
       id: item.id, caseId: item.caseId, name: item.name, kind: item.kind,
       status: item.status, facts: item.facts, ruleHits: item.ruleHits,
       analysis: item.analysis, model: item.model, error: item.error,
+      factItems: item.factItems, ruleOutcomes: item.ruleOutcomes, uncertainties: item.uncertainties,
     }),
   },
   risks: {
@@ -90,7 +95,9 @@ const syncMap = {
     payload: (item: RiskSignal) => ({
       id: item.id, caseId: item.caseId, company: item.company, title: item.title,
       level: item.level, evidence: item.evidence, rule: item.rule, impact: item.impact,
-      status: item.status,
+      status: item.status, origin: item.origin, factIds: item.factIds, ruleCodes: item.ruleCodes,
+      sourceRunId: item.sourceRunId, verificationNote: item.verificationNote,
+      verifiedBy: item.verifiedBy, verifiedAt: item.verifiedAt, mitigationNote: item.mitigationNote,
     }),
   },
   rules: {
@@ -98,14 +105,14 @@ const syncMap = {
     payload: (item: EnterpriseRule) => ({
       id: item.id, code: item.code, name: item.name, domain: item.domain,
       version: item.version, coverage: item.coverage, coverageRate: item.coverageRate,
-      conditions: item.conditions,
+      conditions: item.conditions, testRecords: item.testRecords,
     }),
   },
   tasks: {
     api: "tasks" as EnterpriseKind,
     payload: (item: WorkflowTask) => ({
       id: item.id, caseId: item.caseId, title: item.title, caseName: item.caseName, assignee: item.assignee,
-      due: item.due, priority: item.priority, stage: item.stage,
+      due: item.due, priority: item.priority, stage: item.stage, note: item.note, history: item.history,
     }),
   },
   briefs: {
@@ -221,7 +228,8 @@ export const useEnterpriseStore = create<EnterpriseState>()(
           risk: "medium",
           progress: 0,
           updatedAt: "刚刚",
-          nextAction: "上传企业资料并配置适用规则",
+          nextAction: "配置 AI 模型后上传企业资料",
+          createdAt: new Date().toISOString(),
         };
         set((state) => ({ cases: [item, ...state.cases], activeCaseId: item.id }));
         pushEntity("cases", syncMap.cases.payload(item));
@@ -252,15 +260,48 @@ export const useEnterpriseStore = create<EnterpriseState>()(
         pushEntity("documents", syncMap.documents.payload(item));
         return item;
       },
-      completeDocumentAnalysis: (id, analysis, model, factsCount, ruleHitsCount) => {
+      completeDocumentAnalysis: (id, analysis, model, detail) => {
         withProgress(set, (state) => ({
-          documents: state.documents.map((document) => document.id === id
-            ? { ...document, status: "已解析", analysis, model, error: undefined,
-                facts: typeof factsCount === "number" ? factsCount : document.facts,
-                ruleHits: typeof ruleHitsCount === "number" ? ruleHitsCount : document.ruleHits }
-            : document),
+          documents: state.documents.map((document) => {
+            if (document.id !== id) return document;
+            const factItems: EvidenceFact[] = (detail?.facts ?? []).map((fact) => ({
+              ...fact,
+              id: uid("FACT"),
+              caseId: document.caseId,
+              documentId: document.id,
+              documentName: document.name,
+              reviewStatus: "待复核",
+            }));
+            const ruleOutcomes = detail?.ruleOutcomes ?? [];
+            return {
+              ...document,
+              status: "已解析",
+              analysis,
+              model,
+              error: undefined,
+              facts: factItems.length,
+              ruleHits: ruleOutcomes.filter((outcome) => outcome.hit).length,
+              factItems,
+              ruleOutcomes,
+              uncertainties: detail?.uncertainties ?? [],
+            };
+          }),
         }));
         const doc = get().documents.find((d) => d.id === id);
+        if (doc) pushEntity("documents", syncMap.documents.payload(doc));
+      },
+      reviewFact: (documentId, factId, input) => {
+        set((state) => ({
+          documents: state.documents.map((document) => document.id === documentId
+            ? {
+                ...document,
+                factItems: (document.factItems ?? []).map((fact) => fact.id === factId
+                  ? { ...fact, reviewStatus: input.status, reviewedBy: input.reviewer, reviewedAt: new Date().toISOString(), reviewNote: input.note }
+                  : fact),
+              }
+            : document),
+        }));
+        const doc = get().documents.find((item) => item.id === documentId);
         if (doc) pushEntity("documents", syncMap.documents.payload(doc));
       },
       failDocumentAnalysis: (id, error) => {
@@ -273,21 +314,31 @@ export const useEnterpriseStore = create<EnterpriseState>()(
         if (doc) pushEntity("documents", syncMap.documents.payload(doc));
       },
       addRisk: (input) => {
-        const risk: RiskSignal = { ...input, id: uid("RISK"), status: "待核验" };
+        const risk: RiskSignal = { ...input, id: uid("RISK"), status: "待核验", origin: input.origin ?? "人工登记" };
         withProgress(set, (state) => ({ risks: [risk, ...state.risks] }));
         pushEntity("risks", syncMap.risks.payload(risk));
         return risk;
       },
-      verifyRisk: (id) => {
+      verifyRisk: (id, input) => {
         withProgress(set, (state) => ({
-          risks: state.risks.map((risk) => risk.id === id ? { ...risk, status: "已确认" } : risk),
+          risks: state.risks.map((risk) => risk.id === id ? {
+            ...risk,
+            status: "已确认",
+            verificationNote: input.note,
+            verifiedBy: input.reviewer,
+            verifiedAt: new Date().toISOString(),
+          } : risk),
         }));
         const risk = get().risks.find((r) => r.id === id);
         if (risk) pushEntity("risks", syncMap.risks.payload(risk));
       },
-      mitigateRisk: (id) => {
+      mitigateRisk: (id, input) => {
         withProgress(set, (state) => ({
-          risks: state.risks.map((risk) => risk.id === id ? { ...risk, status: "已缓释" } : risk),
+          risks: state.risks.map((risk) => risk.id === id ? {
+            ...risk,
+            status: "已缓释",
+            mitigationNote: `${input.reviewer}：${input.note}`,
+          } : risk),
         }));
         const risk = get().risks.find((r) => r.id === id);
         if (risk) pushEntity("risks", syncMap.risks.payload(risk));
@@ -296,7 +347,7 @@ export const useEnterpriseStore = create<EnterpriseState>()(
         const item: EnterpriseRule = {
           ...input,
           id: uid("RULE"),
-          version: "v1.0",
+          version: input.version?.trim() || "v1.0",
           coverage: "待测试",
           coverageRate: 0,
           updated: today(),
@@ -304,11 +355,20 @@ export const useEnterpriseStore = create<EnterpriseState>()(
         set((state) => ({ rules: [item, ...state.rules] }));
         pushEntity("rules", syncMap.rules.payload(item));
       },
-      testRule: (id) => {
+      testRule: (id, record) => {
         set((state) => ({
-          rules: state.rules.map((rule) => rule.id === id
-            ? { ...rule, coverage: "已测试", coverageRate: 100, updated: today() }
-            : rule),
+          rules: state.rules.map((rule) => {
+            if (rule.id !== id) return rule;
+            const testRecords = [{ ...record, id: uid("TEST"), testedAt: new Date().toISOString() }, ...(rule.testRecords ?? [])];
+            const passed = testRecords.filter((item) => item.passed).length;
+            return {
+              ...rule,
+              testRecords,
+              coverage: testRecords.length > 0 && passed === testRecords.length ? "已测试" : "测试未通过",
+              coverageRate: Math.round((passed / testRecords.length) * 100),
+              updated: today(),
+            };
+          }),
         }));
         const rule = get().rules.find((r) => r.id === id);
         if (rule) pushEntity("rules", syncMap.rules.payload(rule));
@@ -321,18 +381,51 @@ export const useEnterpriseStore = create<EnterpriseState>()(
       },
       addTask: (input) => {
         withProgress(set, (state) => ({
-          tasks: [{ ...input, id: uid("TASK"), stage: "待处理" }, ...state.tasks],
+          tasks: [{
+            ...input,
+            id: uid("TASK"),
+            stage: "待处理",
+            history: [{ id: uid("EVT"), action: "创建任务", actor: input.assignee || "待指派", at: new Date().toISOString() }],
+          }, ...state.tasks],
         }));
         const task = get().tasks.find((t) => t.title === input.title && t.assignee === input.assignee);
         if (task) pushEntity("tasks", syncMap.tasks.payload(task));
       },
-      advanceTask: (id) => {
+      updateTask: (id, patch, actor, note) => {
+        set((state) => ({
+          tasks: state.tasks.map((task) => {
+            if (task.id !== id) return task;
+            const stageChanged = patch.stage !== undefined && patch.stage !== task.stage;
+            return {
+              ...task,
+              ...patch,
+              history: [{
+                id: uid("EVT"),
+                action: stageChanged ? "调整任务阶段" : "更新任务",
+                actor,
+                note,
+                at: new Date().toISOString(),
+                ...(stageChanged ? { fromStage: task.stage, toStage: patch.stage } : {}),
+              }, ...(task.history ?? [])],
+            };
+          }),
+        }));
+        const task = get().tasks.find((item) => item.id === id);
+        if (task) pushEntity("tasks", syncMap.tasks.payload(task));
+      },
+      advanceTask: (id, actor, note) => {
         withProgress(set, (state) => {
           const stages: WorkflowTask["stage"][] = ["待处理", "处理中", "待复核", "已完成"];
           return {
-            tasks: state.tasks.map((task) => task.id === id
-              ? { ...task, stage: stages[Math.min(stages.indexOf(task.stage) + 1, stages.length - 1)] }
-              : task),
+            tasks: state.tasks.map((task) => {
+              if (task.id !== id) return task;
+              const nextStage = stages[Math.min(stages.indexOf(task.stage) + 1, stages.length - 1)];
+              return {
+                ...task,
+                stage: nextStage,
+                history: [{ id: uid("EVT"), action: "推进任务", actor, note, at: new Date().toISOString(), fromStage: task.stage, toStage: nextStage }, ...(task.history ?? [])],
+              };
+            }),
           };
         });
         const task = get().tasks.find((t) => t.id === id);
@@ -413,6 +506,7 @@ export const useEnterpriseStore = create<EnterpriseState>()(
                 risk: (row.risk as EnterpriseCase["risk"]) ?? "medium",
                 progress: Number(row.progress ?? 0), owner: String(row.owner ?? ""),
                 updatedAt: "从云端恢复", nextAction: String(row.nextAction ?? ""),
+                createdAt: row.createdAt as string | undefined, archivedAt: row.archivedAt as string | undefined,
               })),
               documents: state.documents,
               risks: state.risks,
@@ -425,25 +519,33 @@ export const useEnterpriseStore = create<EnterpriseState>()(
               confidence: 0, facts: Number(row.facts ?? 0), ruleHits: Number(row.ruleHits ?? 0),
               uploadedAt: "从云端恢复", analysis: (row.analysis as string | undefined),
               model: (row.model as string | undefined), error: (row.error as string | undefined),
+              factItems: row.factItems as AnalysisDocument["factItems"],
+              ruleOutcomes: row.ruleOutcomes as AnalysisDocument["ruleOutcomes"],
+              uncertainties: row.uncertainties as string[] | undefined,
             })),
             risks: mergeById(state.risks, snapshot.risks, (row) => ({
               id: String(row.id), caseId: String(row.caseId ?? ""), company: String(row.company ?? ""),
               title: String(row.title ?? ""), level: (row.level as RiskSignal["level"]) ?? "medium",
               evidence: String(row.evidence ?? ""), rule: String(row.rule ?? ""),
               impact: String(row.impact ?? ""), status: (row.status as RiskSignal["status"]) ?? "待核验",
+              origin: row.origin as RiskSignal["origin"], factIds: row.factIds as string[] | undefined,
+              ruleCodes: row.ruleCodes as string[] | undefined, sourceRunId: row.sourceRunId as string | undefined,
+              verificationNote: row.verificationNote as string | undefined, verifiedBy: row.verifiedBy as string | undefined,
+              verifiedAt: row.verifiedAt as string | undefined, mitigationNote: row.mitigationNote as string | undefined,
             })),
             rules: mergeById(state.rules, snapshot.rules, (row) => ({
               id: String(row.id), code: String(row.code ?? ""), name: String(row.name ?? ""),
               domain: String(row.domain ?? ""), version: String(row.version ?? "v1.0"),
               coverage: String(row.coverage ?? "待测试"), coverageRate: Number(row.coverageRate ?? 0),
-              conditions: row.conditions as EnterpriseRule["conditions"], updated: "从云端恢复",
+              conditions: row.conditions as EnterpriseRule["conditions"], testRecords: row.testRecords as EnterpriseRule["testRecords"], updated: "从云端恢复",
             })),
             tasks: mergeById(state.tasks, snapshot.tasks, (row) => ({
               id: String(row.id), caseId: String(row.caseId ?? "") || undefined,
               title: String(row.title ?? ""), caseName: String(row.caseName ?? ""),
               assignee: String(row.assignee ?? ""), due: String(row.due ?? ""),
               priority: (row.priority as WorkflowTask["priority"]) ?? "medium",
-              stage: (row.stage as WorkflowTask["stage"]) ?? "待处理",
+              stage: (row.stage as WorkflowTask["stage"]) ?? "待处理", note: row.note as string | undefined,
+              history: row.history as WorkflowTask["history"],
             })),
             briefs: mergeById(state.briefs, snapshot.briefs, (row) => ({
               id: String(row.id), caseId: String(row.caseId ?? "") || undefined,
