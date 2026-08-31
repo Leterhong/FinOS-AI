@@ -10,7 +10,6 @@ GET  /api/auth/me       — 当前用户（前端恢复会话用）
 """
 from __future__ import annotations
 
-import re
 import secrets
 from datetime import datetime, timezone
 
@@ -41,9 +40,11 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 logger = get_logger("finos.auth")
 settings = get_settings()
 
-EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 CSRF_COOKIE = "finos_csrf"
 REFRESH_COOKIE = "finos_refresh"
+_EMAIL_LOCAL_CHARS = frozenset(
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.!#$%&'*+-/=?^_`{|}~"
+)
 
 
 class RegisterIn(BaseModel):
@@ -58,6 +59,28 @@ class LoginIn(BaseModel):
 
 class RefreshIn(BaseModel):
     refreshToken: str | None = None
+
+
+def _is_valid_email(value: str) -> bool:
+    """以线性扫描校验常用邮箱格式，避免在不受信输入上执行回溯正则。"""
+    if not 5 <= len(value) <= 254 or value.count("@") != 1:
+        return False
+    local, domain = value.split("@", 1)
+    if not local or len(local) > 64 or local.startswith(".") or local.endswith(".") or ".." in local:
+        return False
+    if any(char not in _EMAIL_LOCAL_CHARS for char in local):
+        return False
+
+    labels = domain.split(".")
+    if len(labels) < 2 or len(domain) > 253:
+        return False
+    return all(
+        1 <= len(label) <= 63
+        and not label.startswith("-")
+        and not label.endswith("-")
+        and all(char.isascii() and (char.isalnum() or char == "-") for char in label)
+        for label in labels
+    )
 
 
 def _user_public(u: User, db: Session) -> dict:
@@ -157,7 +180,7 @@ def bootstrap(request: Request, response: Response, db: Session = Depends(get_db
 @router.post("/register")
 def register(body: RegisterIn, request: Request, response: Response, db: Session = Depends(get_db)):
     email = body.email.strip().lower()
-    if not EMAIL_RE.match(email):
+    if not _is_valid_email(email):
         return fail("邮箱格式不正确")
     exists = db.scalar(select(User).where(User.email == email))
     if exists:
@@ -173,7 +196,7 @@ def register(body: RegisterIn, request: Request, response: Response, db: Session
     _set_refresh_cookie(response, tokens["refreshToken"], request)
     db.commit()
     log_event(logger, "info", "auth.register.ok", user_id=user.id, ip=client_ip(request))
-    return ok({"token": tokens["token"], "user": _user_public(user, db)}, "注册成功，欢迎创建你的财富数字分身")
+    return ok({"token": tokens["token"], "user": _user_public(user, db)}, "注册成功，企业研判工作区已就绪")
 
 
 @router.post("/login")

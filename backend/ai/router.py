@@ -23,10 +23,11 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from backend.ai.gateway import GatewayError, embed as gw_embed, generate as gw_generate
+from backend.ai.gateway import GatewayError, PUBLIC_GATEWAY_ERROR, embed as gw_embed, generate as gw_generate
 from backend.ai.gateway import stream as gw_stream, test_connection
 from backend.ai.models import AIConversation, AIModelConfig, AIUsageLog
 from backend.core import get_current_user, ok
+from backend.core.logging_config import get_logger, log_event
 from backend.core.response import fail
 from backend.core.security import decrypt_secret, encrypt_secret, mask_key
 from backend.database import SessionLocal, get_db
@@ -37,6 +38,12 @@ from backend.user.models import User
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 settings = get_settings()
+logger = get_logger("finos.ai")
+
+
+def _record_gateway_failure(*, user_id: str, operation: str) -> None:
+    """仅记录安全的诊断元数据，绝不记录可能包含密钥或内网地址的异常原文。"""
+    log_event(logger, "warning", "ai.gateway.failed", user_id=user_id, operation=operation)
 
 
 def _validate_ai_request(messages: list[dict], max_tokens: int) -> str | None:
@@ -190,8 +197,9 @@ async def generate(body: GenerateIn, request: Request, user: User = Depends(get_
         result = await gw_generate(
             cfg.base_url, api_key, cfg.model_id, body.messages, body.temperature, body.max_tokens
         )
-    except GatewayError as e:
-        return fail(str(e), status_code=502)
+    except GatewayError:
+        _record_gateway_failure(user_id=user.id, operation="generate")
+        return fail(PUBLIC_GATEWAY_ERROR, status_code=502)
     latency_ms = int((time.monotonic() - started) * 1000)
     _log_usage(
         user.id,
@@ -234,8 +242,10 @@ async def stream(body: GenerateIn, request: Request, user: User = Depends(get_cu
                 for part in str(delta).split("\n"):
                     yield f"data: {part}\n\n" if part else ": keepalive\n\n"
             yield "data: [DONE]\n\n"
-        except GatewayError as e:
-            yield f"event: error\ndata: {e}\n\n"
+        except GatewayError:
+            _record_gateway_failure(user_id=user_id, operation="stream")
+            error_payload = json.dumps({"error": PUBLIC_GATEWAY_ERROR}, ensure_ascii=False)
+            yield f"event: error\ndata: {error_payload}\n\n"
         finally:
             # 流式无 usage 回传：按字符估算 token（约 4 字符/token）
             out_tokens = count // 4
@@ -265,8 +275,9 @@ async def embed(body: EmbedIn, user: User = Depends(get_current_user), db: Sessi
     started = time.monotonic()
     try:
         result = await gw_embed(cfg.base_url, api_key, cfg.model_id, body.texts)
-    except GatewayError as e:
-        return fail(str(e), status_code=502)
+    except GatewayError:
+        _record_gateway_failure(user_id=user.id, operation="embed")
+        return fail(PUBLIC_GATEWAY_ERROR, status_code=502)
     _log_usage(
         user.id,
         cfg.model_id,

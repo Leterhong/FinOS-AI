@@ -5,6 +5,9 @@
 """
 from __future__ import annotations
 
+import importlib
+
+from backend.ai.gateway import GatewayError, PUBLIC_GATEWAY_ERROR
 from tests.conftest import API, assert_envelope
 
 FAKE_MODEL = {
@@ -91,6 +94,61 @@ def test_generate_rejects_empty_messages(client, auth):
 def test_generate_requires_auth(client):
     resp = client.post(f"{API}/ai/generate", json={"messages": [{"role": "user", "content": "hi"}]})
     assert resp.status_code in (401, 403)
+
+
+def test_generate_gateway_error_never_exposes_exception(client, auth, monkeypatch):
+    client.post(f"{API}/ai/models", json=FAKE_MODEL, headers=auth)
+    secret = "upstream=https://internal.example/v1 api_key=sk-do-not-leak"
+
+    async def fail_generate(*_args, **_kwargs):
+        raise GatewayError(secret)
+
+    ai_router = importlib.import_module("backend.ai.router")
+    monkeypatch.setattr(ai_router, "gw_generate", fail_generate)
+    resp = client.post(
+        f"{API}/ai/generate",
+        json={"messages": [{"role": "user", "content": "分析经营风险"}]},
+        headers=auth,
+    )
+    assert resp.status_code == 502
+    assert secret not in resp.text
+    assert PUBLIC_GATEWAY_ERROR in resp.text
+
+
+def test_embed_gateway_error_never_exposes_exception(client, auth, monkeypatch):
+    client.post(f"{API}/ai/models", json=FAKE_MODEL, headers=auth)
+    secret = "provider traceback with sk-do-not-leak"
+
+    async def fail_embed(*_args, **_kwargs):
+        raise GatewayError(secret)
+
+    ai_router = importlib.import_module("backend.ai.router")
+    monkeypatch.setattr(ai_router, "gw_embed", fail_embed)
+    resp = client.post(f"{API}/ai/embed", json={"texts": ["季度财报"]}, headers=auth)
+    assert resp.status_code == 502
+    assert secret not in resp.text
+    assert PUBLIC_GATEWAY_ERROR in resp.text
+
+
+def test_stream_gateway_error_never_exposes_exception(client, auth, monkeypatch):
+    client.post(f"{API}/ai/models", json=FAKE_MODEL, headers=auth)
+    secret = "private endpoint 10.0.0.8 and sk-do-not-leak"
+
+    async def fail_stream(*_args, **_kwargs):
+        if False:
+            yield ""
+        raise GatewayError(secret)
+
+    ai_router = importlib.import_module("backend.ai.router")
+    monkeypatch.setattr(ai_router, "gw_stream", fail_stream)
+    resp = client.post(
+        f"{API}/ai/stream",
+        json={"messages": [{"role": "user", "content": "生成风险提示"}]},
+        headers=auth,
+    )
+    assert resp.status_code == 200
+    assert secret not in resp.text
+    assert PUBLIC_GATEWAY_ERROR in resp.text
 
 
 # ---------------------------------------------------------------- 用量统计

@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.ai.gateway import GatewayError, generate_sync as gw_generate_sync
+from backend.ai.gateway import GatewayError, PUBLIC_GATEWAY_ERROR, generate_sync as gw_generate_sync
 from backend.ai.models import AIModelConfig
 from backend.core import get_current_user, ok
 from backend.core.response import fail
@@ -86,9 +86,9 @@ def rag_query(body: QueryIn, user: User = Depends(get_current_user), db: Session
                     ],
                 )
                 payload["answer"] = gen["content"]
-            except GatewayError as e:
+            except GatewayError:
                 payload["answer"] = None
-                payload["note"] = str(e)
+                payload["note"] = PUBLIC_GATEWAY_ERROR
     return ok(payload)
 
 

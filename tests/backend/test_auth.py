@@ -62,6 +62,20 @@ def test_register_rejects_invalid_email(client):
     assert resp.status_code == 422
 
 
+def test_register_rejects_malformed_email_without_regex_backtracking(client):
+    """长输入和畸形域名应在线性校验中快速失败，不进入回溯正则。"""
+    malformed = [
+        f"{'a' * 64}..suffix@finos.test",
+        "analyst@-finos.test",
+        "analyst@finos..test",
+        "analyst@finos_test.local",
+    ]
+    for email in malformed:
+        resp = client.post(f"{API}/auth/register", json={"email": email, "password": "Test1234!"})
+        assert resp.status_code == 400, email
+        assert "邮箱格式不正确" in resp.text
+
+
 # ---------------------------------------------------------------- 登录
 def test_login_success(client):
     u = register_user(client)

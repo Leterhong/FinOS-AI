@@ -23,7 +23,7 @@ def _h_ping(payload: dict, _db: Session, _user_id: str | None) -> dict:
 def _h_ai_generate(payload: dict, db: Session, user_id: str | None) -> dict:
     from sqlalchemy import select
 
-    from backend.ai.gateway import GatewayError, generate_sync
+    from backend.ai.gateway import GatewayError, PUBLIC_GATEWAY_ERROR, generate_sync
     from backend.ai.models import AIModelConfig
     from backend.core.security import decrypt_secret
     from backend.config import get_settings
@@ -39,15 +39,18 @@ def _h_ai_generate(payload: dict, db: Session, user_id: str | None) -> dict:
         return {"content": "", "error": "未配置可用模型，请先在模型中心连接你的模型"}
     try:
         api_key = decrypt_secret(config.api_key_encrypted)
-    except Exception as exc:  # noqa: BLE001
-        return {"content": "", "error": f"模型密钥解密失败：{exc}"}
+    except Exception:  # noqa: BLE001
+        logger.warning("ai_task_key_decryption_failed", extra={"user_id": user_id})
+        return {"content": "", "error": "模型密钥解密失败，请重新配置模型"}
     try:
         res = generate_sync(config.base_url, api_key, config.model_id, messages, max_tokens=max_tokens)
         return {"content": res.get("content", ""), "tokens": res.get("tokens", 0)}
-    except GatewayError as exc:
-        return {"content": "", "error": f"模型调用失败：{exc}"}
-    except Exception as exc:  # noqa: BLE001
-        return {"content": "", "error": f"AI 任务异常：{exc}"}
+    except GatewayError:
+        logger.warning("ai_task_gateway_failed", extra={"user_id": user_id})
+        return {"content": "", "error": PUBLIC_GATEWAY_ERROR}
+    except Exception:  # noqa: BLE001
+        logger.error("ai_task_unexpected_failure", extra={"user_id": user_id})
+        return {"content": "", "error": "AI 任务执行失败，请稍后重试"}
 
 
 def _h_document_analysis(payload: dict, db: Session, user_id: str | None) -> dict:

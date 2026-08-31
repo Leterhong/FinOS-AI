@@ -8,25 +8,51 @@ import "server-only";
 
 import { inflateSync } from "node:zlib";
 
+const MAX_STREAM_COUNT = 2_048;
+const MAX_STREAM_OUTPUT_BYTES = 16 * 1024 * 1024;
+const MAX_EXTRACTED_CHARS = 2 * 1024 * 1024;
+
+type PdfLiteral = { raw: string; end: number };
+type PdfArray = { literals: string[]; end: number };
+
 /** 从 PDF buffer 抽取纯文本 */
 export function extractPdfText(buf: Buffer): { text: string; warnings: string[] } {
   const warnings: string[] = [];
   const chunks: string[] = [];
-
-  // 匹配所有 stream ... endstream 段
-  const streamRegex = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
-  let m: RegExpExecArray | null;
+  const source = buf.toString("latin1");
+  let cursor = 0;
   let streamCount = 0;
+  let extractedChars = 0;
 
-  while ((m = streamRegex.exec(buf.toString("latin1"))) !== null) {
+  // 使用 indexOf 单向扫描内容流，避免对不受信 PDF 执行可回溯正则。
+  while (cursor < source.length && streamCount < MAX_STREAM_COUNT) {
+    const marker = source.indexOf("stream", cursor);
+    if (marker === -1) break;
+    let start = marker + "stream".length;
+    if (source.startsWith("\r\n", start)) start += 2;
+    else if (source[start] === "\n") start += 1;
+    else {
+      cursor = start;
+      continue;
+    }
+
+    const endMarker = findEndStream(source, start);
+    if (endMarker === -1) break;
+    let end = endMarker;
+    if (source[end - 1] === "\n") end -= 1;
+    if (source[end - 1] === "\r") end -= 1;
+    cursor = endMarker + "endstream".length;
     streamCount++;
-    const start = m.index + m[0].indexOf(m[1]);
-    const end = start + m[1].length;
     const raw = buf.subarray(start, end);
+
+    if (raw.length > MAX_STREAM_OUTPUT_BYTES) {
+      addWarning(warnings, "PDF 内容流超过安全解析上限，已跳过");
+      continue;
+    }
 
     let content = "";
     try {
-      const inflated = inflateSync(raw);
+      const inflated = inflateSync(raw, { maxOutputLength: MAX_STREAM_OUTPUT_BYTES });
       content = inflated.toString("latin1");
     } catch {
       // 未压缩或非 Flate 流，直接按原文尝试
@@ -34,7 +60,24 @@ export function extractPdfText(buf: Buffer): { text: string; warnings: string[] 
     }
 
     const t = extractTextOps(content);
-    if (t) chunks.push(t);
+    if (t) {
+      const remaining = MAX_EXTRACTED_CHARS - extractedChars;
+      if (remaining <= 0) {
+        addWarning(warnings, "PDF 文本超过安全解析上限，结果已截断");
+        break;
+      }
+      const safeText = t.slice(0, remaining);
+      chunks.push(safeText);
+      extractedChars += safeText.length;
+      if (safeText.length < t.length) {
+        addWarning(warnings, "PDF 文本超过安全解析上限，结果已截断");
+        break;
+      }
+    }
+  }
+
+  if (streamCount === MAX_STREAM_COUNT && cursor < source.length) {
+    addWarning(warnings, "PDF 内容流数量超过安全解析上限，剩余内容已跳过");
   }
 
   if (streamCount === 0) {
@@ -52,27 +95,116 @@ export function extractPdfText(buf: Buffer): { text: string; warnings: string[] 
 function extractTextOps(content: string): string {
   const out: string[] = [];
 
-  // (string) Tj
-  const tjRegex = /\((?:\\.|[^\\)])*\)\s*Tj/g;
-  let m: RegExpExecArray | null;
-  while ((m = tjRegex.exec(content)) !== null) {
-    out.push(decodePdfString(m[0]));
-  }
-
-  // [ (str) num (str) ... ] TJ
-  const tjArrRegex = /\[((?:\\.|[^\]])*)\]\s*TJ/g;
-  while ((m = tjArrRegex.exec(content)) !== null) {
-    const inner = m[1];
-    const strRegex = /\((?:\\.|[^\\)])*\)/g;
-    let sm: RegExpExecArray | null;
-    const parts: string[] = [];
-    while ((sm = strRegex.exec(inner)) !== null) {
-      parts.push(decodePdfString(sm[0]));
+  // PDF 字符串支持转义和嵌套括号；显式状态机可保证扫描时间与输入长度成正比。
+  let cursor = 0;
+  while (cursor < content.length) {
+    if (content[cursor] === "(") {
+      const literal = readPdfLiteral(content, cursor);
+      if (!literal) {
+        break;
+      }
+      const operatorAt = skipPdfWhitespace(content, literal.end);
+      if (hasOperator(content, operatorAt, "Tj")) {
+        out.push(decodePdfString(literal.raw));
+      }
+      cursor = literal.end;
+      continue;
     }
-    out.push(parts.join(""));
+
+    if (content[cursor] === "[") {
+      const array = readPdfArray(content, cursor);
+      if (!array) {
+        break;
+      }
+      const operatorAt = skipPdfWhitespace(content, array.end);
+      if (hasOperator(content, operatorAt, "TJ")) {
+        out.push(array.literals.map(decodePdfString).join(""));
+      }
+      cursor = array.end;
+      continue;
+    }
+
+    cursor += 1;
   }
 
   return out.join(" ");
+}
+
+function findEndStream(source: string, start: number): number {
+  let cursor = source.indexOf("endstream", start);
+  while (cursor !== -1) {
+    if (cursor > start && (source[cursor - 1] === "\n" || source[cursor - 1] === "\r")) {
+      return cursor;
+    }
+    cursor = source.indexOf("endstream", cursor + 1);
+  }
+  return -1;
+}
+
+function readPdfLiteral(source: string, start: number): PdfLiteral | null {
+  let depth = 1;
+  let cursor = start + 1;
+  while (cursor < source.length) {
+    const char = source[cursor];
+    if (char === "\\") {
+      cursor += source[cursor + 1] === "\r" && source[cursor + 2] === "\n" ? 3 : 2;
+      continue;
+    }
+    if (char === "(") depth += 1;
+    else if (char === ")") {
+      depth -= 1;
+      if (depth === 0) {
+        const end = cursor + 1;
+        return { raw: source.slice(start, end), end };
+      }
+    }
+    cursor += 1;
+  }
+  return null;
+}
+
+function readPdfArray(source: string, start: number): PdfArray | null {
+  const literals: string[] = [];
+  let depth = 1;
+  let cursor = start + 1;
+  while (cursor < source.length) {
+    if (source[cursor] === "(") {
+      const literal = readPdfLiteral(source, cursor);
+      if (!literal) return null;
+      literals.push(literal.raw);
+      cursor = literal.end;
+      continue;
+    }
+    if (source[cursor] === "[") depth += 1;
+    else if (source[cursor] === "]") {
+      depth -= 1;
+      if (depth === 0) return { literals, end: cursor + 1 };
+    }
+    cursor += 1;
+  }
+  return null;
+}
+
+function skipPdfWhitespace(source: string, start: number): number {
+  let cursor = start;
+  while (cursor < source.length) {
+    const code = source.charCodeAt(cursor);
+    if (code !== 0 && code !== 9 && code !== 10 && code !== 12 && code !== 13 && code !== 32) break;
+    cursor += 1;
+  }
+  return cursor;
+}
+
+function hasOperator(source: string, start: number, operator: "Tj" | "TJ"): boolean {
+  if (!source.startsWith(operator, start)) return false;
+  const next = start + operator.length;
+  if (next >= source.length) return true;
+  const char = source[next];
+  return skipPdfWhitespace(source, next) > next || "()<>[]{}/%".includes(char);
+}
+
+function addWarning(warnings: string[], warning: string): void {
+  if (!warnings.includes(warning)) warnings.push(warning);
 }
 
 /** 解码 PDF 字符串字面量 (....)，处理转义 */
