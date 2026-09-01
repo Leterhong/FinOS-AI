@@ -10,9 +10,9 @@ from __future__ import annotations
 
 import json
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from backend.core import get_current_user, ok
@@ -26,7 +26,15 @@ from backend.enterprise.models import (
     EnterpriseRule,
     EnterpriseTask,
 )
-from backend.security.permission import require_owned_resource
+from backend.governance.service import (
+    accessible_cases,
+    can_access_case,
+    ensure_default_organization,
+    memberships_for_user,
+    record_governance_audit,
+    record_rule_revision,
+    rule_accessible,
+)
 from backend.user.models import User
 
 router = APIRouter(prefix="/enterprise", tags=["enterprise"])
@@ -101,6 +109,8 @@ def _dump_json(value: object, limit: int) -> str | None:
 class CaseIn(BaseModel):
     id: str = Field(min_length=1, max_length=_ID_LEN)
     company: str = Field(min_length=1, max_length=200)
+    organizationId: str | None = Field(default=None, max_length=32)
+    classification: str = Field(default="internal", pattern="^(public|internal|confidential|restricted)$")
     title: str = Field(default="", max_length=300)
     industry: str = Field(default="", max_length=120)
     amount: str = Field(default="", max_length=120)
@@ -117,6 +127,7 @@ class CaseIn(BaseModel):
 class DocumentIn(BaseModel):
     id: str = Field(min_length=1, max_length=_ID_LEN)
     caseId: str = Field(default="", max_length=_ID_LEN)
+    classification: str = Field(default="internal", pattern="^(public|internal|confidential|restricted)$")
     name: str = Field(min_length=1, max_length=300)
     kind: str = Field(default="企业资料", max_length=40)
     status: str = Field(default="解析中", max_length=40)
@@ -128,6 +139,9 @@ class DocumentIn(BaseModel):
     factItems: list | None = Field(default=None, max_length=1000)
     ruleOutcomes: list | None = Field(default=None, max_length=500)
     uncertainties: list | None = Field(default=None, max_length=200)
+    extractionMethod: str | None = Field(default=None, max_length=30)
+    ocrUsed: bool = False
+    tables: list | None = Field(default=None, max_length=100)
 
 
 class RiskIn(BaseModel):
@@ -153,6 +167,7 @@ class RiskIn(BaseModel):
 class RuleIn(BaseModel):
     id: str = Field(min_length=1, max_length=_ID_LEN)
     code: str = Field(min_length=1, max_length=120)
+    organizationId: str | None = Field(default=None, max_length=32)
     name: str = Field(min_length=1, max_length=300)
     domain: str = Field(default="", max_length=120)
     version: str = Field(default="v1.0", max_length=40)
@@ -187,7 +202,8 @@ class BriefIn(BaseModel):
 # ---------------------------------------------------------------- 序列化
 def _case_out(c: EnterpriseCase) -> dict:
     return {
-        "id": c.id, "company": c.company, "title": c.title, "industry": c.industry,
+        "id": c.id, "organizationId": c.organization_id, "classification": c.classification,
+        "company": c.company, "title": c.title, "industry": c.industry,
         "amount": c.amount, "status": c.status, "risk": c.risk, "progress": c.progress,
         "owner": c.owner, "nextAction": c.next_action, "createdAt": c.created_at.isoformat(),
         "updatedAt": c.updated_at.isoformat(), "archivedAt": c.archived_at or None,
@@ -196,7 +212,8 @@ def _case_out(c: EnterpriseCase) -> dict:
 
 def _document_out(d: EnterpriseDocument) -> dict:
     return {
-        "id": d.id, "caseId": d.case_id, "name": d.name, "kind": d.kind,
+        "id": d.id, "caseId": d.case_id, "classification": d.classification,
+        "name": d.name, "kind": d.kind,
         "status": d.status, "facts": d.facts, "ruleHits": d.rule_hits,
         "analysis": d.analysis, "model": d.model, "error": d.error,
         **_json_dict(d.evidence_json),
@@ -214,7 +231,8 @@ def _risk_out(r: EnterpriseRisk) -> dict:
 
 def _rule_out(r: EnterpriseRule) -> dict:
     return {
-        "id": r.id, "code": r.code, "name": r.name, "domain": r.domain,
+        "id": r.id, "organizationId": r.organization_id,
+        "code": r.code, "name": r.name, "domain": r.domain,
         "version": r.version, "conditions": _conditions_from_json(r.conditions),
         "testRecords": _json_list(r.tests_json),
         "coverage": r.coverage, "coverageRate": r.coverage_rate,
@@ -240,6 +258,7 @@ def _brief_out(b: EnterpriseBrief) -> dict:
 
 def _apply_case(row: EnterpriseCase, body: CaseIn) -> None:
     row.company = _clip(body.company, 200)
+    row.classification = body.classification
     row.title = _clip(body.title, 300)
     row.industry = _clip(body.industry, 120)
     row.amount = _clip(body.amount, 120)
@@ -253,6 +272,7 @@ def _apply_case(row: EnterpriseCase, body: CaseIn) -> None:
 
 def _apply_document(row: EnterpriseDocument, body: DocumentIn) -> None:
     row.case_id = _id(body.caseId)
+    row.classification = body.classification
     row.name = _clip(body.name, 300)
     row.kind = _clip(body.kind, 40)
     row.status = _clip(body.status, 40)
@@ -265,6 +285,9 @@ def _apply_document(row: EnterpriseDocument, body: DocumentIn) -> None:
         "factItems": body.factItems or [],
         "ruleOutcomes": body.ruleOutcomes or [],
         "uncertainties": body.uncertainties or [],
+        "extractionMethod": body.extractionMethod,
+        "ocrUsed": body.ocrUsed,
+        "tables": body.tables or [],
     }, 200_000)
 
 
@@ -323,35 +346,56 @@ def _apply_brief(row: EnterpriseBrief, body: BriefIn) -> None:
 # ---------------------------------------------------------------- 快照
 @router.get("/snapshot")
 def snapshot(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """一次性拉取当前用户全部企业对象（前端启动合并）。"""
-    uid = user.id
+    """一次性拉取本人及组织授权可见的企业对象。"""
+    ensure_default_organization(db, user)
+    cases = accessible_cases(db, user)
+    case_ids = [item.id for item in cases]
+    org_ids = [item.organization_id for item in memberships_for_user(db, user)]
+    documents = list(db.scalars(select(EnterpriseDocument).where(or_(EnterpriseDocument.user_id == user.id, EnterpriseDocument.case_id.in_(case_ids or [""])))))
+    risks = list(db.scalars(select(EnterpriseRisk).where(or_(EnterpriseRisk.user_id == user.id, EnterpriseRisk.case_id.in_(case_ids or [""])))))
+    rules = [item for item in db.scalars(select(EnterpriseRule).where(or_(EnterpriseRule.user_id == user.id, EnterpriseRule.organization_id.in_(org_ids or [""])))) if rule_accessible(db, user, item)]
+    tasks = list(db.scalars(select(EnterpriseTask).where(or_(EnterpriseTask.user_id == user.id, EnterpriseTask.case_id.in_(case_ids or [""])))))
+    briefs = list(db.scalars(select(EnterpriseBrief).where(or_(EnterpriseBrief.user_id == user.id, EnterpriseBrief.case_id.in_(case_ids or [""])))))
+    db.commit()
     return ok({
-        "cases": [_case_out(c) for c in db.scalars(select(EnterpriseCase).where(EnterpriseCase.user_id == uid)).all()],
-        "documents": [_document_out(d) for d in db.scalars(select(EnterpriseDocument).where(EnterpriseDocument.user_id == uid)).all()],
-        "risks": [_risk_out(r) for r in db.scalars(select(EnterpriseRisk).where(EnterpriseRisk.user_id == uid)).all()],
-        "rules": [_rule_out(r) for r in db.scalars(select(EnterpriseRule).where(EnterpriseRule.user_id == uid)).all()],
-        "tasks": [_task_out(t) for t in db.scalars(select(EnterpriseTask).where(EnterpriseTask.user_id == uid)).all()],
-        "briefs": [_brief_out(b) for b in db.scalars(select(EnterpriseBrief).where(EnterpriseBrief.user_id == uid)).all()],
+        "cases": [_case_out(c) for c in cases],
+        "documents": [_document_out(d) for d in documents],
+        "risks": [_risk_out(r) for r in risks],
+        "rules": [_rule_out(r) for r in rules],
+        "tasks": [_task_out(t) for t in tasks],
+        "briefs": [_brief_out(b) for b in briefs],
     })
 
 
 # ---------------------------------------------------------------- Cases
 @router.post("/cases")
-def upsert_case(body: CaseIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def upsert_case(body: CaseIn, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    default_org = ensure_default_organization(db, user)
     row = db.get(EnterpriseCase, body.id)
     if row is None:
-        row = EnterpriseCase(id=body.id, user_id=user.id)
+        organization_id = body.organizationId or default_org.id
+        member = next((item for item in memberships_for_user(db, user) if item.organization_id == organization_id and item.role in {"owner", "admin", "analyst"}), None)
+        if member is None:
+            return fail("无权在该组织创建项目", status_code=403)
+        row = EnterpriseCase(id=body.id, user_id=user.id, organization_id=organization_id)
         db.add(row)
-    elif row.user_id != user.id:
+        action = "case.create"
+    elif not can_access_case(db, user, row, "editor"):
         return fail("项目不存在", status_code=404)
+    else:
+        action = "case.update"
     _apply_case(row, body)
+    record_governance_audit(db, user=user, action=action, resource_type="case", resource_id=row.id, organization_id=row.organization_id, case_id=row.id, details={"classification": row.classification}, request=request)
     db.commit()
     return ok(_case_out(row))
 
 
 @router.delete("/cases/{case_id}")
-def delete_case(case_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    row = require_owned_resource(db, EnterpriseCase, case_id, user.id)
+def delete_case(case_id: str, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    row = db.get(EnterpriseCase, case_id)
+    if row is None or not can_access_case(db, user, row, "admin"):
+        return fail("项目不存在", status_code=404)
+    record_governance_audit(db, user=user, action="case.delete", resource_type="case", resource_id=row.id, organization_id=row.organization_id, case_id=row.id, request=request)
     db.delete(row)
     db.commit()
     return ok({"deleted": True})
@@ -359,21 +403,32 @@ def delete_case(case_id: str, user: User = Depends(get_current_user), db: Sessio
 
 # ---------------------------------------------------------------- Documents
 @router.post("/documents")
-def upsert_document(body: DocumentIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def upsert_document(body: DocumentIn, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     row = db.get(EnterpriseDocument, body.id)
+    case = db.get(EnterpriseCase, body.caseId) if body.caseId else None
+    if body.caseId and (case is None or not can_access_case(db, user, case, "editor")):
+        return fail("项目不存在", status_code=404)
     if row is None:
         row = EnterpriseDocument(id=body.id, user_id=user.id)
         db.add(row)
-    elif row.user_id != user.id:
+        action = "document.create"
+    elif row.user_id != user.id and (case is None or not can_access_case(db, user, case, "editor")):
         return fail("资料不存在", status_code=404)
+    else:
+        action = "document.update"
     _apply_document(row, body)
+    record_governance_audit(db, user=user, action=action, resource_type="document", resource_id=row.id, organization_id=case.organization_id if case else "", case_id=row.case_id, details={"classification": row.classification, "status": row.status}, request=request)
     db.commit()
     return ok(_document_out(row))
 
 
 @router.delete("/documents/{document_id}")
-def delete_document(document_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    row = require_owned_resource(db, EnterpriseDocument, document_id, user.id)
+def delete_document(document_id: str, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    row = db.get(EnterpriseDocument, document_id)
+    case = db.get(EnterpriseCase, row.case_id) if row else None
+    if row is None or (row.user_id != user.id and (case is None or not can_access_case(db, user, case, "editor"))):
+        return fail("资料不存在", status_code=404)
+    record_governance_audit(db, user=user, action="document.delete", resource_type="document", resource_id=row.id, organization_id=case.organization_id if case else "", case_id=row.case_id, request=request)
     db.delete(row)
     db.commit()
     return ok({"deleted": True})
@@ -381,21 +436,32 @@ def delete_document(document_id: str, user: User = Depends(get_current_user), db
 
 # ---------------------------------------------------------------- Risks
 @router.post("/risks")
-def upsert_risk(body: RiskIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def upsert_risk(body: RiskIn, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     row = db.get(EnterpriseRisk, body.id)
+    case = db.get(EnterpriseCase, body.caseId) if body.caseId else None
+    if body.caseId and (case is None or not can_access_case(db, user, case, "editor")):
+        return fail("项目不存在", status_code=404)
     if row is None:
         row = EnterpriseRisk(id=body.id, user_id=user.id)
         db.add(row)
-    elif row.user_id != user.id:
+        action = "risk.create"
+    elif row.user_id != user.id and (case is None or not can_access_case(db, user, case, "editor")):
         return fail("风险不存在", status_code=404)
+    else:
+        action = "risk.update"
     _apply_risk(row, body)
+    record_governance_audit(db, user=user, action=action, resource_type="risk", resource_id=row.id, organization_id=case.organization_id if case else "", case_id=row.case_id, details={"status": row.status, "level": row.level}, request=request)
     db.commit()
     return ok(_risk_out(row))
 
 
 @router.delete("/risks/{risk_id}")
-def delete_risk(risk_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    row = require_owned_resource(db, EnterpriseRisk, risk_id, user.id)
+def delete_risk(risk_id: str, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    row = db.get(EnterpriseRisk, risk_id)
+    case = db.get(EnterpriseCase, row.case_id) if row else None
+    if row is None or (row.user_id != user.id and (case is None or not can_access_case(db, user, case, "editor"))):
+        return fail("风险不存在", status_code=404)
+    record_governance_audit(db, user=user, action="risk.delete", resource_type="risk", resource_id=row.id, organization_id=case.organization_id if case else "", case_id=row.case_id, request=request)
     db.delete(row)
     db.commit()
     return ok({"deleted": True})
@@ -403,21 +469,31 @@ def delete_risk(risk_id: str, user: User = Depends(get_current_user), db: Sessio
 
 # ---------------------------------------------------------------- Rules
 @router.post("/rules")
-def upsert_rule(body: RuleIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def upsert_rule(body: RuleIn, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    org = ensure_default_organization(db, user)
     row = db.get(EnterpriseRule, body.id)
     if row is None:
-        row = EnterpriseRule(id=body.id, user_id=user.id)
+        row = EnterpriseRule(id=body.id, user_id=user.id, organization_id=body.organizationId or org.id)
         db.add(row)
-    elif row.user_id != user.id:
+        action = "rule.create"
+    elif not rule_accessible(db, user, row, "analyst"):
         return fail("规则不存在", status_code=404)
+    else:
+        action = "rule.update"
     _apply_rule(row, body)
+    db.flush()
+    record_rule_revision(db, rule=row, user=user, reason="创建规则" if action == "rule.create" else "更新规则")
+    record_governance_audit(db, user=user, action=action, resource_type="rule", resource_id=row.id, organization_id=row.organization_id, details={"version": row.version}, request=request)
     db.commit()
     return ok(_rule_out(row))
 
 
 @router.delete("/rules/{rule_id}")
-def delete_rule(rule_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    row = require_owned_resource(db, EnterpriseRule, rule_id, user.id)
+def delete_rule(rule_id: str, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    row = db.get(EnterpriseRule, rule_id)
+    if row is None or not rule_accessible(db, user, row, "analyst"):
+        return fail("规则不存在", status_code=404)
+    record_governance_audit(db, user=user, action="rule.delete", resource_type="rule", resource_id=row.id, organization_id=row.organization_id, details={"version": row.version}, request=request)
     db.delete(row)
     db.commit()
     return ok({"deleted": True})
@@ -425,21 +501,32 @@ def delete_rule(rule_id: str, user: User = Depends(get_current_user), db: Sessio
 
 # ---------------------------------------------------------------- Tasks
 @router.post("/tasks")
-def upsert_task(body: TaskIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def upsert_task(body: TaskIn, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     row = db.get(EnterpriseTask, body.id)
+    case = db.get(EnterpriseCase, body.caseId) if body.caseId else None
+    if body.caseId and (case is None or not can_access_case(db, user, case, "editor")):
+        return fail("项目不存在", status_code=404)
     if row is None:
         row = EnterpriseTask(id=body.id, user_id=user.id)
         db.add(row)
-    elif row.user_id != user.id:
+        action = "task.create"
+    elif row.user_id != user.id and (case is None or not can_access_case(db, user, case, "editor")):
         return fail("任务不存在", status_code=404)
+    else:
+        action = "task.update"
     _apply_task(row, body)
+    record_governance_audit(db, user=user, action=action, resource_type="task", resource_id=row.id, organization_id=case.organization_id if case else "", case_id=row.case_id, details={"stage": row.stage}, request=request)
     db.commit()
     return ok(_task_out(row))
 
 
 @router.delete("/tasks/{task_id}")
-def delete_task(task_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    row = require_owned_resource(db, EnterpriseTask, task_id, user.id)
+def delete_task(task_id: str, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    row = db.get(EnterpriseTask, task_id)
+    case = db.get(EnterpriseCase, row.case_id) if row else None
+    if row is None or (row.user_id != user.id and (case is None or not can_access_case(db, user, case, "editor"))):
+        return fail("任务不存在", status_code=404)
+    record_governance_audit(db, user=user, action="task.delete", resource_type="task", resource_id=row.id, organization_id=case.organization_id if case else "", case_id=row.case_id, request=request)
     db.delete(row)
     db.commit()
     return ok({"deleted": True})
@@ -447,21 +534,32 @@ def delete_task(task_id: str, user: User = Depends(get_current_user), db: Sessio
 
 # ---------------------------------------------------------------- Briefs
 @router.post("/briefs")
-def upsert_brief(body: BriefIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def upsert_brief(body: BriefIn, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     row = db.get(EnterpriseBrief, body.id)
+    case = db.get(EnterpriseCase, body.caseId) if body.caseId else None
+    if body.caseId and (case is None or not can_access_case(db, user, case, "editor")):
+        return fail("项目不存在", status_code=404)
     if row is None:
         row = EnterpriseBrief(id=body.id, user_id=user.id)
         db.add(row)
-    elif row.user_id != user.id:
+        action = "brief.create"
+    elif row.user_id != user.id and (case is None or not can_access_case(db, user, case, "editor")):
         return fail("底稿不存在", status_code=404)
+    else:
+        action = "brief.update"
     _apply_brief(row, body)
+    record_governance_audit(db, user=user, action=action, resource_type="brief", resource_id=row.id, organization_id=case.organization_id if case else "", case_id=row.case_id, request=request)
     db.commit()
     return ok(_brief_out(row))
 
 
 @router.delete("/briefs/{brief_id}")
-def delete_brief(brief_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    row = require_owned_resource(db, EnterpriseBrief, brief_id, user.id)
+def delete_brief(brief_id: str, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    row = db.get(EnterpriseBrief, brief_id)
+    case = db.get(EnterpriseCase, row.case_id) if row else None
+    if row is None or (row.user_id != user.id and (case is None or not can_access_case(db, user, case, "editor"))):
+        return fail("底稿不存在", status_code=404)
+    record_governance_audit(db, user=user, action="brief.delete", resource_type="brief", resource_id=row.id, organization_id=case.organization_id if case else "", case_id=row.case_id, request=request)
     db.delete(row)
     db.commit()
     return ok({"deleted": True})

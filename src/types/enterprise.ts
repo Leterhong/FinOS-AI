@@ -1,8 +1,11 @@
 export type RiskLevel = "critical" | "high" | "medium" | "low";
 export type CaseStatus = "研判中" | "待复核" | "资料补充" | "已完成";
+export type DataClassification = "public" | "internal" | "confidential" | "restricted";
 
 export interface EnterpriseCase {
   id: string;
+  organizationId?: string;
+  classification?: DataClassification;
   company: string;
   title: string;
   industry: string;
@@ -19,6 +22,24 @@ export interface EnterpriseCase {
 
 export type ReviewStatus = "待复核" | "已确认" | "已驳回";
 
+export interface EvidenceCoordinate {
+  page?: number;
+  line?: number;
+  bbox?: [number, number, number, number];
+  sheet?: string;
+  cell?: string;
+  row?: number;
+  column?: number;
+}
+
+export interface ExtractedTable {
+  name: string;
+  headers: string[];
+  rows: Array<Record<string, string | number | boolean | null>>;
+  sheet?: string;
+  range?: string;
+}
+
 export interface EvidenceFact {
   id: string;
   caseId: string;
@@ -29,6 +50,7 @@ export interface EvidenceFact {
   unit: string;
   quote: string;
   location?: string;
+  coordinate?: EvidenceCoordinate;
   period?: string;
   confidence?: number;
   reviewStatus: ReviewStatus;
@@ -60,6 +82,7 @@ export interface RiskSignal {
 export interface AnalysisDocument {
   id: string;
   caseId: string;
+  classification?: DataClassification;
   name: string;
   kind: string;
   pages: number;
@@ -80,6 +103,9 @@ export interface AnalysisDocument {
     matchedQuote?: string;
   }>;
   uncertainties?: string[];
+  extractionMethod?: "text" | "ocr" | "table" | "connector";
+  ocrUsed?: boolean;
+  tables?: ExtractedTable[];
 }
 
 export interface AgentRun {
@@ -126,6 +152,7 @@ import type { RuleCondition } from "@/lib/rule-engine";
 
 export interface EnterpriseRule {
   id: string;
+  organizationId?: string;
   code: string;
   name: string;
   domain: string;

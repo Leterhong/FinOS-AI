@@ -22,6 +22,8 @@ class EnterpriseCase(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     user_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    classification: Mapped[str] = mapped_column(String(24), nullable=False, default="internal")
     company: Mapped[str] = mapped_column(String(200), nullable=False)
     title: Mapped[str] = mapped_column(String(300), nullable=False, default="")
     industry: Mapped[str] = mapped_column(String(120), nullable=False, default="")
@@ -35,7 +37,10 @@ class EnterpriseCase(Base):
     created_at: Mapped[datetime] = mapped_column(default=_now)
     updated_at: Mapped[datetime] = mapped_column(default=_now, onupdate=_now)
 
-    __table_args__ = (Index("ix_enterprise_cases_user", "user_id"),)
+    __table_args__ = (
+        Index("ix_enterprise_cases_user", "user_id"),
+        Index("ix_enterprise_cases_org", "organization_id"),
+    )
 
 
 class EnterpriseDocument(Base):
@@ -44,6 +49,7 @@ class EnterpriseDocument(Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     user_id: Mapped[str] = mapped_column(String(64), nullable=False)
     case_id: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    classification: Mapped[str] = mapped_column(String(24), nullable=False, default="internal")
     name: Mapped[str] = mapped_column(String(300), nullable=False)
     kind: Mapped[str] = mapped_column(String(40), nullable=False, default="企业资料")
     status: Mapped[str] = mapped_column(String(40), nullable=False, default="解析中")
@@ -84,6 +90,7 @@ class EnterpriseRule(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     user_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(32), nullable=False, default="")
     code: Mapped[str] = mapped_column(String(120), nullable=False)
     name: Mapped[str] = mapped_column(String(300), nullable=False)
     domain: Mapped[str] = mapped_column(String(120), nullable=False, default="")
@@ -96,7 +103,10 @@ class EnterpriseRule(Base):
     created_at: Mapped[datetime] = mapped_column(default=_now)
     updated_at: Mapped[datetime] = mapped_column(default=_now, onupdate=_now)
 
-    __table_args__ = (Index("ix_enterprise_rules_user", "user_id"),)
+    __table_args__ = (
+        Index("ix_enterprise_rules_user", "user_id"),
+        Index("ix_enterprise_rules_org", "organization_id"),
+    )
 
 
 class EnterpriseTask(Base):

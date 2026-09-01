@@ -19,8 +19,8 @@ depends_on = None
 def upgrade() -> None:
     # ---- notifications 扩列 ----
     with op.batch_alter_table("notifications") as batch:
-        batch.add_column(sa.Column("category", sa.String(20), server__default="system"))
-        batch.add_column(sa.Column("archived", sa.Boolean(), server__default=sa.text("0")))
+        batch.add_column(sa.Column("category", sa.String(20), server_default="system"))
+        batch.add_column(sa.Column("archived", sa.Boolean(), server_default=sa.text("0")))
     op.execute("UPDATE notifications SET category='system' WHERE category IS NULL")
     op.execute("UPDATE notifications SET archived=0 WHERE archived IS NULL")
     op.create_index("ix_notifications_category", "notifications", ["category"])
@@ -30,12 +30,12 @@ def upgrade() -> None:
         "wealth_avatars",
         sa.Column("id", sa.String(32), primary_key=True),
         sa.Column("user_id", sa.String(32), sa.ForeignKey("users.id"), nullable=False, index=True),
-        sa.Column("avatar_name", sa.String(120), server__default="我的财富分身"),
-        sa.Column("profile_summary", sa.Text(), server__default=""),
-        sa.Column("financial_status", sa.Text(), server__default=""),
-        sa.Column("life_stage", sa.String(40), server__default=""),
-        sa.Column("risk_preference", sa.String(20), server__default="balanced"),
-        sa.Column("future_outlook", sa.Text(), server__default=""),
+        sa.Column("avatar_name", sa.String(120), server_default="我的财富分身"),
+        sa.Column("profile_summary", sa.Text(), server_default=""),
+        sa.Column("financial_status", sa.Text(), server_default=""),
+        sa.Column("life_stage", sa.String(40), server_default=""),
+        sa.Column("risk_preference", sa.String(20), server_default="balanced"),
+        sa.Column("future_outlook", sa.Text(), server_default=""),
         sa.Column("created_at", sa.DateTime(timezone=True), index=True),
         sa.Column("updated_at", sa.DateTime(timezone=True)),
     )
@@ -46,13 +46,13 @@ def upgrade() -> None:
         "timeline_events",
         sa.Column("id", sa.String(32), primary_key=True),
         sa.Column("user_id", sa.String(32), sa.ForeignKey("users.id"), nullable=False, index=True),
-        sa.Column("title", sa.String(200), server__default=""),
-        sa.Column("category", sa.String(10), server__default="future", index=True),
-        sa.Column("event_date", sa.String(20), server__default="", index=True),
-        sa.Column("description", sa.Text(), server__default=""),
-        sa.Column("source", sa.String(10), server__default="system"),
-        sa.Column("importance", sa.Float(), server__default="0.5"),
-        sa.Column("payload", sa.Text(), server__default="{}"),
+        sa.Column("title", sa.String(200), server_default=""),
+        sa.Column("category", sa.String(10), server_default="future", index=True),
+        sa.Column("event_date", sa.String(20), server_default="", index=True),
+        sa.Column("description", sa.Text(), server_default=""),
+        sa.Column("source", sa.String(10), server_default="system"),
+        sa.Column("importance", sa.Float(), server_default="0.5"),
+        sa.Column("payload", sa.Text(), server_default="{}"),
         sa.Column("created_at", sa.DateTime(timezone=True), index=True),
     )
     op.create_index("ix_timeline_events_user_created", "timeline_events", ["user_id", "created_at"])
@@ -62,13 +62,13 @@ def upgrade() -> None:
         "knowledge_items",
         sa.Column("id", sa.String(32), primary_key=True),
         sa.Column("user_id", sa.String(32), sa.ForeignKey("users.id"), nullable=False, index=True),
-        sa.Column("title", sa.String(200), server__default=""),
-        sa.Column("content", sa.Text(), server__default=""),
-        sa.Column("source", sa.String(20), server__default="upload", index=True),
-        sa.Column("source_ref", sa.String(32), server__default=""),
-        sa.Column("category", sa.String(40), server__default="general", index=True),
-        sa.Column("tags", sa.Text(), server__default="[]"),
-        sa.Column("favorite", sa.Boolean(), server__default=sa.text("0")),
+        sa.Column("title", sa.String(200), server_default=""),
+        sa.Column("content", sa.Text(), server_default=""),
+        sa.Column("source", sa.String(20), server_default="upload", index=True),
+        sa.Column("source_ref", sa.String(32), server_default=""),
+        sa.Column("category", sa.String(40), server_default="general", index=True),
+        sa.Column("tags", sa.Text(), server_default="[]"),
+        sa.Column("favorite", sa.Boolean(), server_default=sa.text("0")),
         sa.Column("created_at", sa.DateTime(timezone=True), index=True),
         sa.Column("updated_at", sa.DateTime(timezone=True)),
     )
@@ -79,12 +79,12 @@ def upgrade() -> None:
         "decision_journals",
         sa.Column("id", sa.String(32), primary_key=True),
         sa.Column("user_id", sa.String(32), sa.ForeignKey("users.id"), nullable=False, index=True),
-        sa.Column("question", sa.Text(), server__default=""),
-        sa.Column("analysis", sa.Text(), server__default=""),
-        sa.Column("recommendation", sa.Text(), server__default=""),
-        sa.Column("chosen_plan", sa.Text(), server__default=""),
-        sa.Column("alternatives", sa.Text(), server__default=""),
-        sa.Column("payload", sa.Text(), server__default="{}"),
+        sa.Column("question", sa.Text(), server_default=""),
+        sa.Column("analysis", sa.Text(), server_default=""),
+        sa.Column("recommendation", sa.Text(), server_default=""),
+        sa.Column("chosen_plan", sa.Text(), server_default=""),
+        sa.Column("alternatives", sa.Text(), server_default=""),
+        sa.Column("payload", sa.Text(), server_default="{}"),
         sa.Column("created_at", sa.DateTime(timezone=True), index=True),
     )
     op.create_index("ix_decision_journals_user_created", "decision_journals", ["user_id", "created_at"])
@@ -94,12 +94,12 @@ def upgrade() -> None:
         "plan_versions",
         sa.Column("id", sa.String(32), primary_key=True),
         sa.Column("user_id", sa.String(32), sa.ForeignKey("users.id"), nullable=False, index=True),
-        sa.Column("subject", sa.String(40), server__default="general", index=True),
-        sa.Column("version", sa.Integer(), server__default="1"),
-        sa.Column("title", sa.String(200), server__default=""),
-        sa.Column("content", sa.Text(), server__default=""),
-        sa.Column("change_note", sa.Text(), server__default=""),
-        sa.Column("payload", sa.Text(), server__default="{}"),
+        sa.Column("subject", sa.String(40), server_default="general", index=True),
+        sa.Column("version", sa.Integer(), server_default="1"),
+        sa.Column("title", sa.String(200), server_default=""),
+        sa.Column("content", sa.Text(), server_default=""),
+        sa.Column("change_note", sa.Text(), server_default=""),
+        sa.Column("payload", sa.Text(), server_default="{}"),
         sa.Column("created_at", sa.DateTime(timezone=True), index=True),
     )
     op.create_index("ix_plan_versions_user_subject", "plan_versions", ["user_id", "subject"])
@@ -109,13 +109,13 @@ def upgrade() -> None:
         "daily_briefings",
         sa.Column("id", sa.String(32), primary_key=True),
         sa.Column("user_id", sa.String(32), sa.ForeignKey("users.id"), nullable=False, index=True),
-        sa.Column("brief_date", sa.String(12), server__default="", index=True),
-        sa.Column("greeting", sa.Text(), server__default=""),
-        sa.Column("wealth_change", sa.Text(), server__default=""),
-        sa.Column("reminders", sa.Text(), server__default=""),
-        sa.Column("actions", sa.Text(), server__default=""),
-        sa.Column("tone", sa.String(10), server__default="neutral"),
-        sa.Column("payload", sa.Text(), server__default="{}"),
+        sa.Column("brief_date", sa.String(12), server_default="", index=True),
+        sa.Column("greeting", sa.Text(), server_default=""),
+        sa.Column("wealth_change", sa.Text(), server_default=""),
+        sa.Column("reminders", sa.Text(), server_default=""),
+        sa.Column("actions", sa.Text(), server_default=""),
+        sa.Column("tone", sa.String(10), server_default="neutral"),
+        sa.Column("payload", sa.Text(), server_default="{}"),
         sa.Column("created_at", sa.DateTime(timezone=True), index=True),
     )
     op.create_index("ix_daily_briefings_user_date", "daily_briefings", ["user_id", "brief_date"])

@@ -55,6 +55,8 @@ def init_db() -> None:
     from backend.report import models as _report  # noqa: F401  Phase 7.2
     from backend.personal_os import models as _personal_os  # noqa: F401  Phase 7.3
     from backend.autonomous import models as _autonomous  # noqa: F401  Phase 7.4
+    from backend.enterprise import models as _enterprise  # noqa: F401  企业工作区
+    from backend.governance import models as _governance  # noqa: F401  企业治理
     from backend.database.base import Base
 
     Base.metadata.create_all(bind=engine)
@@ -104,10 +106,20 @@ def _ensure_enterprise_scope_columns(engine) -> None:
 
     insp = inspect(engine)
     targets = {
-        "enterprise_cases": {"archived_at": "VARCHAR(40) NOT NULL DEFAULT ''"},
-        "enterprise_documents": {"evidence_json": "TEXT"},
+        "enterprise_cases": {
+            "archived_at": "VARCHAR(40) NOT NULL DEFAULT ''",
+            "organization_id": "VARCHAR(32) NOT NULL DEFAULT ''",
+            "classification": "VARCHAR(24) NOT NULL DEFAULT 'internal'",
+        },
+        "enterprise_documents": {
+            "evidence_json": "TEXT",
+            "classification": "VARCHAR(24) NOT NULL DEFAULT 'internal'",
+        },
         "enterprise_risks": {"review_json": "TEXT"},
-        "enterprise_rules": {"tests_json": "TEXT"},
+        "enterprise_rules": {
+            "tests_json": "TEXT",
+            "organization_id": "VARCHAR(32) NOT NULL DEFAULT ''",
+        },
         "enterprise_tasks": {
             "case_id": "VARCHAR(64) NOT NULL DEFAULT ''",
             "note": "TEXT NOT NULL DEFAULT ''",

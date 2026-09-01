@@ -32,6 +32,17 @@ from backend.config import UPLOAD_DIR
 from backend.database import get_db
 from backend.document.models import Document
 from backend.financial.models import Asset, FinancialProfile, Transaction
+from backend.governance.models import (
+    EnterpriseConnector,
+    GovernanceAudit,
+    GovernanceReview,
+    ModelEvalCase,
+    ModelEvalRun,
+    Organization,
+    OrganizationMember,
+    ProjectGrant,
+    RuleRevision,
+)
 from backend.intelligence.models import (
     HealthScoreHistory,
     LongTermMemory,
@@ -105,6 +116,15 @@ _USER_SCOPED_MODELS = (
     RefreshToken,
     SecurityEvent,
     AuditLog,
+    EnterpriseConnector,
+    GovernanceReview,
+    ModelEvalRun,
+    ModelEvalCase,
+    RuleRevision,
+    GovernanceAudit,
+    ProjectGrant,
+    OrganizationMember,
+    Organization,
 )
 
 

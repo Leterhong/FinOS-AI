@@ -59,6 +59,11 @@ def test_cross_user_access_returns_404(client, user_a, user_b):
 
 
 def test_document_and_risk_upsert_with_counts(client, auth):
+    assert client.post(
+        "/api/enterprise/cases",
+        json={"id": "CASE-x", "company": "测试制造有限公司", "title": "资料研判"},
+        headers=auth,
+    ).status_code == 200
     doc_id = f"DOC-{uuid.uuid4().hex[:8]}"
     resp = client.post(
         "/api/enterprise/documents",
@@ -146,6 +151,11 @@ def test_task_and_brief_keep_enterprise_case_scope(client, auth):
     case_id = f"CASE-{uuid.uuid4().hex[:8]}"
     task_id = f"TASK-{uuid.uuid4().hex[:8]}"
     brief_id = f"BRIEF-{uuid.uuid4().hex[:8]}"
+    assert client.post(
+        "/api/enterprise/cases",
+        json={"id": case_id, "company": "测试制造有限公司", "title": "尽调"},
+        headers=auth,
+    ).status_code == 200
     assert client.post(
         "/api/enterprise/tasks",
         json={

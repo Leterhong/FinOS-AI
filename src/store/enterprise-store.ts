@@ -46,9 +46,9 @@ interface EnterpriseState {
   activeCaseId: string;
   setActiveCaseId: (id: string) => void;
   createCase: (input: NewCase) => EnterpriseCase;
-  updateCase: (id: string, patch: Partial<Pick<EnterpriseCase, "company" | "title" | "industry" | "amount" | "owner" | "status" | "risk" | "nextAction" | "archivedAt">>) => void;
+  updateCase: (id: string, patch: Partial<Pick<EnterpriseCase, "company" | "title" | "industry" | "amount" | "owner" | "status" | "risk" | "nextAction" | "archivedAt" | "classification">>) => void;
   addDocument: (file: File, caseId: string) => AnalysisDocument;
-  completeDocumentAnalysis: (id: string, analysis: string, model: string, detail?: { facts?: Array<Omit<EvidenceFact, "id" | "caseId" | "documentId" | "documentName" | "reviewStatus">>; ruleOutcomes?: AnalysisDocument["ruleOutcomes"]; uncertainties?: string[] }) => void;
+  completeDocumentAnalysis: (id: string, analysis: string, model: string, detail?: { facts?: Array<Omit<EvidenceFact, "id" | "caseId" | "documentId" | "documentName" | "reviewStatus">>; ruleOutcomes?: AnalysisDocument["ruleOutcomes"]; uncertainties?: string[]; extractionMethod?: AnalysisDocument["extractionMethod"]; ocrUsed?: boolean; tables?: AnalysisDocument["tables"] }) => void;
   reviewFact: (documentId: string, factId: string, input: { status: EvidenceFact["reviewStatus"]; reviewer: string; note?: string }) => void;
   failDocumentAnalysis: (id: string, error: string) => void;
   addRisk: (input: NewRisk) => RiskSignal;
@@ -77,6 +77,7 @@ const syncMap = {
     api: "cases" as EnterpriseKind,
     payload: (item: EnterpriseCase) => ({
       id: item.id, company: item.company, title: item.title, industry: item.industry,
+      organizationId: item.organizationId, classification: item.classification ?? "internal",
       amount: item.amount, status: item.status, risk: item.risk, progress: item.progress,
       owner: item.owner, nextAction: item.nextAction, createdAt: item.createdAt, archivedAt: item.archivedAt,
     }),
@@ -85,9 +86,11 @@ const syncMap = {
     api: "documents" as EnterpriseKind,
     payload: (item: AnalysisDocument) => ({
       id: item.id, caseId: item.caseId, name: item.name, kind: item.kind,
+      classification: item.classification ?? "internal",
       status: item.status, facts: item.facts, ruleHits: item.ruleHits,
       analysis: item.analysis, model: item.model, error: item.error,
       factItems: item.factItems, ruleOutcomes: item.ruleOutcomes, uncertainties: item.uncertainties,
+      extractionMethod: item.extractionMethod, ocrUsed: item.ocrUsed, tables: item.tables,
     }),
   },
   risks: {
@@ -104,6 +107,7 @@ const syncMap = {
     api: "rules" as EnterpriseKind,
     payload: (item: EnterpriseRule) => ({
       id: item.id, code: item.code, name: item.name, domain: item.domain,
+      organizationId: item.organizationId,
       version: item.version, coverage: item.coverage, coverageRate: item.coverageRate,
       conditions: item.conditions, testRecords: item.testRecords,
     }),
@@ -224,6 +228,7 @@ export const useEnterpriseStore = create<EnterpriseState>()(
         const item: EnterpriseCase = {
           ...input,
           id: uid("CASE"),
+          classification: "internal",
           status: "研判中",
           risk: "medium",
           progress: 0,
@@ -247,6 +252,7 @@ export const useEnterpriseStore = create<EnterpriseState>()(
         const item: AnalysisDocument = {
           id: uid("DOC"),
           caseId,
+          classification: "internal",
           name: file.name,
           kind: extension === "xlsx" || extension === "csv" ? "经营数据" : extension === "docx" ? "业务文件" : "企业资料",
           pages: 0,
@@ -284,6 +290,9 @@ export const useEnterpriseStore = create<EnterpriseState>()(
               factItems,
               ruleOutcomes,
               uncertainties: detail?.uncertainties ?? [],
+              extractionMethod: detail?.extractionMethod ?? "text",
+              ocrUsed: detail?.ocrUsed ?? false,
+              tables: detail?.tables ?? [],
             };
           }),
         }));
@@ -501,6 +510,8 @@ export const useEnterpriseStore = create<EnterpriseState>()(
             cases: deriveCaseProgress({
               cases: mergeById(state.cases, snapshot.cases, (row) => ({
                 id: String(row.id), company: String(row.company ?? ""), title: String(row.title ?? ""),
+                organizationId: row.organizationId as string | undefined,
+                classification: (row.classification as EnterpriseCase["classification"]) ?? "internal",
                 industry: String(row.industry ?? ""), amount: String(row.amount ?? ""),
                 status: (row.status as EnterpriseCase["status"]) ?? "研判中",
                 risk: (row.risk as EnterpriseCase["risk"]) ?? "medium",
@@ -514,6 +525,7 @@ export const useEnterpriseStore = create<EnterpriseState>()(
             }).cases,
             documents: mergeById(state.documents, snapshot.documents, (row) => ({
               id: String(row.id), caseId: String(row.caseId ?? ""), name: String(row.name ?? ""),
+              classification: (row.classification as AnalysisDocument["classification"]) ?? "internal",
               kind: String(row.kind ?? "企业资料"), pages: 0,
               status: (row.status as AnalysisDocument["status"]) ?? "已解析",
               confidence: 0, facts: Number(row.facts ?? 0), ruleHits: Number(row.ruleHits ?? 0),
@@ -522,6 +534,8 @@ export const useEnterpriseStore = create<EnterpriseState>()(
               factItems: row.factItems as AnalysisDocument["factItems"],
               ruleOutcomes: row.ruleOutcomes as AnalysisDocument["ruleOutcomes"],
               uncertainties: row.uncertainties as string[] | undefined,
+              extractionMethod: row.extractionMethod as AnalysisDocument["extractionMethod"],
+              ocrUsed: Boolean(row.ocrUsed), tables: row.tables as AnalysisDocument["tables"],
             })),
             risks: mergeById(state.risks, snapshot.risks, (row) => ({
               id: String(row.id), caseId: String(row.caseId ?? ""), company: String(row.company ?? ""),
@@ -535,6 +549,7 @@ export const useEnterpriseStore = create<EnterpriseState>()(
             })),
             rules: mergeById(state.rules, snapshot.rules, (row) => ({
               id: String(row.id), code: String(row.code ?? ""), name: String(row.name ?? ""),
+              organizationId: row.organizationId as string | undefined,
               domain: String(row.domain ?? ""), version: String(row.version ?? "v1.0"),
               coverage: String(row.coverage ?? "待测试"), coverageRate: Number(row.coverageRate ?? 0),
               conditions: row.conditions as EnterpriseRule["conditions"], testRecords: row.testRecords as EnterpriseRule["testRecords"], updated: "从云端恢复",

@@ -155,6 +155,7 @@ from backend.personal_os.router import router as personal_os_router  # noqa: E40
 from backend.autonomous.router import router as autonomic_router  # noqa: E402  Phase 7.4
 from backend.backup import router as backup_router  # noqa: E402  Phase 7.6 备份/导出
 from backend.enterprise import router as enterprise_router  # noqa: E402  2.1 企业工作区持久化
+from backend.governance import router as governance_router  # noqa: E402  2.2 企业治理
 
 for r in (
     auth_router,
@@ -180,6 +181,7 @@ for r in (
     autonomic_router,
     backup_router,
     enterprise_router,
+    governance_router,
     task_router,
     health_router,
     metrics_router,

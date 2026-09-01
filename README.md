@@ -7,7 +7,7 @@
 让企业资料、经营事实、业务规则与外部研究进入同一条可追溯的研判链路，辅助团队完成资料理解、规则匹配、风险提示、投研整理和流程协作。
 
 [![CI](https://github.com/Leterhong/FinOS-AI/actions/workflows/ci.yml/badge.svg)](https://github.com/Leterhong/FinOS-AI/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/badge/release-2.1.0-38bdf8.svg)](./CHANGELOG.md)
+[![Release](https://img.shields.io/badge/release-2.2.0-38bdf8.svg)](./CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-22c55e.svg)](./LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6.svg)](https://www.typescriptlang.org/)
 [![Security Policy](https://img.shields.io/badge/security-policy-f59e0b.svg)](./SECURITY.md)
@@ -40,7 +40,7 @@ FinOS AI 是一个面向企业金融、产业金融、授信尽调、经营分�
 
 ## 当前版本状态
 
-FinOS AI 2.0 已完成企业金融信息架构、可配置模型中心和 AI 研判主链路。开源版本无需登录即可进入零数据工作区；系统不会自动创建企业、资产、风险、规则或研究结论，所有业务记录均由用户主动录入或基于真实资料生成。
+FinOS AI 2.2 已完成企业金融信息架构、可配置模型中心、AI 研判主链路与组织治理控制。开源版本无需登录即可进入零数据工作区；系统不会自动创建企业、资产、风险、规则或研究结论，所有业务记录均由用户主动录入或基于真实资料生成。
 
 | 能力 | 当前状态 |
 | --- | --- |
@@ -48,14 +48,15 @@ FinOS AI 2.0 已完成企业金融信息架构、可配置模型中心和 AI 研
 | OpenAI、DeepSeek、通义千问、Claude、Gemini、智谱、Moonshot、Ollama 与自定义兼容接口 | 可配置、可测试、可切换默认模型及任务角色 |
 | 智能助手、资料研判、Agent 与投研生成 | 调用当前默认模型，返回实际模型、耗时与 Token 用量 |
 | 项目、资料、事实、风险、规则测试、任务审计与投研底稿 | 零预置数据；本地即时持久化 + 服务端同步，可一键清空 |
-| 资料研判 | 批量上传；结构化事实抽取（原文、位置、单位、报告期、复核状态）→ 确定性规则命中 → 叙述生成 |
+| 资料研判 | 批量上传；文本/图片 OCR、表格结构与证据坐标 → 结构化事实 → 确定性规则命中 → 叙述生成 |
 | 项目交付 | 财务指标与跨期趋势、候选风险人工确认、流程留痕、Markdown 研判报告导出 |
 | FastAPI、数据库、认证、文件与模型基础设施 | 已提供并具有自动化测试 |
 | 真实企业对象与证据链服务端持久化 | 已提供；开发自愈补列，生产使用 Alembic 迁移 |
-| 企业组织、RBAC、审批权限与完整审计 | 规划中 |
-| OCR 服务、完整规则历史回放、模型评测与生产级组织复核 | 规划中 |
+| 企业组织、五级 RBAC、项目授权、数据分级与治理审计 | 已提供，并有跨用户/密级回归测试 |
+| 规则历史回放、模型评测集、提示词防护与人工复核 | 已提供统一治理工作台 |
+| 受控 JSON/CSV 企业数据源连接器与运行可观测性 | 已提供，连接器强制公网校验、限量与复核 |
 
-当前无登录工作区仍不具备企业组织身份、RBAC 和共享设备隔离，不应在公共或共享设备上承载真实客户资料或商业秘密。生产部署前请阅读 [安全策略](./SECURITY.md) 和 [安全设计](./docs/security.md)。
+无登录模式使用浏览器隔离的访客身份，适合单机评估，不等同于企业身份源或共享设备隔离。组织、成员与项目权限在完整后端模式生效；生产环境仍应接入企业账户生命周期、HTTPS、密钥管理和留存策略。详见 [安全策略](./SECURITY.md) 和 [安全设计](./docs/security.md)。
 
 ## 产品能力
 
@@ -71,6 +72,7 @@ FinOS AI 2.0 已完成企业金融信息架构、可配置模型中心和 AI 研
 | 流程中心 | 创建并流转待处理、处理中、待复核和已完成任务 |
 | 智能研判助手 | 基于项目上下文回答问题，并给出证据和规则依据 |
 | AI 模型中心 | 服务端加密保存模型凭据，测试连通性、选择默认模型并进行真实调用验证 |
+| 企业治理 | 管理组织成员、五级角色、项目授权、数据密级、规则历史、复核队列、模型评测、连接器与审计观测 |
 
 ### 适用方向
 
@@ -99,7 +101,7 @@ Browser
        ├─ AES-256-GCM 模型凭据存储（仅服务端可解密）
        └─ FastAPI
             ├─ 访客会话 / JWT / HttpOnly Refresh Cookie
-            ├─ 文档、Agent、任务、金融与审计服务
+            ├─ 文档、Agent、任务、金融、组织治理与审计服务
             ├─ SQLite（开发）/ PostgreSQL（生产）
             └─ Redis（可选，可降级）
 ```
@@ -108,7 +110,7 @@ Browser
 | --- | --- |
 | 前端 | Next.js 15、React 19、TypeScript strict、Tailwind CSS、Zustand、Framer Motion |
 | 后端 | FastAPI、SQLAlchemy 2、Pydantic v2、Uvicorn |
-| 文档处理 | `mammoth`（Word）、`pdf-parse`（PDF）、多编码 CSV、分块上传限制、路径边界校验 |
+| 文档处理 | `mammoth`（Word）、`pdf-parse`（PDF）、图片视觉 OCR、Excel/CSV 表格结构、证据行号/单元格/图像坐标 |
 | 数据 | SQLite、PostgreSQL 16、Redis 7 |
 | 安全 | 短期 Access Token、HttpOnly Refresh Cookie、AES-256-GCM、限流、可信代理、SSRF 防护 |
 | 部署 | Docker Compose、nginx、独立 Next.js 运行产物 |
@@ -222,7 +224,7 @@ node tests/e2e/main-chain.mjs   # 端到端主链路（本地 mock LLM，需先 
 - 模型凭据以 AES-256-GCM 加密落盘，解密失败时拒绝读写而不是清空；健康检查与错误响应不泄漏内部细节。
 - 模型密钥、数据库凭据和企业资料不进入公开仓库或浏览器构建（`.dockerignore` 同步排除子目录环境文件）。
 
-当前开源工作区不是已经完成多租户认证、企业 RBAC、数据分级和审批隔离的 SaaS 产品。部署者必须自行完成组织权限、数据授权、日志留存、模型供应商评估和适用地区的监管合规。模式对比与上线门槛见 [部署模式说明](./docs/deployment-modes.md)。
+项目已经提供应用层组织角色、项目授权、数据分级、复核与审计控制，但这不自动构成完成企业身份接入、基础设施隔离或监管认证的 SaaS 产品。部署者仍须对接真实身份源，并完成日志留存、备份恢复、模型供应商评估和适用地区的监管合规。模式对比与上线门槛见 [部署模式说明](./docs/deployment-modes.md)。
 
 发现漏洞时，请不要创建公开 Issue，也不要上传真实企业数据。按照 [`SECURITY.md`](./SECURITY.md) 使用 GitHub 私密漏洞报告。
 
@@ -236,6 +238,7 @@ FinOS-AI/
 ├─ src/store/                 # 工作区状态和业务操作
 ├─ src/types/                 # TypeScript 业务模型
 ├─ backend/                   # FastAPI、数据库、安全与服务层
+│  └─ governance/            # 组织权限、分级、复核、评测、连接器和可观测性
 ├─ tests/                     # 前端、后端与 AI 回归测试
 ├─ deploy/                    # Docker 与 nginx 配置
 └─ docs/                      # 架构、安全、API 与部署资料
@@ -250,12 +253,14 @@ FinOS-AI/
 - [x] 智能助手、文档研判、Agent 和投研生成接入真实模型调用
 - [x] 会话、上传、出站访问、可信代理和并发任务安全加固
 - [x] 企业对象、证据链、规则测试与工作流审计同步到服务端数据库
-- [ ] 组织、角色、项目权限、数据分级和完整审计日志
-- [ ] OCR、表格结构识别和真实证据坐标
+- [x] 组织、角色、项目权限、数据分级和完整审计日志
+- [x] OCR、表格结构识别和真实证据坐标
 - [x] 可配置确定性规则、版本与真实测试样本记录
-- [ ] 完整规则变更历史与历史版本回放
-- [ ] 模型评测集、细粒度提示词防护和生产级人机复核闭环
-- [ ] 企业数据源连接器和可观测性体系
+- [x] 完整规则变更历史与历史版本回放
+- [x] 模型评测集、细粒度提示词防护和生产级人机复核闭环
+- [x] 企业数据源连接器和可观测性体系
+
+2.2 路线图已全部落地。后续迭代将以真实部署反馈、评测数据和合规要求驱动，不用预置演示数据扩充表面功能。
 
 ## 参与贡献
 

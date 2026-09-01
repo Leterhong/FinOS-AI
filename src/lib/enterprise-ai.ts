@@ -50,6 +50,23 @@ export interface DocumentFact {
   unit: string;
   quote: string;
   location?: string;
+  coordinate?: {
+    page?: number;
+    line?: number;
+    bbox?: [number, number, number, number];
+    sheet?: string;
+    cell?: string;
+    row?: number;
+    column?: number;
+  };
+}
+
+export interface DocumentTable {
+  name: string;
+  headers: string[];
+  rows: Array<Record<string, string | number | boolean | null>>;
+  sheet?: string;
+  range?: string;
 }
 
 export interface DocumentRuleHit {
@@ -138,6 +155,9 @@ export async function analyzeEnterpriseDocument(input: {
   facts: DocumentFact[];
   ruleHits: DocumentRuleHit[];
   uncertainties?: string[];
+  extractionMethod?: "text" | "ocr" | "table";
+  ocrUsed?: boolean;
+  tables?: DocumentTable[];
   model: string;
   latencyMs: number;
 }> {
@@ -152,7 +172,7 @@ export async function analyzeEnterpriseDocument(input: {
     body: form,
   });
   const payload = await response.json().catch(() => null) as
-    | { result?: { analysis: string; facts?: DocumentFact[]; ruleHits?: DocumentRuleHit[]; uncertainties?: string[]; model: string; latencyMs: number }; error?: string }
+    | { result?: { analysis: string; facts?: DocumentFact[]; ruleHits?: DocumentRuleHit[]; uncertainties?: string[]; extractionMethod?: "text" | "ocr" | "table"; ocrUsed?: boolean; tables?: DocumentTable[]; model: string; latencyMs: number }; error?: string }
     | null;
   if (!response.ok || !payload?.result) {
     throw new Error(payload?.error || "资料 AI 分析失败");
@@ -162,6 +182,9 @@ export async function analyzeEnterpriseDocument(input: {
     facts: payload.result.facts ?? [],
     ruleHits: payload.result.ruleHits ?? [],
     uncertainties: payload.result.uncertainties ?? [],
+    extractionMethod: payload.result.extractionMethod,
+    ocrUsed: payload.result.ocrUsed,
+    tables: payload.result.tables ?? [],
     model: payload.result.model,
     latencyMs: payload.result.latencyMs,
   };

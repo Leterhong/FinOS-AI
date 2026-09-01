@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { LayoutDashboard, BriefcaseBusiness, Files, ShieldAlert, ChartNoAxesCombined, Scale, Bot, Workflow, MessageSquareText, X, ArrowUpRight, Activity, Cpu, Building2 } from "lucide-react";
+import { LayoutDashboard, BriefcaseBusiness, Files, ShieldAlert, ChartNoAxesCombined, Scale, Bot, Workflow, MessageSquareText, X, ArrowUpRight, Activity, Cpu, Building2, ShieldCheck } from "lucide-react";
 import Logo from "@/components/brand/Logo";
 import { cn } from "@/lib/utils";
 
@@ -24,6 +24,7 @@ const groups = [
     { href: "/workflows", label: "流程中心", icon: Workflow },
     { href: "/assistant", label: "智能研判助手", icon: MessageSquareText },
     { href: "/deployment", label: "部署与合规", icon: Building2 },
+    { href: "/governance", label: "企业治理", icon: ShieldCheck },
   ]},
 ];
 

@@ -7,7 +7,7 @@
 | 后端 API | `tests/backend/` | pytest + FastAPI TestClient | 鉴权、用户隔离、数据正确性、错误契约 |
 | AI 质量 | `tests/ai/` | pytest | 无模型时的本地确定性算法、零数据欢迎态、合规口径 |
 | 前端契约 | `tests/frontend/` | Node 内置 test runner | 品牌红线、安全红线、部署契约（nginx 孤岛路由/compose 令牌）、开源定位 |
-| 纯函数单测 | `tests/unit/` | tsx + node:test | 规则引擎等核心算法 |
+| 纯函数单测 | `tests/unit/` | tsx + node:test | 规则引擎、财务分析、PDF 安全解析与提示词防护 |
 | 端到端 | `tests/e2e/` | Node 脚本 + mock LLM | 真实前后端进程下的主链路（会话/模型/研判/持久化/隔离） |
 
 ## 快速开始
@@ -52,6 +52,8 @@ pip install pytest pytest-asyncio
 | `test_agents.py` | 5 个内置 Agent 可运行、工作流、工具上下文锁定、运行日志隔离 |
 | `test_rag.py` | 知识入库/检索/片段管理、空知识库优雅返回、跨用户检索零泄露 |
 | `test_security.py` | 安全响应头、错误不泄露堆栈、登录限流、密钥零泄露、上传防护 |
+| `test_governance.py` | 组织角色、项目授权、数据密级隔离、规则历史回放、模型评测记录、人工复核、连接器 SSRF 与审计观测 |
+| `test_enterprise.py` | 企业项目、资料、风险、规则、任务和投研对象的持久化、归属校验与跨用户隔离 |
 
 ### 关键断言口径
 
