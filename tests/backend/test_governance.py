@@ -204,3 +204,22 @@ def test_connector_sync_creates_classified_document_and_review(client, user_a, m
     assert document["extractionMethod"] == "connector"
     governance = client.get("/api/governance/snapshot", headers=user_a["headers"]).json()["data"]
     assert any(item["resourceId"] == document_id and item["status"] == "pending" for item in governance["reviews"])
+
+
+def test_review_decision_ignores_spoofed_decided_by(client, user_a):
+    """decided_by 由服务端已认证身份写入，客户端伪造值被忽略（单人组织允许自审，但留痕真实）。"""
+    case_id = _case(client, user_a["headers"])
+    created = client.post(
+        "/api/governance/reviews",
+        json={"caseId": case_id, "resourceType": "risk", "resourceId": "RISK-X", "title": "审批测试", "requestedBy": "发起人"},
+        headers=user_a["headers"],
+    ).json()["data"]
+    decision = client.post(
+        f"/api/governance/reviews/{created['id']}/decision",
+        json={"status": "approved", "decidedBy": "伪造审批人", "note": "同意"},
+        headers=user_a["headers"],
+    )
+    assert decision.status_code == 200
+    body = decision.json()["data"]
+    assert body["decidedBy"] != "伪造审批人"
+    assert body["decidedBy"]  # 服务端写入的已认证身份

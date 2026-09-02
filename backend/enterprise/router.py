@@ -26,6 +26,11 @@ from backend.enterprise.models import (
     EnterpriseRule,
     EnterpriseTask,
 )
+from backend.governance.models import (
+    EnterpriseConnector,
+    GovernanceReview,
+    ProjectGrant,
+)
 from backend.governance.service import (
     accessible_cases,
     can_access_case,
@@ -44,6 +49,19 @@ _ID_LEN = 64
 
 def _id(value: object) -> str:
     return str(value or "")[:_ID_LEN]
+
+
+def _can_edit_row(db: Session, user: User, row) -> bool:
+    """既有行的更新授权必须按「行自身的归属」判定：
+    所有者本人，或行当前所属项目的 editor。
+
+    此前 upsert 用请求体里的 caseId 做授权——攻击者把自己的项目 id 填进
+    body 即可覆写并改挂他人的资料/风险/任务/底稿（跨租户数据劫持）。
+    """
+    if row.user_id == user.id:
+        return True
+    row_case = db.get(EnterpriseCase, row.case_id) if row.case_id else None
+    return row_case is not None and can_access_case(db, user, row_case, "editor")
 
 
 def _clip(value: object, limit: int) -> str:
@@ -133,9 +151,10 @@ class DocumentIn(BaseModel):
     status: str = Field(default="解析中", max_length=40)
     facts: int = Field(default=0, ge=0)
     ruleHits: int = Field(default=0, ge=0)
-    analysis: str | None = None
+    # 上限对齐前端持久化截断与叙述生成规模，防止无界 Text 行（DoS 面）。
+    analysis: str | None = Field(default=None, max_length=60_000)
     model: str | None = Field(default=None, max_length=200)
-    error: str | None = None
+    error: str | None = Field(default=None, max_length=2_000)
     factItems: list | None = Field(default=None, max_length=1000)
     ruleOutcomes: list | None = Field(default=None, max_length=500)
     uncertainties: list | None = Field(default=None, max_length=200)
@@ -412,7 +431,8 @@ def upsert_document(body: DocumentIn, request: Request, user: User = Depends(get
         row = EnterpriseDocument(id=body.id, user_id=user.id)
         db.add(row)
         action = "document.create"
-    elif row.user_id != user.id and (case is None or not can_access_case(db, user, case, "editor")):
+    elif not _can_edit_row(db, user, row):
+        # 按行自身归属授权（防跨租户劫持：请求体 caseId 不能作为既有行的授权依据）。
         return fail("资料不存在", status_code=404)
     else:
         action = "document.update"
@@ -445,7 +465,8 @@ def upsert_risk(body: RiskIn, request: Request, user: User = Depends(get_current
         row = EnterpriseRisk(id=body.id, user_id=user.id)
         db.add(row)
         action = "risk.create"
-    elif row.user_id != user.id and (case is None or not can_access_case(db, user, case, "editor")):
+    elif not _can_edit_row(db, user, row):
+        # 按行自身归属授权（防跨租户劫持：请求体 caseId 不能作为既有行的授权依据）。
         return fail("风险不存在", status_code=404)
     else:
         action = "risk.update"
@@ -510,7 +531,8 @@ def upsert_task(body: TaskIn, request: Request, user: User = Depends(get_current
         row = EnterpriseTask(id=body.id, user_id=user.id)
         db.add(row)
         action = "task.create"
-    elif row.user_id != user.id and (case is None or not can_access_case(db, user, case, "editor")):
+    elif not _can_edit_row(db, user, row):
+        # 按行自身归属授权（防跨租户劫持：请求体 caseId 不能作为既有行的授权依据）。
         return fail("任务不存在", status_code=404)
     else:
         action = "task.update"
@@ -543,7 +565,8 @@ def upsert_brief(body: BriefIn, request: Request, user: User = Depends(get_curre
         row = EnterpriseBrief(id=body.id, user_id=user.id)
         db.add(row)
         action = "brief.create"
-    elif row.user_id != user.id and (case is None or not can_access_case(db, user, case, "editor")):
+    elif not _can_edit_row(db, user, row):
+        # 按行自身归属授权（防跨租户劫持：请求体 caseId 不能作为既有行的授权依据）。
         return fail("底稿不存在", status_code=404)
     else:
         action = "brief.update"

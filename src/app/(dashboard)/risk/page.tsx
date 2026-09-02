@@ -1,7 +1,7 @@
 "use client";
 
 import { type FormEvent, useState } from "react";
-import { CheckCircle2, Plus, ShieldAlert, ShieldCheck } from "lucide-react";
+import { Download, CheckCircle2, Plus, ShieldAlert, ShieldCheck } from "lucide-react";
 import EnterpriseDialog from "@/components/enterprise/EnterpriseDialog";
 import { EmptyStateCard, PageIntro, Panel, RiskBadge, riskMeta } from "@/components/enterprise/EnterpriseUI";
 import { useEnterpriseStore } from "@/store/enterprise-store";
@@ -13,6 +13,7 @@ export default function RiskPage() {
   const addRisk = useEnterpriseStore((state) => state.addRisk);
   const verifyRisk = useEnterpriseStore((state) => state.verifyRisk);
   const mitigateRisk = useEnterpriseStore((state) => state.mitigateRisk);
+  const [exported, setExported] = useState(false);
   const [level, setLevel] = useState("all");
   const [open, setOpen] = useState(false);
   const [reviewing, setReviewing] = useState<{ risk: RiskSignal; mode: "verify" | "mitigate" } | null>(null);
@@ -52,8 +53,25 @@ export default function RiskPage() {
     setReviewing(null);
   };
 
+  const exportRisks = () => {
+    const nl = String.fromCharCode(10);
+    const lines = filtered.map((s) => [
+      `## ${s.title}`,
+      `- 主体：${s.company}`,
+      `- 等级：${s.level} · 状态：${s.status}`,
+      `- 证据：${s.evidence}`,
+      `- 规则依据：${s.rule}`,
+      `- 潜在影响：${s.impact}`,
+      s.verifiedBy ? `- 复核：${s.verifiedBy}` : "",
+    ].filter(Boolean).join(nl));
+    const text = ["# 企业风险清单", "", ...lines, "", `（共 ${filtered.length} 项；AI 输出需人工复核，不构成授信、投资、法律、审计或合规意见）`].join(nl);
+    void navigator.clipboard?.writeText(text).then(() => {
+      setExported(true);
+      setTimeout(() => setExported(false), 2000);
+    });
+  };
   return <div className="page-shell">
-    <PageIntro eyebrow="Risk intelligence" title="企业风险中心" description="风险提示必须同时呈现事实证据、命中规则、潜在影响与核验状态，避免黑箱评分和无依据结论。" actions={<button disabled={cases.length === 0} onClick={() => setOpen(true)} className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018] disabled:cursor-not-allowed disabled:opacity-40"><Plus className="h-3.5 w-3.5" />登记风险</button>} />
+    <PageIntro eyebrow="Risk intelligence" title="企业风险中心" description="风险提示必须同时呈现事实证据、命中规则、潜在影响与核验状态，避免黑箱评分和无依据结论。" actions={<><button type="button" onClick={exportRisks} className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-300 hover:border-cyan-400/25 hover:text-cyan-200"><Download className="h-3.5 w-3.5" />{exported ? "已复制" : "复制风险清单"}</button><button disabled={cases.length === 0} onClick={() => setOpen(true)} className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018] disabled:cursor-not-allowed disabled:opacity-40"><Plus className="h-3.5 w-3.5" />登记风险</button></>} />
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{filters.map(([label, count, value]) => <button key={value} onClick={() => setLevel(value)} className={`rounded-2xl border p-4 text-left transition ${level === value ? "border-cyan-300/25 bg-cyan-300/[0.07]" : "border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.04]"}`}><p className="text-xs text-slate-500">{label}</p><p className="numeric mt-2 text-2xl font-semibold text-white">{count}</p></button>)}</div>
     <Panel>
       <div className="divide-y divide-white/[0.07]">

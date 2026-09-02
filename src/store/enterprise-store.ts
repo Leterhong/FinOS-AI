@@ -8,6 +8,7 @@ import {
   pullSnapshot,
   type EnterpriseKind,
 } from "@/lib/enterprise-sync";
+import { evaluateRules, type FactCandidate } from "@/lib/rule-engine";
 import type {
   AgentRun,
   AnalysisDocument,
@@ -68,6 +69,11 @@ interface EnterpriseState {
   clearAssistantHistory: (caseId?: string) => void;
   /** 从服务端拉取快照并合并（跨设备恢复/备份；后端不可达时静默跳过）。 */
   syncFromServer: () => Promise<{ pulled: boolean; merged: number }>;
+  /** 服务端同步状态（页脚徽标）：synced=已上云，local-only=后端不可达。 */
+  serverSync: "unknown" | "synced" | "local-only";
+  deleteDocument: (id: string) => void;
+  /** 用当前工作区规则对已解析资料重跑确定性规则评估（后建规则也能生效）。 */
+  rerunRulesForDocument: (id: string) => { hits: number; total: number } | null;
   clearWorkspace: () => void;
 }
 
@@ -150,6 +156,7 @@ const emptyWorkspace = () => ({
   briefs: [] as ResearchBrief[],
   assistantMessages: [] as AssistantMessage[],
   activeCaseId: "",
+  serverSync: "unknown" as EnterpriseState["serverSync"],
 });
 
 /** 同毫秒内创建两个实体也不会碰撞（Date.now().toString(36) 会）。 */
@@ -196,8 +203,9 @@ function deriveCaseProgress(state: {
             : taskRatio < 1
               ? "推进流程任务"
               : "提交人工复核";
-    const status: EnterpriseCase["status"] =
-      progress >= 100 ? "待复核" : progress > 0 ? item.status === "待复核" ? item.status : "研判中" : item.status;
+    // 仅在进度满格时提升为「待复核」；用户在编辑弹窗里显式设置的
+    // 状态（已完成/资料补充等）不再被推导覆盖。
+    const status: EnterpriseCase["status"] = progress >= 100 && item.status !== "已完成" ? "待复核" : item.status;
     return { ...item, progress, nextAction, status };
   });
   // 同步清理：文档不再关联已删除项目时保留原样（不静默丢数据）。
@@ -388,6 +396,29 @@ export const useEnterpriseStore = create<EnterpriseState>()(
         }));
         pushDelete("rules", id);
       },
+      deleteDocument: (id) => {
+        set((state) => ({ documents: state.documents.filter((d) => d.id !== id) }));
+        pushDelete("documents", id);
+      },
+      rerunRulesForDocument: (id) => {
+        const state = get();
+        const doc = state.documents.find((d) => d.id === id);
+        if (!doc || doc.status !== "已解析") return null;
+        const facts: FactCandidate[] = (doc.factItems ?? []).map((fact) => ({
+          topic: fact.topic, value: fact.value, unit: fact.unit as FactCandidate["unit"], quote: fact.quote,
+        }));
+        const structured = state.rules.filter((rule) => (rule.conditions ?? []).length > 0)
+          .map((rule) => ({ code: rule.code, name: rule.name, conditions: rule.conditions ?? [] }));
+        const outcomes = evaluateRules(facts, structured);
+        withProgress(set, (s) => ({
+          documents: s.documents.map((d) => d.id === id
+            ? { ...d, ruleOutcomes: outcomes, ruleHits: outcomes.filter((o) => o.hit).length }
+            : d),
+        }));
+        const updated = get().documents.find((d) => d.id === id);
+        if (updated) pushEntity("documents", syncMap.documents.payload(updated));
+        return { hits: outcomes.filter((o) => o.hit).length, total: outcomes.length };
+      },
       addTask: (input) => {
         withProgress(set, (state) => ({
           tasks: [{
@@ -486,7 +517,10 @@ export const useEnterpriseStore = create<EnterpriseState>()(
       })),
       syncFromServer: async () => {
         const snapshot = await pullSnapshot();
-        if (!snapshot) return { pulled: false, merged: 0 };
+        if (!snapshot) {
+          set({ serverSync: "local-only" });
+          return { pulled: false, merged: 0 };
+        }
         let merged = 0;
         set((state) => {
           // 合并策略：本地已有同 id 记录时本地优先（本会话是活动源）；
@@ -570,6 +604,7 @@ export const useEnterpriseStore = create<EnterpriseState>()(
             })),
           };
         });
+        set({ serverSync: "synced" });
         return { pulled: true, merged };
       },
       clearWorkspace: () => {
@@ -585,6 +620,18 @@ export const useEnterpriseStore = create<EnterpriseState>()(
       name: "finos-enterprise-workspace-v2",
       version: 3,
       migrate: () => emptyWorkspace(),
+      // 会话中断恢复：刷新/崩溃后残留的「解析中」不可能再有回调来写终态，
+      // 重 hydration 时统一回收为「分析失败」，用户可删除该资料后重新上传。
+      onRehydrateStorage: () => (state) => {
+        if (!state) return;
+        const stuck = state.documents.filter((d) => d.status === "解析中");
+        if (stuck.length === 0) return;
+        useEnterpriseStore.setState({
+          documents: useEnterpriseStore.getState().documents.map((d) => d.status === "解析中"
+            ? { ...d, status: "分析失败" as const, error: "分析在会话结束前未完成，请删除后重新上传" }
+            : d),
+        });
+      },
       // 持久化裁剪：AI 分析原文/Agent 输出/对话历史截断限量，避免长期使用
       // 撞上 localStorage ~5MB 配额后写入失败。
       partialize: (state) => ({

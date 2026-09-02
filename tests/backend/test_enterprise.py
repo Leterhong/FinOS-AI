@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import uuid
 
+from sqlalchemy import select
+
 
 def _headers(auth: dict) -> dict:
     return auth
@@ -194,3 +196,47 @@ def test_task_and_brief_keep_enterprise_case_scope(client, auth):
 def test_snapshot_requires_auth(client):
     resp = client.get("/api/enterprise/snapshot")
     assert resp.status_code == 401
+
+
+def test_cross_user_document_upsert_cannot_hijack(client, user_a, user_b):
+    """B 不能通过把自己项目 id 填进 caseId 来覆写 A 的资料（跨租户劫持回归）。"""
+    case_a = f"CASE-{uuid.uuid4().hex[:8]}"
+    client.post("/api/enterprise/cases", json={"id": case_a, "company": "甲公司", "title": "t"}, headers=user_a["headers"])
+    doc_id = f"DOC-{uuid.uuid4().hex[:8]}"
+    client.post(
+        "/api/enterprise/documents",
+        json={"id": doc_id, "caseId": case_a, "name": "审计报告.pdf", "status": "已解析", "facts": 9},
+        headers=user_a["headers"],
+    )
+    case_b = f"CASE-{uuid.uuid4().hex[:8]}"
+    client.post("/api/enterprise/cases", json={"id": case_b, "company": "乙公司", "title": "t"}, headers=user_b["headers"])
+    # B 用自己的 caseId 覆写 A 的资料 → 404，A 的数据不受影响
+    resp = client.post(
+        "/api/enterprise/documents",
+        json={"id": doc_id, "caseId": case_b, "name": "被劫持.pdf", "status": "已解析"},
+        headers=user_b["headers"],
+    )
+    assert resp.status_code == 404, resp.text
+    snap_a = client.get("/api/enterprise/snapshot", headers=user_a["headers"]).json()["data"]
+    doc = next(d for d in snap_a["documents"] if d["id"] == doc_id)
+    assert doc["name"] == "审计报告.pdf" and doc["facts"] == 9
+    assert doc["caseId"] == case_a
+
+
+def test_account_deletion_covers_enterprise_tables(client, user_a, db_session):
+    """账户删除必须覆盖企业工作区六表（合规硬要求回归）。"""
+    from backend.enterprise.models import EnterpriseCase
+    from backend.security.models import SecurityEvent
+
+    case_id = f"CASE-{uuid.uuid4().hex[:8]}"
+    client.post("/api/enterprise/cases", json={"id": case_id, "company": "删除测试", "title": "t"}, headers=user_a["headers"])
+    resp = client.request(
+        "DELETE",
+        "/api/security/account",
+        json={"password": "Test1234!", "confirmation": "DELETE MY DATA"},
+        headers=user_a["headers"],
+    )
+    assert resp.status_code == 200, resp.text
+    db_session.expire_all()
+    leftover = db_session.scalar(select(EnterpriseCase).where(EnterpriseCase.id == case_id))
+    assert leftover is None

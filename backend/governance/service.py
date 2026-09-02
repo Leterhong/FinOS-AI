@@ -28,7 +28,14 @@ def ensure_default_organization(db: Session, user: User) -> Organization:
     if org is None:
         org = Organization(user_id=user.id, name="企业研判工作区")
         db.add(org)
-        db.flush()
+        try:
+            db.flush()
+        except IntegrityError:
+            # 并发首触（多 worker 同一用户）会撞 user_id 唯一约束——回滚后重读即可。
+            db.rollback()
+            org = db.scalar(select(Organization).where(Organization.user_id == user.id).order_by(Organization.created_at))
+            if org is None:
+                raise
     member = db.scalar(
         select(OrganizationMember).where(
             OrganizationMember.organization_id == org.id,

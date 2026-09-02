@@ -97,6 +97,18 @@ def register_user(client: TestClient, email: str | None = None, password: str = 
 
 
 @pytest.fixture()
+def db_session():
+    """独立 DB 会话：与 TestClient 共用同一测试数据库。"""
+    from backend.database import SessionLocal
+
+    session = SessionLocal()
+    try:
+        yield session
+    finally:
+        session.close()
+
+
+@pytest.fixture()
 def user_a(client: TestClient) -> dict[str, Any]:
     return register_user(client, _unique_email("alice"))
 

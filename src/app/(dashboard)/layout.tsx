@@ -6,6 +6,18 @@ import { usePathname } from "next/navigation";
 import Sidebar from "@/components/dashboard/Sidebar";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import { useEnterpriseStore } from "@/store/enterprise-store";
+
+/** 同步状态徽标：让部署者一眼确认服务端持久化是否生效。 */
+function SyncBadge() {
+  const serverSync = useEnterpriseStore((state) => state.serverSync);
+  if (serverSync === "unknown") return null;
+  return (
+    <p className={`mt-1 flex items-center gap-1.5 ${serverSync === "synced" ? "text-emerald-300/70" : "text-amber-300/80"}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${serverSync === "synced" ? "bg-emerald-400" : "bg-amber-400"}`} />
+      {serverSync === "synced" ? "云端已同步：项目与研判数据已持久化到服务端" : "仅本地模式：后端不可达，数据只保存在当前浏览器"}
+    </p>
+  );
+}
 import { useModelStore } from "@/store/model-store";
 
 export default function DashboardLayout({
@@ -60,7 +72,8 @@ export default function DashboardLayout({
               {children}
             </div>
             <footer className="mt-4 shrink-0 border-t border-white/[0.06] pt-3 text-[10px] leading-5 text-slate-600">
-              FinOS AI提供信息分析和辅助决策，不构成投资建议，也不替代授信、投资、法律、审计或合规负责人。重大结论请以人工复核为准。
+              <p>FinOS AI提供信息分析和辅助决策，不构成投资建议，也不替代授信、投资、法律、审计或合规负责人。重大结论请以人工复核为准。</p>
+              <SyncBadge />
             </footer>
           </div>
         </main>

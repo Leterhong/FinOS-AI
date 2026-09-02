@@ -197,13 +197,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "未能提取可分析文本；扫描 PDF 请转为图片上传，或配置企业 OCR 数据源" }, { status: 422 });
   }
   const guardedText = redactPromptSecrets(text);
-  const documentGuard = promptGuardInstruction(inspectPrompt(text));
+  const guardFlags = inspectPrompt(text);
+  const documentGuard = promptGuardInstruction(guardFlags);
 
   const project = String(form.get("project") || "未关联项目").slice(0, 2_000);
   const rules = String(form.get("rules") || "[]").slice(0, 12_000);
 
   // ── 阶段一：结构化事实抽取（JSON 输出，逐条携带原文逐字引用）──
   let facts: LocatedFact[] = [];
+  let extractionFailed = false;
   let uncertainties: string[] = [];
   try {
     const extraction = await provider.generate({
@@ -245,9 +247,12 @@ export async function POST(req: NextRequest) {
     uncertainties = (Array.isArray(parsed.uncertainties) ? parsed.uncertainties : [])
       .filter((u) => typeof u === "string" && u.trim())
       .slice(0, 10);
-  } catch {
-    // 抽取失败不阻断主流程：事实为空 → 规则评估显式输出「未找到事实」，叙述继续。
+  } catch (error) {
+    // 抽取失败不阻断主流程：事实为空 → 规则评估显式输出「未找到事实」，叙述继续；
+    // 但必须留痕（extractionFailed + uncertainties），不能让「空结果」伪装成「没有事实」。
     facts = [];
+    extractionFailed = true;
+    uncertainties = [...uncertainties, `事实抽取阶段失败（${error instanceof Error ? error.message : "未知错误"}），本报告未经过结构化事实校验，请人工复核全文`];
   }
 
   // ── 阶段二：确定性规则评估（无 LLM，可复现、可审计）──
@@ -284,6 +289,8 @@ export async function POST(req: NextRequest) {
         facts,
         ruleHits,
         uncertainties,
+        extractionFailed,
+        guardFlags,
         extractionMethod: extracted.extractionMethod,
         ocrUsed: extracted.ocrUsed,
         tables: extracted.tables,

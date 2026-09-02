@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Bell, ChevronDown, Cpu, Menu, Plus, Search } from "lucide-react";
 import { useEnterpriseStore } from "@/store/enterprise-store";
 
-const titles: Record<string, string> = { "/": "企业经营决策台", "/cases": "项目中心", "/documents": "资料研判", "/risk": "风险中心", "/research": "投研中心", "/rules": "规则库", "/models": "AI 模型中心", "/agents": "Agent 中心", "/workflows": "流程中心", "/assistant": "智能研判助手", "/deployment": "部署与合规准备" };
+const titles: Record<string, string> = { "/": "企业经营决策台", "/cases": "项目中心", "/documents": "资料研判", "/risk": "风险中心", "/research": "投研中心", "/rules": "规则库", "/models": "AI 模型中心", "/agents": "Agent 中心", "/workflows": "流程中心", "/assistant": "智能研判助手", "/governance": "治理与复核中心", "/deployment": "部署与合规准备" };
 const modules = Object.entries(titles).map(([href,label]) => ({ href,label }));
 
 export default function DashboardHeader({ onMenuToggle }: { onMenuToggle?: () => void }) {

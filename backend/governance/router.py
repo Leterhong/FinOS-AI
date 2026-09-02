@@ -9,6 +9,8 @@ import uuid
 from datetime import datetime, timezone
 
 import httpx
+import re
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
@@ -145,14 +147,21 @@ def _connector_out(row: EnterpriseConnector) -> dict:
     }
 
 
+# 与 src/security/prompt-guard.ts 保持同一套规则（锚定正则，避免「token」
+# 之类普通词误伤正常业务提问——如「分析 token 消耗」此前会被判为密钥外泄）。
+_GUARD_RULES: list[tuple[str, list[str]]] = [
+    ("instruction_override", [r"ignore\s+(all\s+)?previous", r"忽略(之前|以上)", r"覆盖系统", r"system\s*prompt"]),
+    ("secret_exfiltration", [r"输出.{0,12}(系统提示|密钥|环境变量|令牌|api.?key)", r"(reveal|print|show)\s+(your\s+)?(secret|api.?key)", r"系统提示词"]),
+    ("tool_escalation", [r"执行(命令|shell)", r"删除数据库", r"bypass\s+permission", r"调用(?!规则)\S{0,6}(工具|shell)"]),
+]
+
+
 def _guard_prompt(prompt: str) -> list[str]:
-    lowered = prompt.lower()
-    checks = {
-        "instruction_override": ("ignore previous", "忽略之前", "覆盖系统", "system prompt"),
-        "secret_exfiltration": ("api key", "密钥", "token", "环境变量", "reveal secret"),
-        "tool_escalation": ("执行命令", "shell", "删除数据库", "bypass permission"),
-    }
-    return [name for name, terms in checks.items() if any(term in lowered for term in terms)]
+    flags: list[str] = []
+    for name, patterns in _GUARD_RULES:
+        if any(re.search(pattern, prompt, re.IGNORECASE) for pattern in patterns):
+            flags.append(name)
+    return flags
 
 
 class OrganizationIn(BaseModel):
@@ -319,6 +328,9 @@ def classify_resource(body: ClassificationIn, request: Request, user: User = Dep
         row = db.get(EnterpriseCase, body.resourceId)
         if row is None or not can_access_case(db, user, row, "editor"):
             return fail("项目不存在", status_code=404)
+        # 降级到 public 会扩大可见面，必须 admin 审批；上调维持 editor 即可。
+        if body.classification == "public" and row.classification != "public" and not can_access_case(db, user, row, "admin"):
+            return fail("降级为 public 需要 admin 权限", status_code=403)
         row.classification = body.classification
         case, org_id = row, row.organization_id
     elif body.resourceType == "document":
@@ -357,9 +369,29 @@ def decide_review(review_id: str, body: ReviewDecisionIn, request: Request, user
     row = db.get(GovernanceReview, review_id)
     if row is None or not has_org_role(db, user, row.organization_id, "reviewer"):
         return fail("复核任务不存在", status_code=404)
+    # 职责分离：组织内存在其他复核人时，发起人不能审批自己的事项；
+    # 单人工作区（无其他成员）保留自审通道，但 decided_by/审计仍如实留痕。
+    if row.user_id == user.id:
+        member_count = len(db.scalars(
+            select(OrganizationMember).where(OrganizationMember.organization_id == row.organization_id)
+        ).all())
+        if member_count > 1:
+            return fail("组织内存在其他复核人，不能审批自己发起的复核事项", status_code=403)
     if row.status != "pending":
         return fail("该任务已经完成复核", status_code=409)
-    row.status, row.decided_by, row.decision_note, row.decided_at = body.status, body.decidedBy, body.note, _now()
+    # 原子流转：仅当仍处于 pending 时生效（并发双审批只会有一个命中）。
+    from sqlalchemy import update as _update
+
+    claimed = db.execute(
+        _update(GovernanceReview)
+        .where(GovernanceReview.id == row.id, GovernanceReview.status == "pending")
+        .values(status=body.status, decided_by=user.email[:120], decision_note=body.note, decided_at=_now())
+    ).rowcount
+    db.commit()
+    if not claimed:
+        return fail("该任务已经完成复核", status_code=409)
+    # decided_by 一律取服务端已认证身份，杜绝客户端伪造复核人。
+    row.decided_by = user.email[:120]
     record_governance_audit(db, user=user, action=f"review.{body.status}", resource_type=row.resource_type, resource_id=row.resource_id, organization_id=row.organization_id, case_id=row.case_id, details={"note": body.note[:500]}, request=request)
     db.commit()
     return ok(_review_out(row))

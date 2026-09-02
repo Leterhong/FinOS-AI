@@ -31,6 +31,14 @@ from backend.core.security import verify_password
 from backend.config import UPLOAD_DIR
 from backend.database import get_db
 from backend.document.models import Document
+from backend.enterprise.models import (
+    EnterpriseBrief,
+    EnterpriseCase,
+    EnterpriseDocument,
+    EnterpriseRisk,
+    EnterpriseRule,
+    EnterpriseTask,
+)
 from backend.financial.models import Asset, FinancialProfile, Transaction
 from backend.governance.models import (
     EnterpriseConnector,
@@ -125,6 +133,13 @@ _USER_SCOPED_MODELS = (
     ProjectGrant,
     OrganizationMember,
     Organization,
+    # 2.1 企业工作区六表——此前遗漏，删除账户后业务数据残留（合规硬要求）。
+    EnterpriseCase,
+    EnterpriseDocument,
+    EnterpriseRisk,
+    EnterpriseRule,
+    EnterpriseTask,
+    EnterpriseBrief,
 )
 
 

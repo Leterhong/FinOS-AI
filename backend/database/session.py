@@ -17,13 +17,24 @@ settings = get_settings()
 
 _connect_args = {}
 if settings.database_url.startswith("sqlite"):
-    _connect_args = {"check_same_thread": False}
+    # busy_timeout：并发写时的默认 0 等待会直接抛 database is locked。
+    _connect_args = {"check_same_thread": False, "timeout": 30}
 
 engine = create_engine(
     settings.database_url,
     connect_args=_connect_args,
     pool_pre_ping=True,
 )
+
+if settings.database_url.startswith("sqlite"):
+    from sqlalchemy import event as _event
+
+    @_event.listens_for(engine, "connect")
+    def _sqlite_pragma(dbapi_connection, _record):  # noqa: ANN001
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA busy_timeout=30000")
+        cursor.close()
 
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 

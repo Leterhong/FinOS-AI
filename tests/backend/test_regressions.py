@@ -12,19 +12,6 @@ from backend.core.metrics import normalize_endpoint
 from backend.intelligence.context import parse_goal_amount
 from backend.services.document.service import _parse_amount, confirm_document
 from backend.services.twin.service import _risk_score
-from backend.database import SessionLocal
-
-
-@pytest.fixture()
-def db_session():
-    """独立 DB 会话：与 TestClient 共用同一测试数据库。"""
-    session = SessionLocal()
-    try:
-        yield session
-    finally:
-        session.close()
-
-
 # ---------------------------------------------------------------- 网关同步封装
 def test_cfo_analyze_with_model_does_not_500(client, auth, user_a, db_session, monkeypatch):
     """此前 gen = gw_generate(...) 未 await 即取值，配置模型后必然 500。"""
