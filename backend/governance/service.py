@@ -5,6 +5,7 @@ import json
 from typing import Any
 
 from sqlalchemy import or_, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.enterprise.models import EnterpriseCase, EnterpriseRule
