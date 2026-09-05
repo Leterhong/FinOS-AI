@@ -7,6 +7,36 @@
 
 ---
 
+## [2.2.1] - 2026-09-02
+
+UI/UX 组件体系与用户旅程补全。
+
+### 新增
+
+- 全局命令面板（⌘K / Ctrl+K）：搜索项目、资料、风险、页面，建议动作随工作区状态变化
+- Evidence Chain UI：事实引用高亮与定位跳转（研判文本 + 表格单元格）
+- Sidebar 折叠态（图标栏 + Tooltip）与布局边距同步
+- AIProcessingState（compact/normal/detailed）与 AIExecutionTimeline 组件
+- ErrorState 五分类（Connection/Model/Permission/Validation/Processing）
+- 项目中心 Table/Board 双视图
+- 使用指引页面（/guide）与 docs/user-guide.md
+- Toast 五语义通知系统（success/info/warning/error/processing）
+
+### 修复
+
+- 本地 `npm run dev` 模式下后端 API 路由 404（添加 fallback rewrite 代理到 FastAPI）
+- 资料分析失败后永久卡在"解析中"（rehydration sweep 回收为"分析失败"）
+- deriveCaseProgress 不再覆盖用户手动设置的项目状态
+- 版本升级 persist migrate 不再清空用户数据
+
+### 设计系统
+
+- `--finos-*` CSS 令牌层成为唯一色彩来源（表面 / 文字 / 品牌 / AI / 风险五级）
+- 组件分层：ui / intelligence / evidence / feedback / workspace / data-display
+- Tailwind cyan-* 色阶重映射为 Wealth Green 渐变（全站品牌迁移）
+
+---
+
 ## [2.2.0] - 2026-09-01
 
 ### 企业治理与质量控制

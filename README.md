@@ -7,7 +7,7 @@
 让企业资料、经营事实、业务规则与外部研究进入同一条可追溯的研判链路，辅助团队完成资料理解、规则匹配、风险提示、投研整理和流程协作。
 
 [![CI](https://github.com/Leterhong/FinOS-AI/actions/workflows/ci.yml/badge.svg)](https://github.com/Leterhong/FinOS-AI/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/badge/release-2.2.0-38bdf8.svg)](./CHANGELOG.md)
+[![Release](https://img.shields.io/badge/release-2.2.1-38bdf8.svg)](./CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-22c55e.svg)](./LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6.svg)](https://www.typescriptlang.org/)
 [![Security Policy](https://img.shields.io/badge/security-policy-f59e0b.svg)](./SECURITY.md)
@@ -62,17 +62,21 @@ FinOS AI 2.2 已完成企业金融信息架构、可配置模型中心、AI 研�
 
 | 模块 | 解决的问题 |
 | --- | --- |
-| 经营决策台 | 统一观察项目、资料、风险、任务和 Agent 运行态 |
-| 项目中心 | 管理企业研判项目、行业、融资需求、负责人和推进阶段 |
-| 资料研判 | 汇集 PDF、Word、Excel、CSV、TXT，关联原文、事实与引用 |
-| 风险中心 | 按严重度聚合风险信号，展示规则、影响、证据和核验状态 |
-| 投研中心 | 整理行业、政策、企业与舆情材料，沉淀专题研究底稿 |
-| 规则库 | 管理准入、授信、并购、担保和供应链规则及版本状态 |
-| Agent 中心 | 编排资料理解、规则匹配、风险研判和投研整理 Agent |
-| 流程中心 | 创建并流转待处理、处理中、待复核和已完成任务 |
-| 智能研判助手 | 基于项目上下文回答问题，并给出证据和规则依据 |
-| AI 模型中心 | 服务端加密保存模型凭据，测试连通性、选择默认模型并进行真实调用验证 |
-| 企业治理 | 管理组织成员、五级角色、项目授权、数据密级、规则历史、复核队列、模型评测、连接器与审计观测 |
+| 经营决策台 | 统一观察项目、资料、风险、任务和 Agent 运行态；Priority Work 面板展示需要人工处理的事项 |
+| 项目中心 | 管理企业研判项目、行业、融资需求、负责人和推进阶段；支持 Table/Board 双视图 |
+| 资料研判 | 汇集 PDF、Word、Excel、CSV、TXT 和图片，事实台账逐条携带原文引用并支持定位高亮 |
+| 风险中心 | 按严重度聚合风险信号，结构化详情抽屉展示 What/Why/Evidence/Rule/Impact/Review/Traceability |
+| 投研中心 | 整理行业、政策、企业与舆情材料，沉淀专题研究底稿，支持复制为 Markdown |
+| 规则库 | 管理准入、授信、并购、担保和供应链规则；结构化条件 + Visual View 决策链 + 测试样本记录 |
+| Agent 中心 | 编排资料理解、规则匹配、风险研判和投研整理 Agent；每条运行可展开执行轨迹 |
+| 流程中心 | 研判流程全景（资料→分析→规则→风险→复核→交付）；看板流转 + 超期自动标红 |
+| 智能研判助手 | 基于项目上下文回答问题，流式输出；错误自动分类并给出可操作建议 |
+| AI 模型中心 | 三步接入向导；服务端加密保存凭据，测试连通性、选择默认模型和任务角色 |
+| 企业治理 | 管理组织成员（邀请确认制）、五级角色、项目授权、数据密级、规则历史、复核队列、模型评测、连接器与审计（Who/Action/Object/Result/Details 搜索与抽屉） |
+| 使用指引 | 内置 8 步交互指南 + 常见问题 + 快捷键 + 核心价值链可视化（`/guide`） |
+| 全局命令面板 | ⌘K/Ctrl+K 搜索项目、资料、风险、页面；建议动作随工作区状态变化 |
+
+> 📖 **首次使用？** 请查看内置 [使用指引](/guide) 或 [完整使用文档](./docs/user-guide.md)，按 8 个步骤完成从"上传资料"到"输出风险清单"的完整研判。
 
 ### 适用方向
 
@@ -85,7 +89,7 @@ FinOS AI 2.2 已完成企业金融信息架构、可配置模型中心、AI 研�
 
 ## 设计原则
 
-- **Evidence first**：重要判断必须能回到原始资料、事实字段和引用位置。
+- **Evidence first**：重要判断必须能回到原始资料、事实字段和引用位置；UI 提供 Evidence Chain（结论 → 事实 → 证据 → 来源）的逐级追溯。
 - **Human in the loop**：Agent 生成提示和草稿，关键决策由授权人员确认。
 - **Explainable rules**：展示规则命中原因、潜在影响、证据与处理状态。
 - **Secure by default**：密钥不进入前端，上传和出站访问经过安全边界。
@@ -109,6 +113,7 @@ Browser
 | 层 | 技术 |
 | --- | --- |
 | 前端 | Next.js 15、React 19、TypeScript strict、Tailwind CSS、Zustand、Framer Motion |
+| 设计系统 | `--finos-*` CSS 令牌（色彩 / 表面 / 动效）、组件分层（ui / intelligence / evidence / feedback / workspace / data-display） |
 | 后端 | FastAPI、SQLAlchemy 2、Pydantic v2、Uvicorn |
 | 文档处理 | `mammoth`（Word）、`pdf-parse`（PDF）、图片视觉 OCR、Excel/CSV 表格结构、证据行号/单元格/图像坐标 |
 | 数据 | SQLite、PostgreSQL 16、Redis 7 |
@@ -145,15 +150,13 @@ API Key 通过 HttpOnly 工作区会话隔离，在服务端使用 AES-256-GCM �
 
 要求：Python 3.11+。
 
-Windows PowerShell：
-
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
+.\.venv\Scripts\python.exe -m pip install -r backend
+equirements.txt
 .\.venv\Scripts\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8300 --reload
 
 # 另一个终端
-$env:NEXT_PUBLIC_BACKEND_URL = "http://127.0.0.1:8300"
 npm run dev
 ```
 
@@ -166,10 +169,12 @@ pip install -r backend/requirements.txt
 python -m uvicorn backend.main:app --host 127.0.0.1 --port 8300 --reload
 
 # 另一个终端
-NEXT_PUBLIC_BACKEND_URL=http://127.0.0.1:8300 npm run dev
+npm run dev
 ```
 
 后端健康检查：<http://127.0.0.1:8300/api/health>。
+
+> Next.js 已内置 fallback rewrite：所有未匹配到 Next.js 路由的 `/api/*` 请求自动代理到 `http://127.0.0.1:8300`，无需手动设置 `NEXT_PUBLIC_BACKEND_URL`。可通过 `BACKEND_PROXY_URL` 环境变量覆盖后端地址。
 
 ### Docker Compose
 
@@ -232,16 +237,24 @@ node tests/e2e/main-chain.mjs   # 端到端主链路（本地 mock LLM，需先 
 
 ```text
 FinOS-AI/
-├─ src/app/(dashboard)/       # 企业工作台、AI 模型中心与业务模块
-├─ src/app/api/enterprise/ai/ # 企业助手、Agent 与资料研判 AI 网关
+├─ src/app/(dashboard)/       # 企业工作台、模型中心、治理与业务模块（含 /guide 使用指引）
+├─ src/app/api/enterprise/ai/ # 企业助手、Agent 与资料研判 AI 网关（SSE 流式）
+├─ src/components/ui/         # 基础 UI 组件（Button、Badge、Tooltip）
 ├─ src/components/enterprise/ # 企业 UI 基础组件
-├─ src/store/                 # 工作区状态和业务操作
+├─ src/components/intelligence/ # AI 组件（ProcessingState、ExecutionTimeline）
+├─ src/components/evidence/   # 证据链组件（EvidenceReference、EvidenceChain）
+├─ src/components/feedback/   # 反馈组件（Toast、ErrorState）
+├─ src/components/workspace/  # 工作区组件（DetailDrawer）
+├─ src/components/data-display/ # 数据展示（EnterpriseDataTable）
+├─ src/store/                 # 工作区状态、业务操作与服务端同步
+├─ src/lib/rule-engine.ts     # 确定性规则引擎（纯函数，非 LLM）
 ├─ src/types/                 # TypeScript 业务模型
 ├─ backend/                   # FastAPI、数据库、安全与服务层
+│  ├─ enterprise/            # 企业对象持久化（6 表 CRUD + 快照）
 │  └─ governance/            # 组织权限、分级、复核、评测、连接器和可观测性
-├─ tests/                     # 前端、后端与 AI 回归测试
+├─ tests/                     # 前端契约、后端回归、规则引擎单测与端到端
 ├─ deploy/                    # Docker 与 nginx 配置
-└─ docs/                      # 架构、安全、API 与部署资料
+└─ docs/                      # 架构、安全、API、使用指引与部署资料
 ```
 
 ## 路线图
@@ -259,6 +272,7 @@ FinOS-AI/
 - [x] 完整规则变更历史与历史版本回放
 - [x] 模型评测集、细粒度提示词防护和生产级人机复核闭环
 - [x] 企业数据源连接器和可观测性体系
+- [x] 企业设计令牌体系、组件分层、Command Palette 与 Evidence Chain UI
 
 2.2 路线图已全部落地。后续迭代将以真实部署反馈、评测数据和合规要求驱动，不用预置演示数据扩充表面功能。
 
