@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo } from "react";
 import { ArrowRight, Bot, CheckCircle2, Cpu, FileSearch, FolderPlus, Scale, Sparkles, ShieldAlert, AlertTriangle, CalendarClock, Sparkle } from "lucide-react";
 import { EmptyStateCard, MetricCard, PageIntro, Panel, PanelHeader, RiskBadge, riskMeta } from "@/components/enterprise/EnterpriseUI";
+import { Button } from "@/components/ui/Button";
 import { useEnterpriseStore } from "@/store/enterprise-store";
 import { useModelStore } from "@/store/model-store";
 import { formatWhen } from "@/lib/relative-time";
@@ -87,7 +88,7 @@ export default function EnterpriseCommandCenter() {
       eyebrow="Enterprise intelligence workspace"
       title="企业经营与风险决策台"
       description="从空工作区开始接入真实项目、企业资料、业务规则和你自己的大模型。系统不预置企业、金额、风险或 AI 结论。"
-      actions={<Link href={activeModel?.configured ? "/assistant" : "/models"} className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]"><Sparkles className="h-3.5 w-3.5" />{activeModel?.configured ? "开始 AI 研判" : "配置 AI 模型"}</Link>}
+      actions={<Button variant="primary" href={activeModel?.configured ? "/assistant" : "/models"}><Sparkles className="h-3.5 w-3.5" />{activeModel?.configured ? "开始 AI 研判" : "配置 AI 模型"}</Button>}
     />
 
     <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">

@@ -11,6 +11,7 @@ import EnterpriseDialog from "@/components/enterprise/EnterpriseDialog";
 import { useActiveEnterpriseCase } from "@/hooks/use-active-enterprise-case";
 import { analyzeEnterpriseDocument } from "@/lib/enterprise-ai";
 import { AIProcessingState } from "@/components/intelligence/AIProcessingState";
+import { toast } from "@/components/feedback/toast";
 import { useEnterpriseStore } from "@/store/enterprise-store";
 import { useModelStore } from "@/store/model-store";
 import type { AnalysisDocument, EvidenceFact } from "@/types/enterprise";
@@ -54,7 +55,6 @@ export default function DocumentsPage() {
   const [focusedFactId, setFocusedFactId] = useState<string | null>(null);
   const active = useModelStore((state) => state.active);
   const [selected, setSelected] = useState<AnalysisDocument | null>(null);
-  const [notice, setNotice] = useState("");
   const [uploading, setUploading] = useState(false);
   const [failedUploads, setFailedUploads] = useState<Array<{ documentId: string; caseId: string; file: File }>>([]);
   const [reviewingFact, setReviewingFact] = useState<EvidenceFact | null>(null);
@@ -128,15 +128,14 @@ export default function DocumentsPage() {
       origin: "事实台账",
       factIds: [fact.id],
     });
-    setNotice(`已将事实「${fact.topic}」登记为待核验风险 ${risk.id}`);
+    toast.success(`已将事实「${fact.topic}」登记为待核验风险`);
   };
 
   const rerunRules = (document: AnalysisDocument) => {
     const outcome = rerunRulesForDocument(document.id);
     if (!outcome) return;
-    setNotice(outcome.total
-      ? `已用当前规则库对「${document.name}」重跑规则：${outcome.total} 条中命中 ${outcome.hits} 条`
-      : "规则库中暂无带触发条件的规则；请在规则页为规则补充「指标+阈值」条件后重试");
+    if (outcome.total) toast.success(`已重跑规则：${outcome.total} 条中命中 ${outcome.hits} 条`);
+    else toast.warning("规则库中暂无带触发条件的规则；请在规则页为规则补充「指标+阈值」条件后重试");
   };
 
   const copyAnalysis = (document: AnalysisDocument) => {
@@ -146,14 +145,14 @@ export default function DocumentsPage() {
     }
     const text = parts.filter(Boolean).join("\n\n");
     if (!text) return;
-    void navigator.clipboard?.writeText(text).then(() => setNotice("已复制研判结果为 Markdown 文本"));
+    void navigator.clipboard?.writeText(text).then(() => toast.success("已复制研判结果为 Markdown 文本"));
   };
 
   const removeDocument = (document: AnalysisDocument) => {
     if (!window.confirm(`确定删除资料「${document.name}」？将同时从云端移除。`)) return;
     deleteDocument(document.id);
     if (selected?.id === document.id) setSelected(null);
-    setNotice(`已删除资料「${document.name}」`);
+    toast.success(`已删除资料「${document.name}」`);
   };
 
   const upload = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -171,7 +170,7 @@ export default function DocumentsPage() {
       }
       const item = addDocument(file, caseId);
       setSelected(item);
-      setNotice(`正在分析 ${succeeded + failures.length + 1}/${files.length}：${file.name}`);
+      toast.processing(`正在分析 ${succeeded + failures.length + 1}/${files.length}：${file.name}`);
       try {
         const result = await analyzeEnterpriseDocument({ file, project, rules, onStage: (stage, state) => setStageState((current) => ({ ...current, [stage]: state })) });
         completeDocumentAnalysis(item.id, result.analysis, result.model, {
@@ -192,7 +191,8 @@ export default function DocumentsPage() {
       }
     }
     setUploading(false);
-    setNotice(`批量处理完成：${succeeded} 成功${failures.length ? `，${failures.length} 个失败：${failures.join("；")}` : "，全部等待人工复核"}`);
+    toast.success(`批量处理完成：${succeeded} 成功`);
+    if (failures.length) toast.error(`失败 ${failures.length} 个：${failures.join("；")}`);
   };
 
   const retryFailed = async () => {
@@ -205,7 +205,7 @@ export default function DocumentsPage() {
     const failures: string[] = [];
     for (const [index, item] of queue.entries()) {
       setSelected(documents.find((document) => document.id === item.documentId) ?? null);
-      setNotice(`正在重试 ${index + 1}/${queue.length}：${item.file.name}`);
+      toast.processing(`正在重试 ${index + 1}/${queue.length}：${item.file.name}`);
       try {
         const result = await analyzeEnterpriseDocument({ file: item.file, project, rules, onStage: (stage, state) => setStageState((current) => ({ ...current, [stage]: state })) });
         completeDocumentAnalysis(item.documentId, result.analysis, result.model, {
@@ -225,7 +225,8 @@ export default function DocumentsPage() {
       }
     }
     setUploading(false);
-    setNotice(`重试完成：${succeeded} 成功，${failures.length} 仍失败${failures.length ? `；${failures.join("；")}` : ""}`);
+    toast.success(`重试完成：${succeeded} 成功`);
+    if (failures.length) toast.error(`仍失败 ${failures.length} 个：${failures.join("；")}`);
   };
 
   const submitReview = (event: FormEvent<HTMLFormElement>) => {
@@ -242,7 +243,7 @@ export default function DocumentsPage() {
 
   return <div className="page-shell">
     <PageIntro eyebrow="AI document intelligence" title="企业资料研判" description="支持文本解析、图片 OCR、表格结构识别和真实行号/图像坐标，所有事实进入人工复核。单文件上限 10MB。" actions={<><input id="enterprise-document-upload" ref={fileRef} type="file" multiple accept=".pdf,.docx,.xlsx,.xls,.csv,.txt,.md,.json,.png,.jpg,.jpeg,.webp" onChange={(event) => void upload(event)} className="sr-only" aria-label="选择一份或多份企业资料文件" /><button type="button" onClick={() => fileRef.current?.click()} disabled={!canUpload} className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018] disabled:cursor-not-allowed disabled:opacity-40">{uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}{uploading ? "批量分析中" : "批量上传并分析"}</button></>} />
-    {notice && <div className="flex flex-col gap-2 rounded-xl border border-cyan-400/15 bg-cyan-400/[0.05] px-4 py-3 text-xs text-cyan-200 sm:flex-row sm:items-center"><p className="min-w-0 flex-1">{notice}</p>{failedUploads.some((item) => item.caseId === caseId) && <button type="button" onClick={() => void retryFailed()} disabled={uploading || !active?.configured} className="rounded-lg border border-cyan-300/20 px-3 py-1.5 text-[10px] disabled:opacity-40">重试当前项目失败项</button>}<button type="button" onClick={() => setNotice("")} className="text-[10px] text-slate-500 hover:text-slate-300">关闭</button></div>}
+    {failedUploads.some((item) => item.caseId === caseId) && <div className="flex flex-col gap-2 rounded-xl border border-amber-400/20 bg-amber-400/[0.05] px-4 py-3 text-xs text-amber-100 sm:flex-row sm:items-center"><p className="min-w-0 flex-1">有 {failedUploads.filter((item) => item.caseId === caseId).length} 份资料分析失败。</p><button type="button" onClick={() => void retryFailed()} disabled={uploading || !active?.configured} className="rounded-lg border border-amber-300/25 px-3 py-1.5 text-[10px] disabled:opacity-40">重试当前项目失败项</button></div>}
     <div className="grid gap-3 lg:grid-cols-[1fr_1fr]">
       <CaseContextSelector cases={cases} value={caseId} onChange={setCaseId} detail={`${projectDocuments.length} 份关联资料，仅本项目内容会进入分析`} />
       <div className="flex items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.025] p-3"><Cpu className={`h-4 w-4 ${active?.configured ? "text-emerald-300" : "text-amber-300"}`} /><div><p className="text-[10px] text-slate-500">资料分析模型</p><p className="mt-1 text-xs text-slate-200">{active?.configured ? `${active.displayName} · ${active.modelName}` : "尚未配置模型"}</p></div>{!active?.configured && <Link href="/models" className="ml-auto text-[10px] text-cyan-300">去配置</Link>}</div>

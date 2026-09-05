@@ -19,6 +19,7 @@ import {
   Zap,
 } from "lucide-react";
 import { PageIntro, Panel, PanelHeader } from "@/components/enterprise/EnterpriseUI";
+import { Button } from "@/components/ui/Button";
 import ModelFormDialog from "@/components/models/ModelFormDialog";
 import { PROVIDER_PRESETS } from "@/ai/model-center/providers/presets";
 import type { PublicProviderConfig } from "@/ai/model-center/types";
@@ -91,7 +92,7 @@ export default function ModelsPage() {
       eyebrow="Bring your own model"
       title="AI 模型中心"
       description="连接 OpenAI、DeepSeek、通义千问、Claude、Gemini、智谱、Kimi、Ollama 或任意 OpenAI 兼容服务。模型密钥只在服务端加密保存，不会返回浏览器。"
-      actions={<button onClick={openAdd} className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]"><Plus className="h-3.5 w-3.5" />添加模型</button>}
+      actions={<Button variant="primary" onClick={openAdd}><Plus className="h-3.5 w-3.5" />添加模型</Button>}
     />
 
     {error && <div role="alert" className="rounded-xl border border-rose-400/20 bg-rose-400/[0.06] px-4 py-3 text-xs text-rose-200">{error}</div>}

@@ -4,6 +4,7 @@ import { type FormEvent, useState } from "react";
 import { Download, CheckCircle2, Plus, ShieldAlert, ShieldCheck } from "lucide-react";
 import EnterpriseDialog from "@/components/enterprise/EnterpriseDialog";
 import DetailDrawer, { DrawerSection } from "@/components/workspace/DetailDrawer";
+import { Button } from "@/components/ui/Button";
 import { EmptyStateCard, PageIntro, Panel, RiskBadge, riskMeta } from "@/components/enterprise/EnterpriseUI";
 import { useEnterpriseStore } from "@/store/enterprise-store";
 import type { RiskLevel, RiskSignal } from "@/types/enterprise";
@@ -74,7 +75,7 @@ export default function RiskPage() {
     });
   };
   return <div className="page-shell">
-    <PageIntro eyebrow="Risk intelligence" title="企业风险中心" description="风险提示必须同时呈现事实证据、命中规则、潜在影响与核验状态，避免黑箱评分和无依据结论。" actions={<><button type="button" onClick={exportRisks} className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-300 hover:border-cyan-400/25 hover:text-cyan-200"><Download className="h-3.5 w-3.5" />{exported ? "已复制" : "复制风险清单"}</button><button disabled={cases.length === 0} onClick={() => setOpen(true)} className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018] disabled:cursor-not-allowed disabled:opacity-40"><Plus className="h-3.5 w-3.5" />登记风险</button></>} />
+    <PageIntro eyebrow="Risk intelligence" title="企业风险中心" description="风险提示必须同时呈现事实证据、命中规则、潜在影响与核验状态，避免黑箱评分和无依据结论。" actions={<><button type="button" onClick={exportRisks} className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-300 hover:border-cyan-400/25 hover:text-cyan-200"><Download className="h-3.5 w-3.5" />{exported ? "已复制" : "复制风险清单"}</button><Button variant="primary" disabled={cases.length === 0} onClick={() => setOpen(true)}><Plus className="h-3.5 w-3.5" />登记风险</Button></>} />
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{filters.map(([label, count, value]) => <button key={value} onClick={() => setLevel(value)} className={`rounded-xl border p-4 text-left transition ${level === value ? "border-cyan-300/25 bg-cyan-300/[0.07]" : "border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.04]"}`}><p className="text-xs text-slate-500">{label}</p><p className="numeric mt-2 text-2xl font-semibold text-white">{count}</p></button>)}</div>
     <Panel>
       <div className="divide-y divide-white/[0.07]">
