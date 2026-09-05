@@ -7,6 +7,7 @@ import EnterpriseDialog from "@/components/enterprise/EnterpriseDialog";
 import { EmptyStateCard, PageIntro, Panel } from "@/components/enterprise/EnterpriseUI";
 import { useEnterpriseStore } from "@/store/enterprise-store";
 import { evaluateRule, type FactCandidate } from "@/lib/rule-engine";
+import { toast } from "@/components/feedback/toast";
 import type { EnterpriseRule } from "@/types/enterprise";
 
 export default function RulesPage() {
@@ -41,6 +42,7 @@ export default function RulesPage() {
     addRule({ code: String(data.get("code")), name: String(data.get("name")), domain: String(data.get("domain")), version: String(data.get("version") || "v1.0"), conditions });
     setFormNotice("");
     setOpen(false);
+    toast.success(`规则 ${String(data.get("code"))} 已创建`);
   };
   const submitTest = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

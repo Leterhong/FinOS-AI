@@ -47,6 +47,7 @@ export default function ResearchPage() {
         context: { cases: [activeCase], documents: caseDocuments, rules, risks: caseRisks },
       });
       addBrief({ caseId: activeCase.id, topic, title: `${topic} · AI 研究底稿`, summary: result.answer, model: result.model });
+      toast.success("研究底稿已生成");
       setOpen(false);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "研究生成失败");
