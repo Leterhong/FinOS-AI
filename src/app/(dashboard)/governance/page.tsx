@@ -1,17 +1,18 @@
 "use client";
 
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { Activity, BookOpenCheck, Cable, History, Loader2, ShieldCheck, UsersRound } from "lucide-react";
+import { Activity, BookOpenCheck, Search, Cable, History, Loader2, ShieldCheck, UsersRound } from "lucide-react";
 import { EmptyStateCard, MetricCard, PageIntro, Panel, PanelHeader } from "@/components/enterprise/EnterpriseUI";
 import { governanceApi, governancePost } from "@/lib/governance-client";
 import EnterpriseDialog from "@/components/enterprise/EnterpriseDialog";
+import DetailDrawer, { DrawerSection } from "@/components/workspace/DetailDrawer";
 import { ensureWorkspaceSession } from "@/lib/workspace-session";
 import { useEnterpriseStore } from "@/store/enterprise-store";
 import type { DataClassification } from "@/types/enterprise";
 
 type Member = { id: string; userId?: string; email: string; role: string; clearance: string; status: string };
 type Grant = { id: string; caseId: string; userId: string; permission: string };
-type Audit = { id: string; action: string; resourceType: string; resourceId: string; caseId?: string; outcome: string; createdAt: string };
+type Audit = { id: string; action: string; resourceType: string; resourceId: string; caseId?: string; outcome: string; createdAt: string; ip?: string; userId?: string; operator?: string; details?: Record<string, unknown> };
 type Review = { id: string; caseId?: string; resourceType: string; resourceId: string; title: string; assignedRole: string; status: string; requestedBy: string; decidedBy?: string; decisionNote?: string; createdAt: string };
 type EvalCase = { id: string; name: string; prompt: string; expectedKeywords: string[]; forbiddenKeywords: string[] };
 type EvalRun = { id: string; evalCaseId: string; modelId: string; score: number; passed: boolean; guardFlags: string[]; reviewStatus: string; createdAt: string };
@@ -43,6 +44,8 @@ export default function GovernancePage() {
   const [decisionNote, setDecisionNote] = useState("");
   const [resourceType, setResourceType] = useState("risk");
   const [resourceId, setResourceId] = useState("");
+  const [auditQuery, setAuditQuery] = useState("");
+  const [auditDetail, setAuditDetail] = useState<Audit | null>(null);
   const [notice, setNotice] = useState("");
 
   const load = useCallback(async (organizationId?: string) => {
@@ -189,7 +192,27 @@ export default function GovernancePage() {
 
     {tab === "连接器" && <div className="grid gap-4 xl:grid-cols-[.8fr_1.2fr]"><Panel><PanelHeader eyebrow="Enterprise data sources" title="新增受控数据源" description="当前支持公网 JSON/CSV API；禁止内网、云元数据和自动重定向，凭据加密保存。" /><form onSubmit={submitConnector} className="space-y-3 p-5"><select required name="caseId" className="field-control">{organizationCases.map((item) => <option key={item.id} value={item.id}>{item.company} · {item.title}</option>)}</select><input required name="name" placeholder="数据源名称" className="field-control" /><select name="kind" className="field-control"><option value="json_api">JSON API</option><option value="csv_api">CSV API</option></select><input required name="sourceUrl" type="url" placeholder="https://data.example.com/report" className="field-control" /><input name="bearerToken" type="password" autoComplete="new-password" placeholder="Bearer Token（可选，仅服务端加密保存）" className="field-control" /><button disabled={!organizationCases.length} className="w-full rounded-xl bg-cyan-300 py-2.5 text-xs font-semibold text-[#041018] disabled:opacity-40">保存连接器</button></form></Panel><Panel><PanelHeader eyebrow="Sync & lineage" title="连接器运行状态" description="同步结果生成项目资料、继承密级并自动进入复核队列。" /><div className="divide-y divide-white/[0.06]">{snapshot?.connectors.length ? snapshot.connectors.map((item) => <div key={item.id} className="p-5"><div className="flex items-start gap-3"><Cable className="mt-0.5 h-4 w-4 text-cyan-300" /><div className="min-w-0 flex-1"><p className="text-xs text-slate-200">{item.name}</p><p className="mt-1 truncate text-[10px] text-slate-600">{item.sourceUrl}</p><p className={`mt-2 text-[10px] ${item.status === "connected" ? "text-emerald-300" : item.status === "failed" ? "text-rose-300" : "text-amber-300"}`}>{item.status}{item.lastSync?.recordCount !== undefined ? ` · ${item.lastSync.recordCount} 条` : ""}</p></div><button onClick={() => syncConnector(item)} disabled={busy === `connector-${item.id}`} className="rounded-lg border border-cyan-400/20 px-3 py-2 text-[10px] text-cyan-200">同步</button></div></div>) : <EmptyStateCard icon={Cable} title="尚无数据源" description="配置真实企业数据 API 后再发起同步，系统不会生成演示记录。" />}</div></Panel></div>}
 
-    {tab === "可观测性" && <div className="grid gap-4 lg:grid-cols-3"><Panel><PanelHeader eyebrow="API telemetry" title="请求观测" /><div className="p-5"><Activity className="h-5 w-5 text-cyan-300" /><p className="numeric mt-4 text-3xl text-white">{requestEndpoints}</p><p className="mt-2 text-xs text-slate-500">已归一化接口维度，记录调用数、错误率、平均与最大耗时。</p></div></Panel><Panel><PanelHeader eyebrow="AI telemetry" title="模型调用" /><div className="p-5"><p className="numeric text-3xl text-white">{observability?.ai.avgLatencyMs ?? 0} ms</p><p className="mt-2 text-xs text-slate-500">平均调用耗时 · 累计 {observability?.ai.tokens ?? 0} Token。</p></div></Panel><Panel><PanelHeader eyebrow="Control health" title="治理健康" /><div className="space-y-3 p-5 text-xs"><p className="flex justify-between text-slate-400"><span>待复核</span><span>{observability?.governance.pendingReviews ?? 0}</span></p><p className="flex justify-between text-slate-400"><span>失败连接器</span><span>{observability?.governance.failedConnectors ?? 0}</span></p><p className="flex justify-between text-slate-400"><span>审计事件</span><span>{observability?.governance.auditEvents ?? 0}</span></p></div></Panel><Panel className="lg:col-span-3"><PanelHeader eyebrow="Immutable trail" title="最近审计事件" description="企业对象、权限、分级、评测、复核和连接器操作统一留痕。" /><div className="divide-y divide-white/[0.06]">{snapshot?.audits.slice(0, 30).map((item) => <div key={item.id} className="grid gap-2 px-5 py-3 text-[10px] sm:grid-cols-[1.2fr_1fr_1fr_auto]"><span className="text-cyan-200">{item.action}</span><span className="text-slate-500">{item.resourceType}:{item.resourceId}</span><span className="text-slate-600">{item.caseId || "工作区级"}</span><span className={item.outcome === "success" ? "text-emerald-300" : "text-rose-300"}>{new Date(item.createdAt).toLocaleString("zh-CN")}</span></div>)}</div></Panel></div>}
+    {tab === "可观测性" && <div className="grid gap-4 lg:grid-cols-3"><Panel><PanelHeader eyebrow="API telemetry" title="请求观测" /><div className="p-5"><Activity className="h-5 w-5 text-cyan-300" /><p className="numeric mt-4 text-3xl text-white">{requestEndpoints}</p><p className="mt-2 text-xs text-slate-500">已归一化接口维度，记录调用数、错误率、平均与最大耗时。</p></div></Panel><Panel><PanelHeader eyebrow="AI telemetry" title="模型调用" /><div className="p-5"><p className="numeric text-3xl text-white">{observability?.ai.avgLatencyMs ?? 0} ms</p><p className="mt-2 text-xs text-slate-500">平均调用耗时 · 累计 {observability?.ai.tokens ?? 0} Token。</p></div></Panel><Panel><PanelHeader eyebrow="Control health" title="治理健康" /><div className="space-y-3 p-5 text-xs"><p className="flex justify-between text-slate-400"><span>待复核</span><span>{observability?.governance.pendingReviews ?? 0}</span></p><p className="flex justify-between text-slate-400"><span>失败连接器</span><span>{observability?.governance.failedConnectors ?? 0}</span></p><p className="flex justify-between text-slate-400"><span>审计事件</span><span>{observability?.governance.auditEvents ?? 0}</span></p></div></Panel><Panel className="lg:col-span-3"><PanelHeader eyebrow="Immutable trail" title="审计事件" description="Who / Action / Object / Result / Time 全量留痕；点击行查看完整详情。" action={<label className="flex h-8 items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] px-2.5"><Search className="h-3 w-3 text-slate-600" /><input value={auditQuery} onChange={(event) => setAuditQuery(event.target.value)} placeholder="搜索动作或对象" className="w-40 bg-transparent text-[10px] text-slate-200 outline-none placeholder:text-slate-700" /></label>} /><div className="divide-y divide-white/[0.06]">{(() => { const query = auditQuery.trim().toLowerCase(); const rows = (snapshot?.audits ?? []).filter((item) => !query || `${item.action}${item.resourceType}:${item.resourceId}${item.caseId ?? ""}`.toLowerCase().includes(query)); return rows.slice(0, 30).map((item) => <button key={item.id} type="button" onClick={() => setAuditDetail(item)} className="grid w-full gap-2 px-5 py-3 text-left text-[10px] transition hover:bg-white/[0.03] sm:grid-cols-[1.2fr_1fr_1fr_auto]"><span className="text-cyan-200">{item.action}</span><span className="text-slate-500">{item.resourceType}:{item.resourceId}</span><span className="text-slate-600">{item.caseId || "工作区级"}</span><span className={item.outcome === "success" ? "text-emerald-300" : "text-rose-300"}>{new Date(item.createdAt).toLocaleString("zh-CN")}</span></button>); })()}{snapshot && (snapshot.audits ?? []).length === 0 && <p className="px-5 py-8 text-center text-xs text-slate-600">当前组织暂无审计事件；或当前角色无审计查看权限。</p>}</div></Panel></div>}
+    <DetailDrawer
+      open={Boolean(auditDetail)}
+      onClose={() => setAuditDetail(null)}
+      title={auditDetail?.action ?? ""}
+      subtitle={auditDetail ? `${auditDetail.resourceType}:${auditDetail.resourceId}` : ""}
+    >
+      {auditDetail && <>
+        <DrawerSection label="Who · 操作者"><p>{auditDetail.operator || auditDetail.userId || "—"}</p></DrawerSection>
+        <DrawerSection label="Action · 动作"><p>{auditDetail.action}</p></DrawerSection>
+        <DrawerSection label="Object · 对象"><p>{auditDetail.resourceType}:{auditDetail.resourceId}{auditDetail.caseId ? `（项目 ${auditDetail.caseId}）` : ""}</p></DrawerSection>
+        <DrawerSection label="Result · 结果"><p className={auditDetail.outcome === "success" ? "text-emerald-300" : "text-rose-300"}>{auditDetail.outcome}</p></DrawerSection>
+        <DrawerSection label="When · 时间"><p>{new Date(auditDetail.createdAt).toLocaleString("zh-CN")}</p></DrawerSection>
+        <DrawerSection label="Source · 来源"><p className="font-mono text-[11px]">{auditDetail.ip || "—"}</p></DrawerSection>
+        {auditDetail.details && Object.keys(auditDetail.details).length > 0 && (
+          <DrawerSection label="Details · 变更明细">
+            <pre className="whitespace-pre-wrap break-all rounded-lg bg-black/30 p-3 font-mono text-[10px] leading-5 text-slate-400">{JSON.stringify(auditDetail.details, null, 2)}</pre>
+          </DrawerSection>
+        )}
+      </>}
+    </DetailDrawer>
     {!snapshot && busy !== "load" && <Panel><EmptyStateCard icon={ShieldCheck} title="治理服务尚未连接" description="请确认 FastAPI 服务可用；纯前端模式仍可使用研判功能，但组织权限与审计不会被错误标记为已启用。" /></Panel>}
     {busy && busy !== "load" && <div className="pointer-events-none fixed bottom-6 right-6 flex items-center gap-2 rounded-xl border border-cyan-400/20 bg-[#07111d] px-4 py-3 text-xs text-cyan-100 shadow-2xl"><Loader2 className="h-4 w-4 animate-spin" />正在执行治理操作</div>}
     <EnterpriseDialog open={Boolean(deciding)} onClose={() => setDeciding(null)} title={deciding?.status === "approved" ? "批准复核事项" : "驳回复核事项"} description="复核依据将进入不可篡改留痕；复核人身份由系统记录，无需手填。">

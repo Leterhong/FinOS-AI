@@ -30,6 +30,27 @@
     --brand-a: #22e6a8;
     --brand-b: #18bff2;
     --brand-c: #3b82f6;
+
+    /* ── FinOS Enterprise Design Tokens（2.2 组件体系唯一色彩来源）──
+       页面与组件一律引用这些变量，禁止直接书写十六进制色值。 */
+    --finos-bg: #080A0D;
+    --finos-surface: #0E1116;
+    --finos-surface-elevated: #141820;
+    --finos-surface-hover: #1A1F28;
+    --finos-border: rgba(255, 255, 255, 0.08);
+    --finos-text-primary: #F5F7FA;
+    --finos-text-secondary: #A7AFBC;
+    --finos-text-muted: #747D8C;
+    --finos-brand: #19C37D;
+    --finos-brand-dark: #0E9F63;
+    --finos-ai: #4C8DFF;
+    --finos-risk-critical: #FF4D4F;
+    --finos-risk-high: #FF7A45;
+    --finos-risk-medium: #F6C344;
+    --finos-risk-low: #4C8DFF;
+    --finos-risk-resolved: #19C37D;
+    --finos-duration-fast: 150ms;
+    --finos-duration-normal: 200ms;
     --font-sans-local: "Segoe UI Variable", "PingFang SC", "Microsoft YaHei UI", "Noto Sans CJK SC", system-ui, sans-serif;
     --font-mono-local: "Cascadia Code", "SFMono-Regular", Consolas, ui-monospace, monospace;
   }
@@ -39,7 +60,7 @@
   }
 
   html {
-    background: #08090B;
+    background: var(--finos-bg);
     color: #F8FAFC;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -48,7 +69,7 @@
   }
 
   body {
-    background: #08090B;
+    background: var(--finos-bg);
     min-height: 100vh;
     overflow-x: hidden;
     font-family: var(--font-sans-local);

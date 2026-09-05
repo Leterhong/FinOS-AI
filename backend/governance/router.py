@@ -234,6 +234,8 @@ def governance_snapshot(organizationId: str | None = None, auditLimit: int = 200
     is_reviewer = has_org_role(db, user, org.id, "reviewer")
     safe_audit_limit = max(1, min(int(auditLimit), 200))
     members = list(db.scalars(select(OrganizationMember).where(OrganizationMember.organization_id == org.id))) if is_reviewer else []
+    # 审计的 Who：把 user_id 解析为组织成员邮箱（owner 视角可见）。
+    email_by_user = {m.user_id: m.email for m in members if m.user_id}
     grants = list(db.scalars(select(ProjectGrant).where(ProjectGrant.organization_id == org.id)))
     audits = list(db.scalars(select(GovernanceAudit).where(GovernanceAudit.organization_id == org.id).order_by(GovernanceAudit.created_at.desc()).limit(safe_audit_limit))) if is_reviewer else []
     reviews = list(db.scalars(select(GovernanceReview).where(GovernanceReview.organization_id == org.id).order_by(GovernanceReview.created_at.desc()).limit(200)))
@@ -253,7 +255,7 @@ def governance_snapshot(organizationId: str | None = None, auditLimit: int = 200
         "organization": _org_out(org), "members": [_member_out(x) for x in members],
         "organizations": organizations,
         "grants": [_grant_out(x) for x in grants],
-        "audits": [{"id": x.id, "action": x.action, "resourceType": x.resource_type, "resourceId": x.resource_id, "caseId": x.case_id, "outcome": x.outcome, "details": _json(x.details_json, {}), "ip": x.ip, "createdAt": x.created_at.isoformat()} for x in audits],
+        "audits": [{"id": x.id, "action": x.action, "resourceType": x.resource_type, "resourceId": x.resource_id, "caseId": x.case_id, "outcome": x.outcome, "details": _json(x.details_json, {}), "ip": x.ip, "userId": x.user_id, "operator": email_by_user.get(x.user_id, "系统/未知"), "createdAt": x.created_at.isoformat()} for x in audits],
         "reviews": [_review_out(x) for x in reviews], "evalCases": [_eval_case_out(x) for x in eval_cases],
         "evalRuns": [_eval_run_out(x) for x in eval_runs], "connectors": [_connector_out(x) for x in connectors],
     })

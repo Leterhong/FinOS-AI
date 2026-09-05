@@ -13,29 +13,29 @@ const config: Config = {
         // ── FinOS AI 设计令牌（Enterprise Financial Intelligence）──
         // Wealth Green：品牌主色（正向 / 完成 / 主 CTA）
         wealth: {
-          DEFAULT: "#19C37D",
-          dark: "#0E9F63",
+          DEFAULT: "var(--finos-brand)",
+          dark: "var(--finos-brand-dark)",
           soft: "rgba(25,195,125,0.10)",
         },
         // Intelligence Blue：AI / Agent / 分析中
         intel: {
-          DEFAULT: "#4C8DFF",
+          DEFAULT: "var(--finos-ai)",
           soft: "rgba(76,141,255,0.10)",
         },
         // 风险语义五级（与 RiskBadge 一致）
         riskcolor: {
-          critical: "#FF4D4F",
-          high: "#FF7A45",
-          medium: "#F6C344",
-          low: "#4C8DFF",
-          resolved: "#19C37D",
+          critical: "var(--finos-risk-critical)",
+          high: "var(--finos-risk-high)",
+          medium: "var(--finos-risk-medium)",
+          low: "var(--finos-risk-low)",
+          resolved: "var(--finos-risk-resolved)",
         },
-        // 分层表面：canvas → panel → surface → elevated → hover
-        canvas: "#08090B",
-        panel: "#0D0F12",
-        sheet: "#101216",
-        elevated: "#15181D",
-        hoverline: "#1A1E24",
+        // 分层表面与语义色：全部引用 --finos-* 令牌（2.2 组件体系唯一色彩来源）
+        canvas: "var(--finos-bg)",
+        panel: "var(--finos-surface)",
+        sheet: "var(--finos-surface)",
+        elevated: "var(--finos-surface-elevated)",
+        hoverline: "var(--finos-surface-hover)",
         // cyan-* 工具类整体重映射为 Wealth Green 色阶：
         // 历史页面无差别使用 cyan-*/blue-* 作为强调色，重映射即可完成
         // 全站品牌迁移而不必逐处改 JSX。
