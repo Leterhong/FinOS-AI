@@ -17,7 +17,7 @@ export default function CaseContextSelector({
   if (!cases.length) return null;
   const active = cases.find((item) => item.id === value) ?? cases[0];
   return (
-    <section className="flex flex-col gap-3 rounded-2xl border border-cyan-400/15 bg-cyan-400/[0.045] p-4 sm:flex-row sm:items-center">
+    <section className="flex flex-col gap-3 rounded-xl border border-cyan-400/15 bg-cyan-400/[0.045] p-4 sm:flex-row sm:items-center">
       <div className="flex min-w-0 flex-1 items-center gap-3">
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-cyan-400/15 bg-cyan-400/[0.07]">
           <BriefcaseBusiness className="h-4 w-4 text-cyan-300" />

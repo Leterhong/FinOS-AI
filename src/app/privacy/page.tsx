@@ -45,7 +45,7 @@ export default function PrivacyPage() {
           <Logo size={36} />
         </div>
 
-        <div className="glass rounded-2xl p-8 md:p-10">
+        <div className="glass rounded-xl p-8 md:p-10">
           <div className="mb-6 flex items-center gap-3">
             <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-brand shadow-glow-blue">
               <ShieldCheck className="h-5 w-5 text-white" />

@@ -150,7 +150,7 @@ export default function ModelFormDialog({ open, onClose, editing }: Props) {
         >
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
           <motion.div
-            className="relative z-10 w-full max-w-lg rounded-2xl glass border border-white/10 p-6 text-white max-h-[90vh] overflow-y-auto"
+            className="relative z-10 w-full max-w-lg rounded-xl glass border border-white/10 p-6 text-white max-h-[90vh] overflow-y-auto"
             role="dialog"
             aria-modal="true"
             aria-labelledby="model-form-title"

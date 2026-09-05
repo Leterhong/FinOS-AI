@@ -4,7 +4,7 @@
 
 @layer base {
   :root {
-    --background: #040810;
+    --background: #08090B;
     --foreground: #F8FAFC;
     --card: rgba(255, 255, 255, 0.05);
     --card-foreground: #F8FAFC;
@@ -22,8 +22,8 @@
     --destructive-foreground: #FFFFFF;
     --border: rgba(255, 255, 255, 0.08);
     --input: rgba(255, 255, 255, 0.08);
-    --ring: #0EA5E9;
-    --radius: 1rem;
+    --ring: #19C37D;
+    --radius: 0.75rem;
     --surface-1: rgba(255, 255, 255, 0.035);
     --surface-2: rgba(255, 255, 255, 0.065);
     --surface-3: rgba(255, 255, 255, 0.1);
@@ -39,7 +39,7 @@
   }
 
   html {
-    background: #040810;
+    background: #08090B;
     color: #F8FAFC;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -48,7 +48,7 @@
   }
 
   body {
-    background: #040810;
+    background: #08090B;
     min-height: 100vh;
     overflow-x: hidden;
     font-family: var(--font-sans-local);

@@ -10,6 +10,35 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // ── FinOS AI 设计令牌（Enterprise Financial Intelligence）──
+        // Wealth Green：品牌主色（正向 / 完成 / 主 CTA）
+        wealth: {
+          DEFAULT: "#19C37D",
+          dark: "#0E9F63",
+          soft: "rgba(25,195,125,0.10)",
+        },
+        // Intelligence Blue：AI / Agent / 分析中
+        intel: {
+          DEFAULT: "#4C8DFF",
+          soft: "rgba(76,141,255,0.10)",
+        },
+        // 风险语义五级（与 RiskBadge 一致）
+        riskcolor: {
+          critical: "#FF4D4F",
+          high: "#FF7A45",
+          medium: "#F6C344",
+          low: "#4C8DFF",
+          resolved: "#19C37D",
+        },
+        // 分层表面：canvas → panel → surface → elevated → hover
+        canvas: "#08090B",
+        panel: "#0D0F12",
+        sheet: "#101216",
+        elevated: "#15181D",
+        hoverline: "#1A1E24",
+        // cyan-* 工具类整体重映射为 Wealth Green 色阶：
+        // 历史页面无差别使用 cyan-*/blue-* 作为强调色，重映射即可完成
+        // 全站品牌迁移而不必逐处改 JSX。
         midnight: "#05070A",
         surface: {
           DEFAULT: "#11151B",
@@ -35,6 +64,22 @@ const config: Config = {
           warnGlow: "rgba(245,158,11,0.25)",
         },
       },
+        cyan: {
+          50: "#ECF9F3",
+          100: "#D3F4E6",
+          200: "#A9EBD2",
+          300: "#7FE3BD",
+          400: "#4CD79F",
+          500: "#19C37D",
+          600: "#0E9F63",
+          700: "#0C7A4E",
+          800: "#0A5C3B",
+          900: "#07422B",
+        },
+        blue: {
+          400: "#4C8DFF",
+          500: "#3F7BEE",
+        },
       fontFamily: {
         sans: ["var(--font-sans-local)"],
         mono: ["var(--font-mono-local)"],

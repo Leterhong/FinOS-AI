@@ -1,10 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Bot, CheckCircle2, Cpu, FileSearch, FolderPlus, Scale, Sparkles } from "lucide-react";
-import { EmptyStateCard, MetricCard, PageIntro, Panel, PanelHeader, RiskBadge } from "@/components/enterprise/EnterpriseUI";
+import { useMemo } from "react";
+import { ArrowRight, Bot, CheckCircle2, Cpu, FileSearch, FolderPlus, Scale, Sparkles, ShieldAlert, AlertTriangle, CalendarClock, Sparkle } from "lucide-react";
+import { EmptyStateCard, MetricCard, PageIntro, Panel, PanelHeader, RiskBadge, riskMeta } from "@/components/enterprise/EnterpriseUI";
 import { useEnterpriseStore } from "@/store/enterprise-store";
 import { useModelStore } from "@/store/model-store";
+import { formatWhen } from "@/lib/relative-time";
+
+const LEVEL_ORDER: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
 
 export default function EnterpriseCommandCenter() {
   const cases = useEnterpriseStore((state) => state.cases);
@@ -12,12 +16,71 @@ export default function EnterpriseCommandCenter() {
   const agents = useEnterpriseStore((state) => state.agents);
   const documents = useEnterpriseStore((state) => state.documents);
   const rules = useEnterpriseStore((state) => state.rules);
+  const tasks = useEnterpriseStore((state) => state.tasks);
   const activeModel = useModelStore((state) => state.active);
 
   const highRisks = risks.filter((item) => item.level === "critical" || item.level === "high");
   const completedSetup = [cases.length > 0, documents.length > 0, Boolean(activeModel?.configured)].filter(Boolean).length;
   const averageProgress = cases.length ? Math.round(cases.reduce((sum, item) => sum + item.progress, 0) / cases.length) : 0;
   const setupReady = completedSetup === 3;
+
+  // Priority Work：需要人工处理的真实事项（待核验风险 / 分析失败资料 / 超期任务）。
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const priorityItems = useMemo(() => {
+    const items: Array<{ key: string; href: string; level: string; title: string; detail: string; when: string; cta: string }> = [];
+    for (const risk of risks.filter((item) => item.status === "待核验")) {
+      items.push({
+        key: risk.id, href: "/risk", level: risk.level,
+        title: `${risk.company} · ${risk.title}`,
+        detail: `候选风险待人工核验 · 规则依据：${risk.rule || "待补充"}`,
+        when: risk.verifiedAt || "", cta: "去核验",
+      });
+    }
+    for (const document of documents.filter((item) => item.status === "分析失败")) {
+      items.push({
+        key: document.id, href: "/documents", level: "high",
+        title: `资料分析失败：${document.name}`,
+        detail: document.error || "分析在会话结束前未完成，可删除后重新上传",
+        when: document.uploadedAt, cta: "去处理",
+      });
+    }
+    for (const task of tasks.filter((item) => item.stage !== "已完成" && /^\d{4}-\d{2}-\d{2}$/.test(item.due) && item.due < todayIso)) {
+      items.push({
+        key: task.id, href: "/workflows", level: "medium",
+        title: `任务已超期：${task.title}`,
+        detail: `${task.caseName || "未关联项目"} · 负责人 ${task.assignee || "待指派"}`,
+        when: task.due, cta: "去推进",
+      });
+    }
+    return items
+      .sort((a, b) => (LEVEL_ORDER[a.level] ?? 9) - (LEVEL_ORDER[b.level] ?? 9))
+      .slice(0, 6);
+  }, [risks, documents, tasks, todayIso]);
+
+  // AI Intelligence Feed：AI 近期真实产出（Agent 运行 + 已解析资料）。
+  const aiFeed = useMemo(() => {
+    const entries: Array<{ key: string; title: string; detail: string; when: string; href: string }> = [];
+    for (const run of agents) {
+      if (run.status !== "已完成") continue;
+      entries.push({
+        key: run.id, href: "/agents",
+        title: `AI 完成研判：${run.task}`,
+        detail: `${run.duration} · ${run.model || "未记录模型"} · ${(run.output || "").slice(0, 80)}`,
+        when: run.createdAt,
+      });
+    }
+    for (const document of documents.filter((item) => item.status === "已解析")) {
+      entries.push({
+        key: document.id, href: "/documents",
+        title: `AI 解析资料：${document.name}`,
+        detail: `抽取 ${document.facts || 0} 条事实 · 规则命中 ${document.ruleHits || 0} 条 · ${document.model || ""}`,
+        when: document.uploadedAt,
+      });
+    }
+    return entries
+      .sort((a, b) => (Date.parse(b.when) || 0) - (Date.parse(a.when) || 0))
+      .slice(0, 5);
+  }, [agents, documents]);
 
   return <div className="page-shell">
     <PageIntro
@@ -33,6 +96,33 @@ export default function EnterpriseCommandCenter() {
       <MetricCard label="风险信号" value={String(risks.length)} detail={`${highRisks.length} 项高风险`} accent="rose" />
       <MetricCard label="平均完整度" value={`${averageProgress}%`} detail={`${rules.length} 条业务规则`} accent="emerald" />
     </div>
+
+    {priorityItems.length > 0 && <Panel>
+      <PanelHeader eyebrow="Priority work" title="需要你处理" description="按风险等级排序的待办事项；全部来自当前工作区的真实状态。" action={<span className="text-[10px] text-slate-600">{priorityItems.length} 项</span>} />
+      <div className="divide-y divide-white/[0.06]">
+        {priorityItems.map((item) => {
+          const meta = riskMeta[item.level as keyof typeof riskMeta];
+          const Icon = item.level === "medium" ? CalendarClock : item.href === "/documents" ? AlertTriangle : ShieldAlert;
+          return <Link key={item.key} href={item.href} className="flex items-center gap-3 px-5 py-3.5 transition hover:bg-white/[0.025]">
+            <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg border ${meta.className}`}><Icon className="h-4 w-4" /></span>
+            <span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium text-slate-200">{item.title}</span><span className="mt-0.5 block truncate text-[10px] text-slate-600">{item.detail}</span></span>
+            {item.when && <span className="hidden shrink-0 text-[10px] text-slate-600 sm:block">{formatWhen(item.when)}</span>}
+            <span className="shrink-0 text-[10px] text-cyan-300">{item.cta}<ArrowRight className="ml-1 inline h-3 w-3" /></span>
+          </Link>;
+        })}
+      </div>
+    </Panel>}
+
+    {aiFeed.length > 0 && <Panel>
+      <PanelHeader eyebrow="AI intelligence feed" title="AI 近期动态" description="AI 在当前工作区真实完成的分析与研判。" action={<Link href="/agents" className="flex items-center gap-1 text-xs text-cyan-300">Agent 中心<ArrowRight className="h-3 w-3" /></Link>} />
+      <div className="divide-y divide-white/[0.06]">
+        {aiFeed.map((entry) => <Link key={entry.key} href={entry.href} className="flex items-start gap-3 px-5 py-3.5 transition hover:bg-white/[0.025]">
+          <Sparkle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-wealth" />
+          <span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium text-slate-200">{entry.title}</span><span className="mt-0.5 block truncate text-[10px] text-slate-600">{entry.detail}</span></span>
+          {entry.when && <span className="shrink-0 text-[10px] text-slate-600">{formatWhen(entry.when)}</span>}
+        </Link>)}
+      </div>
+    </Panel>}
 
     <Panel className="relative bg-gradient-to-r from-[#0b1825] to-[#08111c]">
       <div className="absolute right-0 top-0 h-64 w-64 rounded-full bg-cyan-400/[0.05] blur-3xl" />
