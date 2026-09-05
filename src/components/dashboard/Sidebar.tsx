@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect } from "react";
-import { LayoutDashboard, BriefcaseBusiness, Files, ShieldAlert, ChartNoAxesCombined, Scale, Bot, Workflow, MessageSquareText, X, Cpu, Building2, ShieldCheck, XCircle, CheckCircle2, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { LayoutDashboard, BriefcaseBusiness, Files, ShieldAlert, ChartNoAxesCombined, Scale, Bot, Workflow, MessageSquareText, X, Cpu, Building2, ShieldCheck, XCircle, CheckCircle2, PanelLeftClose, PanelLeftOpen, BookOpenCheck } from "lucide-react";
 import Logo from "@/components/brand/Logo";
 import { cn } from "@/lib/utils";
 import { useEnterpriseStore } from "@/store/enterprise-store";
@@ -33,6 +33,7 @@ const groups = [
     { href: "/governance", label: "企业治理", icon: ShieldCheck },
     { href: "/models", label: "AI 模型中心", icon: Cpu },
     { href: "/deployment", label: "部署与合规", icon: Building2 },
+    { href: "/guide", label: "使用指引", icon: BookOpenCheck },
   ]},
 ];
 
