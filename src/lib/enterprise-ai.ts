@@ -146,15 +146,21 @@ export async function streamEnterpriseAI(
   return { answer, model, provider: "user", latencyMs, usage };
 }
 
+export type DocumentStage = "parse" | "facts" | "rules" | "narrative";
+
 export async function analyzeEnterpriseDocument(input: {
   file: File;
   project: unknown;
   rules: unknown[];
+  /** 提供时走流式模式，按真实管线阶段回调（parse/facts/rules/narrative）。 */
+  onStage?: (stage: DocumentStage, state: "active" | "done") => void;
 }): Promise<{
   analysis: string;
   facts: DocumentFact[];
   ruleHits: DocumentRuleHit[];
   uncertainties?: string[];
+  extractionFailed?: boolean;
+  guardFlags?: string[];
   extractionMethod?: "text" | "ocr" | "table";
   ocrUsed?: boolean;
   tables?: DocumentTable[];
@@ -166,13 +172,21 @@ export async function analyzeEnterpriseDocument(input: {
   form.set("file", input.file);
   form.set("project", JSON.stringify(input.project));
   form.set("rules", JSON.stringify(input.rules));
-  const response = await fetch("/api/enterprise/ai/document", {
+  const streaming = Boolean(input.onStage);
+  const response = await fetch(`/api/enterprise/ai/document${streaming ? "?stream=1" : ""}`, {
     method: "POST",
     credentials: "same-origin",
     body: form,
   });
+  if (streaming) {
+    if (!response.ok || !response.body) {
+      const errorPayload = await response.json().catch(() => null) as { error?: string } | null;
+      throw new Error(errorPayload?.error || "资料 AI 分析失败");
+    }
+    return await consumeStageStream(response.body!, input.onStage!);
+  }
   const payload = await response.json().catch(() => null) as
-    | { result?: { analysis: string; facts?: DocumentFact[]; ruleHits?: DocumentRuleHit[]; uncertainties?: string[]; extractionMethod?: "text" | "ocr" | "table"; ocrUsed?: boolean; tables?: DocumentTable[]; model: string; latencyMs: number }; error?: string }
+    | { result?: { analysis: string; facts?: DocumentFact[]; ruleHits?: DocumentRuleHit[]; uncertainties?: string[]; extractionFailed?: boolean; guardFlags?: string[]; extractionMethod?: "text" | "ocr" | "table"; ocrUsed?: boolean; tables?: DocumentTable[]; model: string; latencyMs: number }; error?: string }
     | null;
   if (!response.ok || !payload?.result) {
     throw new Error(payload?.error || "资料 AI 分析失败");
@@ -182,10 +196,84 @@ export async function analyzeEnterpriseDocument(input: {
     facts: payload.result.facts ?? [],
     ruleHits: payload.result.ruleHits ?? [],
     uncertainties: payload.result.uncertainties ?? [],
+    extractionFailed: payload.result.extractionFailed,
+    guardFlags: payload.result.guardFlags,
     extractionMethod: payload.result.extractionMethod,
     ocrUsed: payload.result.ocrUsed,
     tables: payload.result.tables ?? [],
     model: payload.result.model,
     latencyMs: payload.result.latencyMs,
   };
+}
+
+/** 解析分阶段 SSE：{stage,state} 进度事件 + 最终 {result} 或 {error}。 */
+async function consumeStageStream(
+  body: ReadableStream<Uint8Array>,
+  onStage: (stage: DocumentStage, state: "active" | "done") => void
+): Promise<{
+  analysis: string;
+  facts: DocumentFact[];
+  ruleHits: DocumentRuleHit[];
+  uncertainties?: string[];
+  extractionFailed?: boolean;
+  guardFlags?: string[];
+  extractionMethod?: "text" | "ocr" | "table";
+  ocrUsed?: boolean;
+  tables?: DocumentTable[];
+  model: string;
+  latencyMs: number;
+}> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let failure: string | null = null;
+  let final: {
+    analysis: string;
+    facts: DocumentFact[];
+    ruleHits: DocumentRuleHit[];
+    uncertainties?: string[];
+    extractionFailed?: boolean;
+    guardFlags?: string[];
+    extractionMethod?: "text" | "ocr" | "table";
+    ocrUsed?: boolean;
+    tables?: DocumentTable[];
+    model: string;
+    latencyMs: number;
+  } | null = null;
+
+  const handleEvent = (raw: string) => {
+    if (!raw.startsWith("data:")) return;
+    try {
+      const event = JSON.parse(raw.slice(5).trim()) as {
+        stage?: DocumentStage;
+        state?: "active" | "done";
+        result?: { analysis: string; facts?: DocumentFact[]; ruleHits?: DocumentRuleHit[]; uncertainties?: string[]; extractionFailed?: boolean; guardFlags?: string[]; extractionMethod?: "text" | "ocr" | "table"; ocrUsed?: boolean; tables?: DocumentTable[]; model: string; latencyMs: number };
+        error?: string;
+      };
+      if (event.stage && event.state) onStage(event.stage, event.state);
+      if (event.result) {
+        final = {
+          ...event.result,
+          facts: event.result.facts ?? [],
+          ruleHits: event.result.ruleHits ?? [],
+        };
+      }
+      if (event.error) failure = event.error;
+    } catch {
+      // 忽略非 JSON 心跳行
+    }
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) handleEvent(line.trim());
+  }
+  if (buffer) handleEvent(buffer.trim());
+  if (failure) throw new Error(failure);
+  if (!final) throw new Error("资料 AI 分析未返回结果");
+  return final;
 }

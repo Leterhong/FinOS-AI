@@ -1,0 +1,150 @@
+import path from "node:path";
+import { NextRequest, NextResponse } from "next/server";
+import * as mammoth from "mammoth";
+import { getSessionUserId } from "@/auth/session";
+import { resolveActiveModel } from "@/ai/model-center/models/resolver";
+import { ModelStoreDecryptError } from "@/ai/model-center/models/store";
+import { evaluateRules, type FactCandidate, type StructuredRule } from "@/lib/rule-engine";
+import { OpenAICompatibleProvider } from "@/ai/model-center/providers/OpenAICompatibleProvider";
+import { parseForAnalysis } from "@/multimodal/parser";
+import { inspectPrompt, promptGuardInstruction, redactPromptSecrets } from "@/security/prompt-guard";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+const MAX_FILE_BYTES = 10 * 1024 * 1024;
+const MAX_TEXT_CHARS = 60_000;
+const MAX_FACTS = 40;
+const ALLOWED_EXTENSIONS = new Set([".pdf", ".docx", ".xlsx", ".xls", ".csv", ".txt", ".md", ".json", ".png", ".jpg", ".jpeg", ".webp"]);
+const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp"]);
+
+interface ExtractedTable {
+  name: string;
+  headers: string[];
+  rows: Array<Record<string, string | number | boolean | null>>;
+  sheet?: string;
+  range?: string;
+}
+
+interface ExtractionBundle {
+  text: string;
+  extractionMethod: "text" | "ocr" | "table";
+  ocrUsed: boolean;
+  tables: ExtractedTable[];
+  blocks: Array<{ text: string; page: number; bbox: [number, number, number, number] }>;
+}
+
+type LocatedFact = FactCandidate & {
+  coordinate?: { page?: number; line?: number; bbox?: [number, number, number, number]; sheet?: string; cell?: string; row?: number; column?: number };
+};
+
+/** 多编码解码：中文 Excel 导出的 CSV 常为 GBK/GB18030，不能只按 UTF-8 硬解。 */
+function decodeText(content: Buffer): string {
+  try {
+    // utf8 对非法字节静默替换，先用严格解码探测是否真的是 UTF-8。
+    return new TextDecoder("utf-8", { fatal: true }).decode(content).replace(/^\uFEFF/, "");
+  } catch {
+    // 非 UTF-8：Node 的 TextDecoder 支持 gb18030，按中文业务场景优先尝试。
+    try {
+      return new TextDecoder("gb18030").decode(content);
+    } catch {
+      return content.toString("latin1");
+    }
+  }
+}
+
+/** PDF 提取：pdf-parse（完整 CMap/编码支持）优先，失败时退回内置提取器。 */
+async function extractPdf(fileName: string, content: Buffer): Promise<string> {
+  try {
+    const mod = (await import("pdf-parse")) as unknown as {
+      default?: (b: Buffer) => Promise<{ text: string }>;
+    };
+    const pdfParse =
+      mod.default ?? (mod as unknown as (b: Buffer) => Promise<{ text: string }>);
+    const result = await pdfParse(content);
+    if (result.text.trim()) return result.text;
+  } catch {
+    // 解析失败退回内置提取器，由上层「未提取到文本」兜底提示 OCR。
+  }
+  return parseForAnalysis(fileName, content).text;
+}
+
+function recordsToTable(name: string, records: Array<{ fields: Record<string, string> }>): ExtractedTable[] {
+  if (!records.length) return [];
+  const headers = [...new Set(records.slice(0, 200).flatMap((record) => Object.keys(record.fields)))].slice(0, 100);
+  return [{ name, sheet: "Sheet1", headers, rows: records.slice(0, 500).map((record) => record.fields) }];
+}
+
+async function extractImageWithVision(
+  provider: OpenAICompatibleProvider,
+  modelId: string,
+  file: File,
+  content: Buffer,
+): Promise<ExtractionBundle> {
+  const mime = file.type || (file.name.toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg");
+  const response = await provider.generate({
+    messages: [{
+      role: "user",
+      content: "识别企业资料图片",
+      parts: [
+        { type: "text", text: "你是企业资料 OCR 与表格识别引擎。只输出 JSON：{\"text\":\"按阅读顺序的全文\",\"blocks\":[{\"text\":\"原文块\",\"page\":1,\"bbox\":[x,y,width,height]}],\"tables\":[{\"name\":\"表名\",\"headers\":[\"列名\"],\"rows\":[{\"列名\":\"值\"}],\"range\":\"图片区域\"}]}。bbox 使用 0 到 1 的归一化坐标；看不清的内容留空，禁止猜测。" },
+        { type: "image_url", image_url: { url: `data:${mime};base64,${content.toString("base64")}` } },
+      ],
+    }],
+    model: modelId,
+    temperature: 0,
+    maxTokens: 4096,
+    responseFormat: "json",
+    signal: AbortSignal.timeout(90_000),
+  });
+  const parsed = JSON.parse(response.content || "{}") as {
+    text?: string;
+    blocks?: Array<{ text?: string; page?: number; bbox?: number[] }>;
+    tables?: ExtractedTable[];
+  };
+  const blocks = (Array.isArray(parsed.blocks) ? parsed.blocks : [])
+    .filter((block) => typeof block.text === "string" && block.text.trim() && Array.isArray(block.bbox) && block.bbox.length === 4 && block.bbox.every((value) => typeof value === "number" && value >= 0 && value <= 1))
+    .slice(0, 500)
+    .map((block) => ({ text: String(block.text), page: Number(block.page) || 1, bbox: block.bbox as [number, number, number, number] }));
+  const text = String(parsed.text || blocks.map((block) => block.text).join("\n")).trim();
+  const tables = (Array.isArray(parsed.tables) ? parsed.tables : []).filter((table) => table && Array.isArray(table.headers) && Array.isArray(table.rows)).slice(0, 30);
+  return { text, extractionMethod: "ocr", ocrUsed: true, tables, blocks };
+}
+
+async function extractContent(file: File, content: Buffer, extension: string): Promise<ExtractionBundle> {
+  if (extension === ".docx") {
+    const result = await mammoth.extractRawText({ buffer: content });
+    return { text: result.value, extractionMethod: "text", ocrUsed: false, tables: [], blocks: [] };
+  }
+  if (extension === ".pdf") {
+    return { text: await extractPdf(file.name, content), extractionMethod: "text", ocrUsed: false, tables: [], blocks: [] };
+  }
+  if ([".xlsx", ".xls"].includes(extension)) {
+    const parsed = parseForAnalysis(file.name, content);
+    return {
+      text: parsed.text.trim() || (parsed.records.length ? JSON.stringify(parsed.records.slice(0, 500)) : ""),
+      extractionMethod: "table",
+      ocrUsed: false,
+      tables: recordsToTable(file.name, parsed.records),
+      blocks: [],
+    };
+  }
+  const text = decodeText(content);
+  const parsed = extension === ".csv" || extension === ".json" ? parseForAnalysis(file.name, content) : null;
+  return {
+    text,
+    extractionMethod: parsed?.records.length ? "table" : "text",
+    ocrUsed: false,
+    tables: parsed ? recordsToTable(file.name, parsed.records) : [],
+    blocks: [],
+  };
+}
+
+function locateQuote(text: string, quote: string): { line: number } | undefined {
+  const index = text.indexOf(quote);
+  if (index < 0) return undefined;
+  let line = 1;
+  for (let cursor = 0; cursor < index; cursor += 1) if (text.charCodeAt(cursor) === 10) line += 1;
+  return { line };
+}
+
