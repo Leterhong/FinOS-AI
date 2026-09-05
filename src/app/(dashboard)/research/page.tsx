@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
+import { toast } from "@/components/feedback/toast";
 import { formatWhen } from "@/lib/relative-time";
 import Link from "next/link";
 import { BookOpenCheck, Cpu, FileSearch, Loader2, SearchCheck, Sparkles } from "lucide-react";
@@ -64,7 +65,7 @@ export default function ResearchPage() {
 
 ${brief.summary}
 
-（由 ${brief.model || "AI"} 生成，需人工复核；不构成投资、授信、法律、审计或合规意见）`).then(() => setCopiedId(brief.id))} className="mt-3 rounded-lg border border-white/10 px-2.5 py-1.5 text-[10px] text-slate-400 hover:border-cyan-400/25 hover:text-cyan-200">{copiedId === brief.id ? "已复制" : "复制为 Markdown"}</button></article>)}</div>}</Panel>
+（由 ${brief.model || "AI"} 生成，需人工复核；不构成投资、授信、法律、审计或合规意见）`).then(() => { setCopiedId(brief.id); toast.success("已复制研究底稿"); })} className="mt-3 rounded-lg border border-white/10 px-2.5 py-1.5 text-[10px] text-slate-400 hover:border-cyan-400/25 hover:text-cyan-200">{copiedId === brief.id ? "已复制" : "复制为 Markdown"}</button></article>)}</div>}</Panel>
       <div className="space-y-4"><Panel><PanelHeader eyebrow="Research context" title="当前项目内部资料" /><div className="grid grid-cols-2 gap-2 p-4">{[["当前项目",activeCase ? 1 : 0],["项目资料",caseDocuments.length],["全局规则",rules.length],["项目风险",caseRisks.length]].map(([label,value]) => <div key={String(label)} className="rounded-xl border border-white/[0.07] p-3 text-center"><p className="numeric text-xl text-white">{value}</p><p className="mt-1 text-[9px] text-slate-600">{label}</p></div>)}</div></Panel><Panel><PanelHeader eyebrow="Source policy" title="来源策略" /><div className="space-y-3 p-4">{[[FileSearch,"内部资料","仅使用当前企业项目实际存在的资料元数据"],[SearchCheck,"外部来源","未接数据源时只给检索建议，不虚构结果"]].map(([Icon,title,text]) => { const ItemIcon = Icon as typeof FileSearch; return <div key={String(title)} className="rounded-xl border border-white/[0.07] p-3"><ItemIcon className="h-4 w-4 text-cyan-300" /><p className="mt-2 text-xs text-slate-200">{String(title)}</p><p className="mt-1 text-[10px] leading-5 text-slate-600">{String(text)}</p></div>; })}</div></Panel></div>
     </div>
     <EnterpriseDialog open={open} onClose={() => !generating && setOpen(false)} title="生成 AI 专题研究" description="模型只使用当前企业项目上下文，不会自动联网搜索">
