@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import Sidebar from "@/components/dashboard/Sidebar";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import { useEnterpriseStore } from "@/store/enterprise-store";
+import { useUiStore } from "@/store/ui-store";
 import { ToastViewport } from "@/components/feedback/toast";
 
 /** 同步状态徽标：让部署者一眼确认服务端持久化是否生效。 */
@@ -28,6 +29,7 @@ export default function DashboardLayout({
 }) {
   const pathname = usePathname();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const sidebarCollapsed = useUiStore((state) => state.sidebarCollapsed);
 
   useEffect(() => {
     setMobileNavOpen(false);
@@ -66,7 +68,7 @@ export default function DashboardLayout({
         <Sidebar open={mobileNavOpen} onClose={() => setMobileNavOpen(false)} />
         {/* Phase 7.5 #359：左边距与 Sidebar 宽度联动（w-60 / xl:w-64），
             并按视口收敛内边距，1366×768 笔记本不再出现横向滚动。 */}
-        <main className="flex h-screen min-w-0 flex-col overflow-hidden px-3 py-3 md:px-5 md:py-4 lg:ml-60 xl:ml-64 xl:px-7 xl:py-6 2xl:px-8">
+        <main className={`flex h-screen min-w-0 flex-col overflow-hidden px-3 py-3 md:px-5 md:py-4 ${sidebarCollapsed ? 'lg:ml-[4.25rem]' : 'lg:ml-60 xl:ml-64'} xl:px-7 xl:py-6 2xl:px-8`}>
           <div className="mx-auto flex h-full w-full min-w-0 max-w-[1600px] flex-col">
             <DashboardHeader onMenuToggle={() => setMobileNavOpen(true)} />
             <div className="scrollbar-thin flex min-h-0 flex-1 flex-col overflow-y-auto pr-1">
