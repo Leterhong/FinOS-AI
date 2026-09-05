@@ -1,5 +1,8 @@
 import type { NextConfig } from "next";
 
+// 后端 FastAPI 地址：本地 dev 直连 8300，Docker 内 nginx 已代理无需 rewrite。
+const BACKEND_URL = process.env.BACKEND_PROXY_URL || "http://127.0.0.1:8300";
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
@@ -19,6 +22,21 @@ const nextConfig: NextConfig = {
   // Docker 生产镜像使用 standalone 产物；本地生产预览保持标准输出，
   // 这样 `npm start` 与 Next.js 的官方启动方式一致。
   output: process.env.FINOS_STANDALONE === "1" ? "standalone" : undefined,
+  async rewrites() {
+    return {
+      // fallback rewrite：仅当请求没有匹配到任何 Next.js 路由时才代理到后端。
+      // 这让本地 `npm run dev` 不依赖 nginx 即可调用 FastAPI 后端
+      // （企业持久化 /api/enterprise/*、治理 /api/governance/*、
+      //   认证 /api/auth/* 等全部走这里）。
+      // Docker 部署下 nginx 已做同源代理，此 rewrite 是无操作。
+      fallback: [
+        {
+          source: "/api/:path*",
+          destination: `${BACKEND_URL}/api/:path*`,
+        },
+      ],
+    };
+  },
   async redirects() {
     return [
       { source: "/login", destination: "/", permanent: true },
