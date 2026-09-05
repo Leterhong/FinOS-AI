@@ -14,7 +14,7 @@ aiosqlite>=0.20
 pypdf>=5.0
 openpyxl>=3.1
 python-docx>=1.1
-Pillow>=10.4
+Pillow>=12.3.0
 pytest>=8.3
 # PostgreSQL 生产环境驱动
 psycopg2-binary>=2.9
