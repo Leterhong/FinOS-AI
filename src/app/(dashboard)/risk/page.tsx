@@ -4,6 +4,7 @@ import { type FormEvent, useState } from "react";
 import { Download, CheckCircle2, Plus, ShieldAlert, ShieldCheck } from "lucide-react";
 import EnterpriseDialog from "@/components/enterprise/EnterpriseDialog";
 import DetailDrawer, { DrawerSection } from "@/components/workspace/DetailDrawer";
+import { EvidenceReference } from "@/components/evidence/EvidenceReference";
 import { Button } from "@/components/ui/Button";
 import { EmptyStateCard, PageIntro, Panel, RiskBadge, riskMeta } from "@/components/enterprise/EnterpriseUI";
 import { useEnterpriseStore } from "@/store/enterprise-store";
@@ -100,6 +101,13 @@ export default function RiskPage() {
         </DrawerSection>
         <DrawerSection label="Evidence · 证据">
           <p>「{drawerRisk.evidence}」</p>
+          <div className="mt-2">
+            <EvidenceReference
+              documentName={drawerRisk.company}
+              location={drawerRisk.rule || undefined}
+              onLocate={undefined}
+            />
+          </div>
           {drawerRisk.factIds?.length ? <p className="mt-1 text-[10px] text-slate-600">关联事实：{drawerRisk.factIds.join("、")}</p> : null}
         </DrawerSection>
         <DrawerSection label="Matched Rule · 命中规则">
