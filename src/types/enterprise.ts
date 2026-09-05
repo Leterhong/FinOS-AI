@@ -77,8 +77,8 @@ export interface RiskSignal {
   verifiedBy?: string;
   verifiedAt?: string;
   mitigationNote?: string;
+  updatedAt?: string;
 }
-
 export interface AnalysisDocument {
   id: string;
   caseId: string;
@@ -136,8 +136,8 @@ export interface WorkflowTask {
   caseId?: string;
   note?: string;
   history?: WorkflowEvent[];
+  updatedAt?: string;
 }
-
 export interface WorkflowEvent {
   id: string;
   action: string;

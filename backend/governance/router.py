@@ -23,7 +23,7 @@ from backend.core.metrics import snapshot as metrics_snapshot
 from backend.core.response import fail
 from backend.core.security import decrypt_secret, encrypt_secret
 from backend.database import get_db
-from backend.enterprise.models import EnterpriseCase, EnterpriseDocument, EnterpriseRule
+from backend.enterprise.models import EnterpriseCase, EnterpriseDocument, EnterpriseRisk, EnterpriseRule
 from backend.governance.models import (
     EnterpriseConnector,
     GovernanceAudit,
@@ -170,7 +170,7 @@ class OrganizationIn(BaseModel):
 
 
 class MemberIn(BaseModel):
-    email: str = Field(min_length=5, max_length=255)
+    email: str = Field(min_length=5, max_length=255, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
     role: str = "viewer"
     clearance: str = "internal"
     organizationId: str | None = Field(default=None, max_length=32)
@@ -227,12 +227,15 @@ class ConnectorIn(BaseModel):
 
 
 @router.get("/snapshot")
-def governance_snapshot(organizationId: str | None = None, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def governance_snapshot(organizationId: str | None = None, auditLimit: int = 200, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     org, memberships = _organization_context(db, user, organizationId)
     db.commit()
-    members = list(db.scalars(select(OrganizationMember).where(OrganizationMember.organization_id == org.id)))
+    # 审计明细（含 IP）与成员名册仅对 reviewer 及以上开放；viewer 看不到他人审计与邮箱。
+    is_reviewer = has_org_role(db, user, org.id, "reviewer")
+    safe_audit_limit = max(1, min(int(auditLimit), 200))
+    members = list(db.scalars(select(OrganizationMember).where(OrganizationMember.organization_id == org.id))) if is_reviewer else []
     grants = list(db.scalars(select(ProjectGrant).where(ProjectGrant.organization_id == org.id)))
-    audits = list(db.scalars(select(GovernanceAudit).where(GovernanceAudit.organization_id == org.id).order_by(GovernanceAudit.created_at.desc()).limit(200)))
+    audits = list(db.scalars(select(GovernanceAudit).where(GovernanceAudit.organization_id == org.id).order_by(GovernanceAudit.created_at.desc()).limit(safe_audit_limit))) if is_reviewer else []
     reviews = list(db.scalars(select(GovernanceReview).where(GovernanceReview.organization_id == org.id).order_by(GovernanceReview.created_at.desc()).limit(200)))
     eval_cases = list(db.scalars(select(ModelEvalCase).where(ModelEvalCase.organization_id == org.id).order_by(ModelEvalCase.created_at.desc())))
     eval_runs = list(db.scalars(select(ModelEvalRun).where(ModelEvalRun.organization_id == org.id).order_by(ModelEvalRun.created_at.desc()).limit(100)))
@@ -276,13 +279,33 @@ def add_member(body: MemberIn, request: Request, user: User = Depends(get_curren
     target = db.scalar(select(User).where(User.email == email))
     row = db.scalar(select(OrganizationMember).where(OrganizationMember.organization_id == org.id, OrganizationMember.email == email))
     if row is None:
-        row = OrganizationMember(organization_id=org.id, user_id=target.id if target else None, email=email)
+        # 邀请需本人确认：新成员一律先置 invited，由匹配邮箱的登录用户接受后生效，
+        # 避免管理员填写他人邮箱即可静默授予数据访问权。
+        row = OrganizationMember(organization_id=org.id, user_id=target.id if target else None, email=email, status="invited")
         db.add(row)
-    row.role, row.clearance, row.status = body.role, body.clearance, "active"
+    elif row.status != "active":
+        row.status = "invited"
+    row.role, row.clearance = body.role, body.clearance
     db.flush()
-    record_governance_audit(db, user=user, action="member.upsert", resource_type="member", resource_id=row.id, organization_id=org.id, details={"email": email, "role": body.role, "clearance": body.clearance}, request=request)
+    record_governance_audit(db, user=user, action="member.upsert", resource_type="member", resource_id=row.id, organization_id=org.id, details={"email": email, "role": body.role, "clearance": body.clearance, "status": row.status}, request=request)
     db.commit()
-    return ok(_member_out(row), "成员权限已保存" if target else "邀请已保存，用户注册后自动生效")
+    return ok(_member_out(row), "成员权限已保存" if row.status == "active" else "邀请已保存；待成员本人登录确认后生效")
+
+
+@router.post("/members/{member_id}/accept")
+def accept_invite(member_id: str, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """受邀成员本人登录确认：仅当邀请邮箱与当前账号一致时激活。"""
+    row = db.get(OrganizationMember, member_id)
+    if row is None or row.email != user.email.strip().lower():
+        return fail("邀请不存在或与当前账号不符", status_code=404)
+    if row.status == "active":
+        return ok(_member_out(row))
+    row.status = "active"
+    if not row.user_id:
+        row.user_id = user.id
+    record_governance_audit(db, user=user, action="member.accept", resource_type="member", resource_id=row.id, organization_id=row.organization_id, details={"email": row.email}, request=request)
+    db.commit()
+    return ok(_member_out(row), "邀请已接受，组织权限已生效")
 
 
 @router.delete("/members/{member_id}")
@@ -355,6 +378,12 @@ def create_review(body: ReviewIn, request: Request, user: User = Depends(get_cur
         if case is None or not can_access_case(db, user, case, "editor"):
             return fail("项目不存在", status_code=404)
         org = db.get(Organization, case.organization_id) or org
+    # 引用资源必须真实存在（risk/document/evaluation 可校验；report/workflow 为动态产物），
+    # 否则会形成永久悬挂的待复核项。
+    if body.resourceType in {"risk", "document", "evaluation"}:
+        model = {"risk": EnterpriseRisk, "document": EnterpriseDocument, "evaluation": ModelEvalRun}[body.resourceType]
+        if db.get(model, body.resourceId) is None:
+            return fail("引用的资源不存在", status_code=422)
     row = GovernanceReview(organization_id=org.id, user_id=user.id, case_id=body.caseId, resource_type=body.resourceType, resource_id=body.resourceId, title=body.title, assigned_role=body.assignedRole, requested_by=body.requestedBy)
     db.add(row)
     record_governance_audit(db, user=user, action="review.request", resource_type=body.resourceType, resource_id=body.resourceId, organization_id=org.id, case_id=body.caseId, request=request)
@@ -390,6 +419,11 @@ def decide_review(review_id: str, body: ReviewDecisionIn, request: Request, user
     db.commit()
     if not claimed:
         return fail("该任务已经完成复核", status_code=409)
+    # 评测运行的生命周期状态与复核结论保持同步（此前是永远 pending 的死字段）。
+    if row.resource_type == "evaluation":
+        eval_run = db.get(ModelEvalRun, row.resource_id)
+        if eval_run is not None:
+            eval_run.review_status = body.status
     # decided_by 一律取服务端已认证身份，杜绝客户端伪造复核人。
     row.decided_by = user.email[:120]
     record_governance_audit(db, user=user, action=f"review.{body.status}", resource_type=row.resource_type, resource_id=row.resource_id, organization_id=row.organization_id, case_id=row.case_id, details={"note": body.note[:500]}, request=request)
@@ -505,6 +539,23 @@ def create_connector(body: ConnectorIn, request: Request, user: User = Depends(g
     case = db.get(EnterpriseCase, body.caseId)
     if case is None or not can_access_case(db, user, case, "editor"):
         return fail("项目不存在", status_code=404)
+    # 创建时做语法级校验（scheme/凭证/私网 IP 字面量）；完整 DNS 解析与
+    # 公网校验在同步时执行——本机 DNS 差异不应阻塞保存合法地址。
+    from urllib.parse import urlparse as _urlparse
+
+    parsed = _urlparse(body.sourceUrl.strip())
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        return fail("数据源地址仅支持有效的 HTTP/HTTPS 地址", status_code=422)
+    if parsed.username or parsed.password:
+        return fail("数据源地址不能包含用户名或密码", status_code=422)
+    import ipaddress as _ipaddress
+
+    try:
+        host_ip = _ipaddress.ip_address(parsed.hostname)
+    except ValueError:
+        host_ip = None
+    if host_ip and (host_ip.is_private or host_ip.is_link_local or host_ip.is_loopback or host_ip.is_reserved):
+        return fail("数据源地址不允许指向本机、内网或保留地址", status_code=422)
     row = EnterpriseConnector(organization_id=case.organization_id, user_id=user.id, case_id=case.id, name=body.name, kind=body.kind, source_url=body.sourceUrl.strip(), secret_encrypted=encrypt_secret(body.bearerToken) if body.bearerToken else "")
     db.add(row)
     db.flush()

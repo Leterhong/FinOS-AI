@@ -44,13 +44,22 @@ def test_legacy_enterprise_records_are_backfilled_to_default_organization(client
         assert db.get(EnterpriseRule, "RULE-LEGACY").organization_id == organization_id
 
 
-def test_project_grant_and_clearance_are_enforced(client, user_a, user_b):
-    case_id = _case(client, user_a["headers"], classification="restricted")
+
+def _invite_and_accept(client, owner_headers, target: dict, role: str = "reviewer", clearance: str = "internal") -> dict:
+    """新契约：邀请 → 本人确认后才生效。"""
     member = client.post(
         "/api/governance/members",
-        json={"email": user_b["email"], "role": "reviewer", "clearance": "internal"},
-        headers=user_a["headers"],
+        json={"email": target["email"], "role": role, "clearance": clearance},
+        headers=owner_headers,
     ).json()["data"]
+    accepted = client.post(f"/api/governance/members/{member['id']}/accept", headers=target["headers"])
+    assert accepted.status_code == 200, accepted.text
+    return accepted.json()["data"]
+
+
+def test_project_grant_and_clearance_are_enforced(client, user_a, user_b):
+    case_id = _case(client, user_a["headers"], classification="restricted")
+    member = _invite_and_accept(client, user_a["headers"], user_b, role="reviewer", clearance="internal")
     assert member["userId"] == user_b["user"]["id"]
     assert client.post(
         "/api/governance/grants",
@@ -60,11 +69,7 @@ def test_project_grant_and_clearance_are_enforced(client, user_a, user_b):
     hidden = client.get("/api/enterprise/snapshot", headers=user_b["headers"]).json()["data"]
     assert not any(item["id"] == case_id for item in hidden["cases"]), "低于项目密级的成员不得读取项目"
 
-    assert client.post(
-        "/api/governance/members",
-        json={"email": user_b["email"], "role": "reviewer", "clearance": "restricted"},
-        headers=user_a["headers"],
-    ).status_code == 200
+    _invite_and_accept(client, user_a["headers"], user_b, role="reviewer", clearance="restricted")
     visible = client.get("/api/enterprise/snapshot", headers=user_b["headers"]).json()["data"]
     assert any(item["id"] == case_id for item in visible["cases"])
     denied = client.post(
@@ -96,6 +101,8 @@ def test_member_can_switch_into_an_authorized_organization(client, user_a, user_
         headers=user_a["headers"],
     )
     assert invited.status_code == 200
+    member_id = invited.json()["data"]["id"]
+    assert client.post(f"/api/governance/members/{member_id}/accept", headers=user_b["headers"]).status_code == 200
 
     own = client.get("/api/governance/snapshot", headers=user_b["headers"]).json()["data"]
     assert any(item["id"] == organization_id and item["role"] == "reviewer" for item in own["organizations"])
@@ -134,9 +141,15 @@ def test_rule_history_replay_and_audit_trail(client, user_a):
 
 def test_review_requires_decision_note_and_is_immutable_after_decision(client, user_a):
     case_id = _case(client, user_a["headers"])
+    risk_id = f"RISK-{uuid.uuid4().hex[:8]}"
+    assert client.post(
+        "/api/enterprise/risks",
+        json={"id": risk_id, "caseId": case_id, "company": "治理测试企业", "title": "被引用风险", "level": "high", "evidence": "证据", "rule": "规则", "impact": "影响"},
+        headers=user_a["headers"],
+    ).status_code == 200
     created = client.post(
         "/api/governance/reviews",
-        json={"caseId": case_id, "resourceType": "risk", "resourceId": "RISK-1", "title": "复核高风险线索", "requestedBy": "分析师"},
+        json={"caseId": case_id, "resourceType": "risk", "resourceId": risk_id, "title": "复核高风险线索", "requestedBy": "分析师"},
         headers=user_a["headers"],
     ).json()["data"]
     decision = client.post(
@@ -209,9 +222,16 @@ def test_connector_sync_creates_classified_document_and_review(client, user_a, m
 def test_review_decision_ignores_spoofed_decided_by(client, user_a):
     """decided_by 由服务端已认证身份写入，客户端伪造值被忽略（单人组织允许自审，但留痕真实）。"""
     case_id = _case(client, user_a["headers"])
+    risk_id = f"RISK-{uuid.uuid4().hex[:8]}"
+    created_risk = client.post(
+        "/api/enterprise/risks",
+        json={"id": risk_id, "caseId": case_id, "company": "治理测试企业", "title": "被引用风险", "level": "high", "evidence": "证据", "rule": "规则", "impact": "影响"},
+        headers=user_a["headers"],
+    )
+    assert created_risk.status_code == 200, created_risk.text
     created = client.post(
         "/api/governance/reviews",
-        json={"caseId": case_id, "resourceType": "risk", "resourceId": "RISK-X", "title": "审批测试", "requestedBy": "发起人"},
+        json={"caseId": case_id, "resourceType": "risk", "resourceId": risk_id, "title": "审批测试", "requestedBy": "发起人"},
         headers=user_a["headers"],
     ).json()["data"]
     decision = client.post(
@@ -223,3 +243,58 @@ def test_review_decision_ignores_spoofed_decided_by(client, user_a):
     body = decision.json()["data"]
     assert body["decidedBy"] != "伪造审批人"
     assert body["decidedBy"]  # 服务端写入的已认证身份
+
+
+def test_member_invite_requires_acceptance_before_access(client, user_a, user_b):
+    """邀请必须由本人确认后才生效——管理员填邮箱不能静默授予数据访问权。"""
+    case_id = _case(client, user_a["headers"])
+    org_id = client.get("/api/governance/snapshot", headers=user_a["headers"]).json()["data"]["organization"]["id"]
+    invited = client.post(
+        "/api/governance/members",
+        json={"email": user_b["email"], "role": "viewer", "clearance": "internal"},
+        headers=user_a["headers"],
+    ).json()["data"]
+    assert invited["status"] == "invited"
+
+    # 未确认前：B 定向访问 A 的组织 → 404（B 只有自己的默认组织）
+    before = client.get(f"/api/governance/snapshot?organizationId={org_id}", headers=user_b["headers"])
+    assert before.status_code == 404, before.status_code
+
+    # B 本人确认（邮箱匹配才允许）
+    accepted = client.post(f"/api/governance/members/{invited['id']}/accept", headers=user_b["headers"])
+    assert accepted.status_code == 200, accepted.text
+    assert accepted.json()["data"]["status"] == "active"
+
+    after = client.get(f"/api/governance/snapshot?organizationId={org_id}", headers=user_b["headers"])
+    assert after.status_code == 200
+    # viewer 看不到审计明细与成员名册（含 IP/邮箱）
+    body = after.json()["data"]
+    assert body["audits"] == [] and body["members"] == []
+
+
+def test_review_resource_must_exist(client, user_a):
+    """复核引用的 risk/document 必须真实存在，否则形成永久悬挂项。"""
+    case_id = _case(client, user_a["headers"])
+    resp = client.post(
+        "/api/governance/reviews",
+        json={"caseId": case_id, "resourceType": "risk", "resourceId": "RISK-NOT-EXIST", "title": "引用校验", "requestedBy": "分析师"},
+        headers=user_a["headers"],
+    )
+    assert resp.status_code == 422
+
+
+def test_snapshot_hides_audit_from_viewer_but_owner_sees(client, user_a, user_b):
+    """审计明细（含 IP/邮箱）仅 reviewer 及以上可见。"""
+    case_id = _case(client, user_a["headers"])
+    org_id = client.get("/api/governance/snapshot", headers=user_a["headers"]).json()["data"]["organization"]["id"]
+    invited = client.post(
+        "/api/governance/members",
+        json={"email": user_b["email"], "role": "viewer", "clearance": "internal"},
+        headers=user_a["headers"],
+    ).json()["data"]
+    client.post(f"/api/governance/members/{invited['id']}/accept", headers=user_b["headers"])
+
+    owner_view = client.get("/api/governance/snapshot", headers=user_a["headers"]).json()["data"]
+    assert len(owner_view["audits"]) > 0
+    viewer_view = client.get(f"/api/governance/snapshot?organizationId={org_id}", headers=user_b["headers"]).json()["data"]
+    assert viewer_view["audits"] == [] and viewer_view["members"] == []

@@ -4,6 +4,7 @@ import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react
 import { Activity, BookOpenCheck, Cable, History, Loader2, ShieldCheck, UsersRound } from "lucide-react";
 import { EmptyStateCard, MetricCard, PageIntro, Panel, PanelHeader } from "@/components/enterprise/EnterpriseUI";
 import { governanceApi, governancePost } from "@/lib/governance-client";
+import EnterpriseDialog from "@/components/enterprise/EnterpriseDialog";
 import { ensureWorkspaceSession } from "@/lib/workspace-session";
 import { useEnterpriseStore } from "@/store/enterprise-store";
 import type { DataClassification } from "@/types/enterprise";
@@ -28,6 +29,8 @@ const classifications: Array<{ value: DataClassification; label: string }> = [
 
 export default function GovernancePage() {
   const cases = useEnterpriseStore((state) => state.cases);
+  const risks = useEnterpriseStore((state) => state.risks);
+  const documents = useEnterpriseStore((state) => state.documents);
   const rules = useEnterpriseStore((state) => state.rules);
   const updateCase = useEnterpriseStore((state) => state.updateCase);
   const syncFromServer = useEnterpriseStore((state) => state.syncFromServer);
@@ -36,6 +39,10 @@ export default function GovernancePage() {
   const [observability, setObservability] = useState<Observability | null>(null);
   const [history, setHistory] = useState<{ ruleId: string; data: RuleHistory } | null>(null);
   const [busy, setBusy] = useState("");
+  const [deciding, setDeciding] = useState<{ review: Review; status: string } | null>(null);
+  const [decisionNote, setDecisionNote] = useState("");
+  const [resourceType, setResourceType] = useState("risk");
+  const [resourceId, setResourceId] = useState("");
   const [notice, setNotice] = useState("");
 
   const load = useCallback(async (organizationId?: string) => {
@@ -88,11 +95,8 @@ export default function GovernancePage() {
   };
 
   const decide = (review: Review, status: "approved" | "rejected") => {
-    const note = window.prompt(status === "approved" ? "填写批准依据" : "填写驳回原因");
-    if (!note?.trim()) return;
-    const reviewer = window.prompt("填写复核人")?.trim();
-    if (!reviewer) return;
-    void act(`review-${review.id}`, () => governancePost(`/reviews/${review.id}/decision`, { status, decidedBy: reviewer, note }), "复核结论已留痕");
+    setDeciding({ review, status });
+    setDecisionNote("");
   };
 
   const submitEval = (event: FormEvent<HTMLFormElement>) => {
@@ -136,6 +140,29 @@ export default function GovernancePage() {
   const pendingReviews = snapshot?.reviews.filter((review) => review.status === "pending") ?? [];
   const requestEndpoints = observability ? Object.keys(observability.requests).filter((key) => key !== "_dropped_endpoints").length : 0;
 
+  const submitDecision = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!deciding) return;
+    const note = decisionNote.trim();
+    if (!note) return;
+    // decidedBy 已由服务端写入已认证身份，前端不再采集复核人。
+    void act(`review-${deciding.review.id}`, () => governancePost(`/reviews/${deciding.review.id}/decision`, { status: deciding.status, decidedBy: "server", note }), "复核结论已留痕");
+    setDeciding(null);
+    setDecisionNote("");
+  };
+
+  // 按资源类型列出可选对象：不再要求用户手抄资源 ID。
+  const selectableResources = useMemo(() => {
+    const orgCaseIds = new Set(organizationCases.map((item) => item.id));
+    if (resourceType === "risk") {
+      return risks.filter((item) => orgCaseIds.has(item.caseId)).map((item) => ({ id: item.id, label: `${item.company} · ${item.title}` }));
+    }
+    if (resourceType === "document") {
+      return documents.filter((item) => orgCaseIds.has(item.caseId)).map((item) => ({ id: item.id, label: item.name }));
+    }
+    return [];
+  }, [resourceType, risks, documents, organizationCases]);
+
   return <div className="page-shell">
     <PageIntro eyebrow="Enterprise governance" title="企业治理与质量控制" description="组织权限、数据分级、规则版本、人工复核、模型评测、数据源和运行观测共用一条可追溯治理链路。" actions={<><select aria-label="当前治理组织" value={snapshot?.organization.id ?? ""} onChange={(event) => void load(event.target.value)} className="field-control min-w-44">{(snapshot?.organizations ?? []).map((organization) => <option key={organization.id} value={organization.id}>{organization.name} · {organization.role}</option>)}</select><button onClick={() => void load(snapshot?.organization.id)} disabled={busy === "load"} className="rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-300">{busy === "load" ? "刷新中" : "刷新治理数据"}</button></>} />
     {notice && <div className="rounded-xl border border-cyan-400/15 bg-cyan-400/[0.05] px-4 py-3 text-xs text-cyan-100">{notice}</div>}
@@ -148,7 +175,7 @@ export default function GovernancePage() {
     <div className="flex flex-wrap gap-2">{tabs.map((item) => <button key={item} onClick={() => setTab(item)} className={`rounded-xl border px-3 py-2 text-[11px] ${tab === item ? "border-cyan-400/25 bg-cyan-400/[0.08] text-cyan-200" : "border-white/[0.08] text-slate-500"}`}>{item}</button>)}</div>
 
     {tab === "权限与分级" && <div className="grid gap-4 xl:grid-cols-2">
-      <Panel><PanelHeader eyebrow="Organization & RBAC" title={snapshot?.organization.name || "企业组织"} description="Owner / Admin / Analyst / Reviewer / Viewer 五级角色，数据权限独立控制。" /><form onSubmit={submitMember} className="grid gap-3 p-5 sm:grid-cols-3"><input required name="email" type="email" placeholder="成员邮箱" className="field-control sm:col-span-3" /><select name="role" className="field-control"><option value="analyst">分析师</option><option value="reviewer">复核人</option><option value="viewer">只读</option><option value="admin">管理员</option></select><select name="clearance" className="field-control"><option value="internal">内部</option><option value="confidential">机密</option><option value="restricted">严格受限</option><option value="public">公开</option></select><button disabled={busy === "member"} className="rounded-xl bg-cyan-300 px-3 text-xs font-semibold text-[#041018]">保存成员</button></form><div className="divide-y divide-white/[0.06]">{snapshot?.members.map((member) => <div key={member.id} className="flex items-center gap-3 px-5 py-3 text-xs"><UsersRound className="h-4 w-4 text-cyan-300" /><span className="min-w-0 flex-1 truncate text-slate-300">{member.email}</span><span className="text-slate-500">{member.role}</span><span className="text-slate-600">{member.clearance}</span></div>)}</div></Panel>
+      <Panel><PanelHeader eyebrow="Organization & RBAC" title={snapshot?.organization.name || "企业组织"} description="Owner / Admin / Analyst / Reviewer / Viewer 五级角色，数据权限独立控制。" /><form onSubmit={submitMember} className="grid gap-3 p-5 sm:grid-cols-3"><input required name="email" type="email" placeholder="成员邮箱" className="field-control sm:col-span-3" /><select name="role" className="field-control"><option value="analyst">分析师</option><option value="reviewer">复核人</option><option value="viewer">只读</option><option value="admin">管理员</option></select><select name="clearance" className="field-control"><option value="internal">内部</option><option value="confidential">机密</option><option value="restricted">严格受限</option><option value="public">公开</option></select><button disabled={busy === "member"} className="rounded-xl bg-cyan-300 px-3 text-xs font-semibold text-[#041018]">保存成员</button></form><div className="divide-y divide-white/[0.06]">{snapshot?.members.map((member) => <div key={member.id} className="flex items-center gap-3 px-5 py-3 text-xs"><UsersRound className="h-4 w-4 text-cyan-300" /><span className="min-w-0 flex-1 truncate text-slate-300">{member.email}</span><span className="text-slate-500">{member.role}</span><span className="text-slate-600">{member.clearance}</span><span className={`rounded-md px-2 py-0.5 text-[9px] ${member.status === "active" ? "border border-emerald-400/20 text-emerald-300" : "border border-amber-400/20 text-amber-300"}`}>{member.status === "active" ? "已生效" : "待本人确认"}</span>{member.status !== "active" && <button type="button" onClick={() => void act(`member-accept-${member.id}`, () => governancePost(`/members/${member.id}/accept`, {}), "邀请已确认")} className="rounded-lg border border-cyan-400/20 px-2 py-1 text-[9px] text-cyan-200">这是我的邮箱，确认加入</button>}</div>)}</div></Panel>
       <Panel><PanelHeader eyebrow="Project permissions" title="项目最小权限" description="非管理员成员必须获得明确项目授权，且不得超过其数据密级。" /><form onSubmit={submitGrant} className="grid gap-3 p-5 sm:grid-cols-3"><select required name="caseId" className="field-control">{organizationCases.map((item) => <option key={item.id} value={item.id}>{item.company} · {item.title}</option>)}</select><select required name="userId" className="field-control">{activeMembers.map((member) => <option key={member.id} value={member.userId}>{member.email}</option>)}</select><select name="permission" className="field-control"><option value="viewer">查看</option><option value="reviewer">复核</option><option value="editor">编辑</option><option value="admin">项目管理</option></select><button disabled={!organizationCases.length || !activeMembers.length || busy === "grant"} className="rounded-xl bg-cyan-300 px-3 py-2.5 text-xs font-semibold text-[#041018] sm:col-span-3 disabled:opacity-40">保存项目授权</button></form><div className="px-5 pb-5 text-[10px] text-slate-600">已配置 {snapshot?.grants.length ?? 0} 条显式授权。</div></Panel>
       <Panel className="xl:col-span-2"><PanelHeader eyebrow="Data classification" title="项目数据分级" description="外部连接器资料继承项目密级；用户数据许可低于密级时不可访问。" /><div className="grid gap-3 p-5 md:grid-cols-2">{organizationCases.length ? organizationCases.map((item) => <div key={item.id} className="rounded-xl border border-white/[0.07] p-3"><p className="text-xs text-slate-200">{item.company} · {item.title}</p><select value={item.classification ?? "internal"} onChange={(event) => classify(item.id, event.target.value as DataClassification)} className="field-control mt-3">{classifications.map((level) => <option key={level.value} value={level.value}>{level.label}</option>)}</select></div>) : <p className="text-xs text-slate-600">创建项目后可设置数据级别。</p>}</div></Panel>
     </div>}
@@ -165,5 +192,11 @@ export default function GovernancePage() {
     {tab === "可观测性" && <div className="grid gap-4 lg:grid-cols-3"><Panel><PanelHeader eyebrow="API telemetry" title="请求观测" /><div className="p-5"><Activity className="h-5 w-5 text-cyan-300" /><p className="numeric mt-4 text-3xl text-white">{requestEndpoints}</p><p className="mt-2 text-xs text-slate-500">已归一化接口维度，记录调用数、错误率、平均与最大耗时。</p></div></Panel><Panel><PanelHeader eyebrow="AI telemetry" title="模型调用" /><div className="p-5"><p className="numeric text-3xl text-white">{observability?.ai.avgLatencyMs ?? 0} ms</p><p className="mt-2 text-xs text-slate-500">平均调用耗时 · 累计 {observability?.ai.tokens ?? 0} Token。</p></div></Panel><Panel><PanelHeader eyebrow="Control health" title="治理健康" /><div className="space-y-3 p-5 text-xs"><p className="flex justify-between text-slate-400"><span>待复核</span><span>{observability?.governance.pendingReviews ?? 0}</span></p><p className="flex justify-between text-slate-400"><span>失败连接器</span><span>{observability?.governance.failedConnectors ?? 0}</span></p><p className="flex justify-between text-slate-400"><span>审计事件</span><span>{observability?.governance.auditEvents ?? 0}</span></p></div></Panel><Panel className="lg:col-span-3"><PanelHeader eyebrow="Immutable trail" title="最近审计事件" description="企业对象、权限、分级、评测、复核和连接器操作统一留痕。" /><div className="divide-y divide-white/[0.06]">{snapshot?.audits.slice(0, 30).map((item) => <div key={item.id} className="grid gap-2 px-5 py-3 text-[10px] sm:grid-cols-[1.2fr_1fr_1fr_auto]"><span className="text-cyan-200">{item.action}</span><span className="text-slate-500">{item.resourceType}:{item.resourceId}</span><span className="text-slate-600">{item.caseId || "工作区级"}</span><span className={item.outcome === "success" ? "text-emerald-300" : "text-rose-300"}>{new Date(item.createdAt).toLocaleString("zh-CN")}</span></div>)}</div></Panel></div>}
     {!snapshot && busy !== "load" && <Panel><EmptyStateCard icon={ShieldCheck} title="治理服务尚未连接" description="请确认 FastAPI 服务可用；纯前端模式仍可使用研判功能，但组织权限与审计不会被错误标记为已启用。" /></Panel>}
     {busy && busy !== "load" && <div className="pointer-events-none fixed bottom-6 right-6 flex items-center gap-2 rounded-xl border border-cyan-400/20 bg-[#07111d] px-4 py-3 text-xs text-cyan-100 shadow-2xl"><Loader2 className="h-4 w-4 animate-spin" />正在执行治理操作</div>}
+    <EnterpriseDialog open={Boolean(deciding)} onClose={() => setDeciding(null)} title={deciding?.status === "approved" ? "批准复核事项" : "驳回复核事项"} description="复核依据将进入不可篡改留痕；复核人身份由系统记录，无需手填。">
+      <form onSubmit={submitDecision} className="space-y-4">
+        <label className="block"><span className="mb-1.5 block text-[11px] text-slate-400">{deciding?.status === "approved" ? "批准依据" : "驳回原因"}</span><textarea required rows={3} value={decisionNote} onChange={(event) => setDecisionNote(event.target.value)} placeholder="写明对照的证据、规则与结论" className="field-control resize-none" /></label>
+        <div className="flex justify-end gap-2"><button type="button" onClick={() => setDeciding(null)} className="rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-400">取消</button><button type="submit" className={`rounded-xl px-4 py-2.5 text-xs font-semibold text-[#041018] ${deciding?.status === "approved" ? "bg-emerald-300" : "bg-rose-300"}`}>{deciding?.status === "approved" ? "确认批准" : "确认驳回"}</button></div>
+      </form>
+    </EnterpriseDialog>
   </div>;
 }

@@ -121,7 +121,7 @@ test("企业工作区不得包含预置业务数据或旧版引导接口", () =>
   for (const collection of ["cases", "documents", "risks", "agents", "tasks", "rules", "briefs"]) {
     assert.match(store, new RegExp(`${collection}: \\[\\]`), `${collection} 必须从空数组启动`);
   }
-  assert.match(store, /migrate:\s*\(\)\s*=>\s*emptyWorkspace\(\)/, "旧持久化版本必须迁移为空工作区");
+  assert.match(store, /migrate:\s*\(persisted\)\s*=>\s*persisted \?\? emptyWorkspace\(\)/, "版本升级必须保留用户既有数据，不得清空工作区");
 });
 
 test("企业 AI 页面必须调用服务端模型网关", () => {

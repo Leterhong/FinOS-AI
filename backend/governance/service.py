@@ -164,6 +164,18 @@ def record_governance_audit(
             ip=client_ip(request),
         )
     )
+    # 中央审计镜像：/api/security/audit-logs 与安全事件视图因此也能看到
+    # 治理动作，满足统一的留存与导出口径（同事务写入，不产生双写漂移）。
+    from backend.security.models import AuditLog
+
+    db.add(
+        AuditLog(
+            user_id=user.id,
+            action=f"governance.{action}",
+            resource=f"{resource_type}:{resource_id}"[:200],
+            ip=client_ip(request),
+        )
+    )
 
 
 def rule_snapshot(rule: EnterpriseRule) -> dict[str, Any]:

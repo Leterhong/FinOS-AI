@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
+import { formatWhen } from "@/lib/relative-time";
 import Link from "next/link";
 import { BookOpenCheck, Cpu, FileSearch, Loader2, SearchCheck, Sparkles } from "lucide-react";
 import { EmptyStateCard, PageIntro, Panel, PanelHeader } from "@/components/enterprise/EnterpriseUI";
@@ -59,7 +60,7 @@ export default function ResearchPage() {
     {error && <div role="alert" className="rounded-xl border border-rose-400/20 bg-rose-400/[0.06] px-4 py-3 text-xs text-rose-200">{error}</div>}
     {!activeCase ? <Panel><EmptyStateCard icon={BookOpenCheck} title="先创建企业项目" description="每份研究底稿必须有清晰的企业归属，避免不同项目的资料和风险交叉进入模型。" action={<Link href="/cases" className="rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]">创建企业项目</Link>} /></Panel> : !active?.configured && <Panel><EmptyStateCard icon={Cpu} title="投研 Agent 尚未连接模型" description="先在 AI 模型中心添加并测试模型。没有模型时，本页面不会展示预置市场数据或虚构研究结论。" action={<Link href="/models" className="rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]">配置 AI 模型</Link>} /></Panel>}
     <div className="grid gap-4 xl:grid-cols-[1.25fr_.75fr]">
-      <Panel><PanelHeader eyebrow="Research briefs" title="当前项目 AI 研究底稿" description="每一份底稿均绑定企业项目，并记录生成模型标识" />{caseBriefs.length === 0 ? <EmptyStateCard icon={BookOpenCheck} title="当前项目还没有研究底稿" description="输入研究主题和范围后，模型会基于当前项目生成结构化底稿；数据不足时会明确提出待补来源。" /> : <div className="divide-y divide-white/[0.06]">{caseBriefs.map((brief) => <article key={brief.id} className="p-5"><div className="flex flex-wrap items-center gap-2"><span className="rounded-md border border-cyan-400/15 bg-cyan-400/[0.05] px-2 py-1 text-[9px] text-cyan-300">AI 生成 · 待复核</span><span className="text-[9px] text-slate-600">{brief.createdAt}</span><span className="ml-auto font-mono text-[9px] text-slate-700">{brief.model}</span></div><h2 className="mt-3 text-sm font-semibold text-white">{brief.title}</h2><p className="mt-3 whitespace-pre-wrap text-xs leading-6 text-slate-400">{brief.summary}</p><button type="button" onClick={() => void navigator.clipboard?.writeText(`# ${brief.title}
+      <Panel><PanelHeader eyebrow="Research briefs" title="当前项目 AI 研究底稿" description="每一份底稿均绑定企业项目，并记录生成模型标识" />{caseBriefs.length === 0 ? <EmptyStateCard icon={BookOpenCheck} title="当前项目还没有研究底稿" description="输入研究主题和范围后，模型会基于当前项目生成结构化底稿；数据不足时会明确提出待补来源。" /> : <div className="divide-y divide-white/[0.06]">{caseBriefs.map((brief) => <article key={brief.id} className="p-5"><div className="flex flex-wrap items-center gap-2"><span className="rounded-md border border-cyan-400/15 bg-cyan-400/[0.05] px-2 py-1 text-[9px] text-cyan-300">AI 生成 · 待复核</span><span className="text-[9px] text-slate-600">{formatWhen(brief.createdAt)}</span><span className="ml-auto font-mono text-[9px] text-slate-700">{brief.model}</span></div><h2 className="mt-3 text-sm font-semibold text-white">{brief.title}</h2><p className="mt-3 whitespace-pre-wrap text-xs leading-6 text-slate-400">{brief.summary}</p><button type="button" onClick={() => void navigator.clipboard?.writeText(`# ${brief.title}
 
 ${brief.summary}
 

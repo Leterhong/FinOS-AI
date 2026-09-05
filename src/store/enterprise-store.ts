@@ -240,7 +240,7 @@ export const useEnterpriseStore = create<EnterpriseState>()(
           status: "研判中",
           risk: "medium",
           progress: 0,
-          updatedAt: "刚刚",
+          updatedAt: new Date().toISOString(),
           nextAction: "配置 AI 模型后上传企业资料",
           createdAt: new Date().toISOString(),
         };
@@ -268,7 +268,7 @@ export const useEnterpriseStore = create<EnterpriseState>()(
           confidence: 0,
           facts: 0,
           ruleHits: 0,
-          uploadedAt: "刚刚",
+          uploadedAt: new Date().toISOString(),
         };
         set((state) => ({ documents: [item, ...state.documents] }));
         pushEntity("documents", syncMap.documents.payload(item));
@@ -367,7 +367,7 @@ export const useEnterpriseStore = create<EnterpriseState>()(
           version: input.version?.trim() || "v1.0",
           coverage: "待测试",
           coverageRate: 0,
-          updated: today(),
+          updated: new Date().toISOString(),
         };
         set((state) => ({ rules: [item, ...state.rules] }));
         pushEntity("rules", syncMap.rules.payload(item));
@@ -383,7 +383,7 @@ export const useEnterpriseStore = create<EnterpriseState>()(
               testRecords,
               coverage: testRecords.length > 0 && passed === testRecords.length ? "已测试" : "测试未通过",
               coverageRate: Math.round((passed / testRecords.length) * 100),
-              updated: today(),
+              updated: new Date().toISOString(),
             };
           }),
         }));
@@ -499,7 +499,7 @@ export const useEnterpriseStore = create<EnterpriseState>()(
           : run),
       })),
       addBrief: (input) => {
-        const brief: ResearchBrief = { ...input, id: uid("BRIEF"), createdAt: "刚刚" };
+        const brief: ResearchBrief = { ...input, id: uid("BRIEF"), createdAt: new Date().toISOString() };
         set((state) => ({ briefs: [brief, ...state.briefs] }));
         pushEntity("briefs", syncMap.briefs.payload(brief));
         return brief;
@@ -525,20 +525,37 @@ export const useEnterpriseStore = create<EnterpriseState>()(
         set((state) => {
           // 合并策略：本地已有同 id 记录时本地优先（本会话是活动源）；
           // 服务端多出的记录按 id 补入——实现换设备恢复与服务端备份。
-          const mergeById = <T extends { id: string }>(local: T[], remote: Array<Record<string, unknown>>, adapt: (row: Record<string, unknown>) => T): T[] => {
-            const ids = new Set(local.map((item) => item.id));
-            let count = 0;
-            const additions: T[] = [];
+          // LWW 合并：本地缺失 → 补入；双方都有 → 服务端 updatedAt 更新者胜。
+          // 此前「本地永远赢」，双设备之间永远看不到对方的修改。
+          const tsOf = (value: unknown): number => {
+            const parsed = Date.parse(String(value ?? ""));
+            return Number.isNaN(parsed) ? 0 : parsed;
+          };
+          const mergeById = <T extends { id: string }>(local: T[], remote: Array<Record<string, unknown>>, adapt: (row: Record<string, unknown>) => T, localTs?: (item: T) => string): T[] => {
+            const byId = new Map(local.map((item) => [item.id, item]));
+            let additions = 0;
+            let updated = 0;
+            const result = [...local];
             for (const row of remote) {
               const item = adapt(row);
-              if (item?.id && !ids.has(item.id)) {
-                additions.push(item);
-                ids.add(item.id);
-                count += 1;
+              if (!item?.id) continue;
+              const existing = byId.get(item.id);
+              if (!existing) {
+                byId.set(item.id, item);
+                result.unshift(item);
+                additions += 1;
+                continue;
+              }
+              const remoteTs = tsOf(row.updatedAt ?? row.createdAt);
+              const localValue = localTs ? localTs(existing) : "";
+              if (remoteTs > 0 && remoteTs > tsOf(localValue)) {
+                const at = result.findIndex((entry) => entry.id === item.id);
+                result[at] = item;
+                updated += 1;
               }
             }
-            merged += count;
-            return [...additions, ...local];
+            merged += additions + updated;
+            return result;
           };
           return {
             cases: deriveCaseProgress({
@@ -550,9 +567,9 @@ export const useEnterpriseStore = create<EnterpriseState>()(
                 status: (row.status as EnterpriseCase["status"]) ?? "研判中",
                 risk: (row.risk as EnterpriseCase["risk"]) ?? "medium",
                 progress: Number(row.progress ?? 0), owner: String(row.owner ?? ""),
-                updatedAt: "从云端恢复", nextAction: String(row.nextAction ?? ""),
+                updatedAt: String(row.updatedAt ?? ""), nextAction: String(row.nextAction ?? ""),
                 createdAt: row.createdAt as string | undefined, archivedAt: row.archivedAt as string | undefined,
-              })),
+              }), (item) => item.updatedAt),
               documents: state.documents,
               risks: state.risks,
               tasks: state.tasks,
@@ -563,14 +580,14 @@ export const useEnterpriseStore = create<EnterpriseState>()(
               kind: String(row.kind ?? "企业资料"), pages: 0,
               status: (row.status as AnalysisDocument["status"]) ?? "已解析",
               confidence: 0, facts: Number(row.facts ?? 0), ruleHits: Number(row.ruleHits ?? 0),
-              uploadedAt: "从云端恢复", analysis: (row.analysis as string | undefined),
+              uploadedAt: String(row.updatedAt ?? ""), analysis: (row.analysis as string | undefined),
               model: (row.model as string | undefined), error: (row.error as string | undefined),
               factItems: row.factItems as AnalysisDocument["factItems"],
               ruleOutcomes: row.ruleOutcomes as AnalysisDocument["ruleOutcomes"],
               uncertainties: row.uncertainties as string[] | undefined,
               extractionMethod: row.extractionMethod as AnalysisDocument["extractionMethod"],
               ocrUsed: Boolean(row.ocrUsed), tables: row.tables as AnalysisDocument["tables"],
-            })),
+            }), (item) => item.uploadedAt),
             risks: mergeById(state.risks, snapshot.risks, (row) => ({
               id: String(row.id), caseId: String(row.caseId ?? ""), company: String(row.company ?? ""),
               title: String(row.title ?? ""), level: (row.level as RiskSignal["level"]) ?? "medium",
@@ -580,14 +597,14 @@ export const useEnterpriseStore = create<EnterpriseState>()(
               ruleCodes: row.ruleCodes as string[] | undefined, sourceRunId: row.sourceRunId as string | undefined,
               verificationNote: row.verificationNote as string | undefined, verifiedBy: row.verifiedBy as string | undefined,
               verifiedAt: row.verifiedAt as string | undefined, mitigationNote: row.mitigationNote as string | undefined,
-            })),
+            }), (item) => item.updatedAt ?? ""),
             rules: mergeById(state.rules, snapshot.rules, (row) => ({
               id: String(row.id), code: String(row.code ?? ""), name: String(row.name ?? ""),
               organizationId: row.organizationId as string | undefined,
               domain: String(row.domain ?? ""), version: String(row.version ?? "v1.0"),
               coverage: String(row.coverage ?? "待测试"), coverageRate: Number(row.coverageRate ?? 0),
-              conditions: row.conditions as EnterpriseRule["conditions"], testRecords: row.testRecords as EnterpriseRule["testRecords"], updated: "从云端恢复",
-            })),
+              conditions: row.conditions as EnterpriseRule["conditions"], testRecords: row.testRecords as EnterpriseRule["testRecords"], updated: String(row.updatedAt ?? ""),
+            }), (item) => item.updated),
             tasks: mergeById(state.tasks, snapshot.tasks, (row) => ({
               id: String(row.id), caseId: String(row.caseId ?? "") || undefined,
               title: String(row.title ?? ""), caseName: String(row.caseName ?? ""),
@@ -595,13 +612,13 @@ export const useEnterpriseStore = create<EnterpriseState>()(
               priority: (row.priority as WorkflowTask["priority"]) ?? "medium",
               stage: (row.stage as WorkflowTask["stage"]) ?? "待处理", note: row.note as string | undefined,
               history: row.history as WorkflowTask["history"],
-            })),
+            }), (item) => item.updatedAt ?? ""),
             briefs: mergeById(state.briefs, snapshot.briefs, (row) => ({
               id: String(row.id), caseId: String(row.caseId ?? "") || undefined,
               title: String(row.title ?? ""), summary: String(row.summary ?? ""),
               topic: String(row.topic ?? ""), model: (row.model as string | undefined),
-              createdAt: "从云端恢复",
-            })),
+              createdAt: String(row.createdAt ?? ""),
+            }), (item) => item.createdAt),
           };
         });
         set({ serverSync: "synced" });
@@ -619,7 +636,8 @@ export const useEnterpriseStore = create<EnterpriseState>()(
     {
       name: "finos-enterprise-workspace-v2",
       version: 3,
-      migrate: () => emptyWorkspace(),
+      // 版本升级保留既有数据（此前任何 version+1 都会清空整个工作区）。
+      migrate: (persisted) => persisted ?? emptyWorkspace(),
       // 会话中断恢复：刷新/崩溃后残留的「解析中」不可能再有回调来写终态，
       // 重 hydration 时统一回收为「分析失败」，用户可删除该资料后重新上传。
       onRehydrateStorage: () => (state) => {
@@ -638,7 +656,7 @@ export const useEnterpriseStore = create<EnterpriseState>()(
         ...state,
         documents: state.documents.slice(0, 100).map((d) => ({
           ...d,
-          analysis: d.analysis ? d.analysis.slice(0, 8000) : undefined,
+          analysis: d.analysis ? d.analysis.slice(0, 16000) : undefined,
         })),
         agents: state.agents.slice(0, 50).map((a) => ({
           ...a,
@@ -651,5 +669,15 @@ export const useEnterpriseStore = create<EnterpriseState>()(
     },
   ),
 );
+
+// 多标签页同步：任一标签页写入持久化数据后，其余标签页重新 hydrate，
+// 避免标签页 B 用内存旧态覆盖标签页 A 刚创建的数据（仅浏览器环境生效）。
+if (typeof window !== "undefined") {
+  window.addEventListener("storage", (event) => {
+    if (event.key === "finos-enterprise-workspace-v2" && event.newValue) {
+      void useEnterpriseStore.persist.rehydrate();
+    }
+  });
+}
 
 export { notePushFailure };
