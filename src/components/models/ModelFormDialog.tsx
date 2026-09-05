@@ -44,12 +44,14 @@ export default function ModelFormDialog({ open, onClose, editing }: Props) {
     msg: string;
     latency?: number;
   } | null>(null);
+  const [step, setStep] = useState(0); // 0 连接 · 1 模型 · 2 验证
 
   const preset = PROVIDER_PRESETS[providerType];
 
   // 初始化 / 切换 provider 时填充默认值。
   useEffect(() => {
     if (!open) return;
+    setStep(0);
     if (editing) {
       setProviderType(editing.providerType);
       setDisplayName(editing.displayName);
@@ -139,6 +141,14 @@ export default function ModelFormDialog({ open, onClose, editing }: Props) {
 
   const canSave = modelId.trim() && baseUrl.trim() && (editing || !preset.requiresKey || apiKey.trim());
 
+  const stepMeta = [
+    { title: "连接", done: Boolean(baseUrl.trim()) },
+    { title: "模型", done: Boolean(modelId.trim()) },
+    { title: "验证", done: Boolean(testState?.ok) },
+  ];
+  const canNext =
+    step === 0 ? Boolean(baseUrl.trim()) : step === 1 ? Boolean(modelId.trim()) : true;
+
   return (
     <AnimatePresence>
       {open && (
@@ -158,7 +168,7 @@ export default function ModelFormDialog({ open, onClose, editing }: Props) {
             animate={{ scale: 1, y: 0 }}
             exit={{ scale: 0.95, y: 20 }}
           >
-            <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-brand">
                   <Plug className="h-4 w-4 text-white" />
@@ -172,202 +182,252 @@ export default function ModelFormDialog({ open, onClose, editing }: Props) {
               </button>
             </div>
 
-            {/* Provider 选择 */}
-            <label className="block text-xs text-white/50 mb-2">Provider</label>
-            <div className="grid grid-cols-3 gap-2 mb-4">
-              {ALL_PRESETS.map((p) => (
-                <button
-                  key={p.type}
-                  onClick={() => !editing && resetForProvider(p.type)}
-                  disabled={!!editing}
-                  className={`rounded-xl px-3 py-2 text-xs font-medium transition-all ${
-                    providerType === p.type
-                      ? "bg-brand-electric/20 border border-brand-electric/40 text-white"
-                      : "bg-white/[0.04] border border-white/8 text-white/60 hover:text-white disabled:opacity-40"
-                  }`}
-                >
-                  {p.label}
-                </button>
+            {/* 步骤指示：1 连接 → 2 模型 → 3 验证 */}
+            <div className="mb-5 flex items-center gap-2">
+              {stepMeta.map((item, index) => (
+                <div key={item.title} className="flex flex-1 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => index < step && setStep(index)}
+                    aria-label={`步骤 ${index + 1}：${item.title}`}
+                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold transition ${
+                      index === step
+                        ? "border-wealth bg-wealth/15 text-wealth"
+                        : index < step
+                          ? "border-wealth/40 bg-wealth/5 text-wealth/70"
+                          : "border-white/10 text-white/30"
+                    }`}
+                  >
+                    {index + 1}
+                  </button>
+                  <span className={`text-xs ${index === step ? "text-white" : "text-white/35"}`}>{item.title}</span>
+                  {index < stepMeta.length - 1 && <span className={`h-px flex-1 ${index < step ? "bg-wealth/40" : "bg-white/10"}`} />}
+                </div>
               ))}
             </div>
 
-            {preset.hint && (
-              <p className="text-[11px] text-white/40 mb-4 -mt-1">{preset.hint}</p>
-            )}
-
-            {/* 字段 */}
-            <div className="space-y-3">
-              <Field label="显示名称">
-                <input
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder="如：我的 DeepSeek"
-                  className="input"
-                />
-              </Field>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="模型名称">
-                  <input
-                    value={modelName}
-                    onChange={(e) => setModelName(e.target.value)}
-                    placeholder="DeepSeek-V3"
-                    className="input"
-                  />
-                </Field>
-                <Field label="Model ID">
-                  <input
-                    value={modelId}
-                    onChange={(e) => setModelId(e.target.value)}
-                    placeholder="deepseek-chat"
-                    className="input"
-                  />
-                </Field>
-              </div>
-              {/* 建议模型快捷选择 */}
-              {preset.suggestedModels.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {preset.suggestedModels.map((m) => (
+            {step === 0 && (
+              <div className="space-y-3">
+                <label className="block text-xs text-white/50 mb-2">Provider</label>
+                <div className="grid grid-cols-3 gap-2 mb-4">
+                  {ALL_PRESETS.map((p) => (
                     <button
-                      key={m.id}
-                      onClick={() => {
-                        setModelId(m.id);
-                        setModelName(m.name);
-                      }}
-                      className="rounded-lg bg-white/[0.04] px-2 py-1 text-[11px] text-white/50 hover:text-white hover:bg-white/[0.08]"
+                      key={p.type}
+                      onClick={() => !editing && resetForProvider(p.type)}
+                      disabled={!!editing}
+                      className={`rounded-lg px-3 py-2 text-xs font-medium transition ${
+                        providerType === p.type
+                          ? "border border-wealth/40 bg-wealth/10 text-white"
+                          : "border border-white/[0.08] bg-white/[0.04] text-white/60 hover:text-white disabled:opacity-40"
+                      }`}
                     >
-                      {m.name}
+                      {p.label}
                     </button>
                   ))}
                 </div>
-              )}
-              <Field label="API URL (Base URL)">
-                <input
-                  value={baseUrl}
-                  onChange={(e) => setBaseUrl(e.target.value)}
-                  placeholder="https://api.deepseek.com/v1"
-                  className="input"
-                />
-              </Field>
-              <Field
-                label={
-                  <span className="flex items-center gap-1">
-                    <KeyRound className="h-3 w-3" /> API Key
-                    {editing && <span className="text-white/30">（留空表示不修改）</span>}
-                    {!preset.requiresKey && <span className="text-white/30">（本地模型可留空）</span>}
-                  </span>
-                }
-              >
-                <input
-                  type="password"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  placeholder="sk-..."
-                  className="input font-mono"
-                />
-              </Field>
-
-              <fieldset className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-3">
-                <legend className="px-1 text-xs text-white/55">任务角色</legend>
-                <p className="mb-3 text-[11px] leading-5 text-white/35">
-                  Agent 会优先选择匹配角色的在线模型；没有匹配项时才回退到默认模型。
-                </p>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {MODEL_ROLES.map((role) => {
-                    const checked = roles.includes(role.value);
-                    return (
-                      <label key={role.value} className={`flex cursor-pointer items-start gap-2 rounded-lg border p-2.5 ${checked ? "border-cyan-400/25 bg-cyan-400/[0.06]" : "border-white/[0.06]"}`}>
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={(event) => setRoles((current) => event.target.checked
-                            ? [...current, role.value]
-                            : current.filter((item) => item !== role.value))}
-                          className="mt-0.5 accent-cyan-300"
-                        />
-                        <span>
-                          <span className="block text-[11px] text-slate-200">{role.label}</span>
-                          <span className="mt-0.5 block text-[9px] leading-4 text-slate-500">{role.description}</span>
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
-                {roles.length === 0 && <p className="mt-2 text-[10px] text-amber-300">未选择角色时，此模型只能被明确指定调用。</p>}
-              </fieldset>
-
-              {/* 模型参数（Phase 6.2：用户可自助调节采样温度与最大 Token） */}
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="温度 (0–1)">
+                {preset.hint && <p className="text-[11px] text-white/40 -mt-2 mb-3">{preset.hint}</p>}
+                <Field label="API URL (Base URL)">
                   <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    max="1"
-                    value={temperature}
-                    onChange={(e) => setTemperature(e.target.value)}
+                    value={baseUrl}
+                    onChange={(e) => setBaseUrl(e.target.value)}
+                    placeholder="https://api.deepseek.com/v1"
                     className="input"
                   />
                 </Field>
-                <Field label="Max Tokens">
+                <Field
+                  label={
+                    <span className="flex items-center gap-1">
+                      <KeyRound className="h-3 w-3" /> API Key
+                      {editing && <span className="text-white/30">（留空表示不修改）</span>}
+                      {!preset.requiresKey && <span className="text-white/30">（本地模型可留空）</span>}
+                    </span>
+                  }
+                >
                   <input
-                    type="number"
-                    step="256"
-                    min="1"
-                    max="128000"
-                    value={maxTokens}
-                    onChange={(e) => setMaxTokens(e.target.value)}
-                    className="input"
+                    type="password"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    placeholder="sk-..."
+                    className="input font-mono"
                   />
                 </Field>
-              </div>
-              <p className="-mt-1 text-[11px] text-white/35">
-                温度越高输出越发散（建议 0.3–0.8）；Max Tokens 控制单次回复长度上限。
-              </p>
-            </div>
-
-            {/* 测试结果 */}
-            {testState && (
-              <div
-                className={`mt-4 flex items-center gap-2 rounded-xl px-3 py-2 text-sm ${
-                  testState.ok
-                    ? "bg-semantic-success/10 text-semantic-success"
-                    : "bg-semantic-risk/10 text-semantic-risk"
-                }`}
-              >
-                {testState.ok ? (
-                  <CheckCircle2 className="h-4 w-4 shrink-0" />
-                ) : (
-                  <XCircle className="h-4 w-4 shrink-0" />
-                )}
-                <span className="flex-1">{testState.msg}</span>
-                {testState.latency !== undefined && testState.ok && (
-                  <span className="text-xs text-white/40">{testState.latency}ms</span>
-                )}
               </div>
             )}
 
-            {/* 操作 */}
-            <div className="mt-5 flex items-center gap-3">
-              <button
-                onClick={handleTest}
-                disabled={isTesting === "draft" || !modelId.trim() || !baseUrl.trim()}
-                className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-white hover:bg-white/[0.08] disabled:opacity-40"
-              >
-                {isTesting === "draft" ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Plug className="h-4 w-4" />
+            {step === 1 && (
+              <div className="space-y-3">
+                <Field label="显示名称">
+                  <input
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    placeholder="如：我的 DeepSeek"
+                    className="input"
+                  />
+                </Field>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="模型名称">
+                    <input
+                      value={modelName}
+                      onChange={(e) => setModelName(e.target.value)}
+                      placeholder="DeepSeek-V3"
+                      className="input"
+                    />
+                  </Field>
+                  <Field label="Model ID">
+                    <input
+                      value={modelId}
+                      onChange={(e) => setModelId(e.target.value)}
+                      placeholder="deepseek-chat"
+                      className="input"
+                    />
+                  </Field>
+                </div>
+                {preset.suggestedModels.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {preset.suggestedModels.map((m) => (
+                      <button
+                        key={m.id}
+                        onClick={() => {
+                          setModelId(m.id);
+                          setModelName(m.name);
+                        }}
+                        className="rounded-lg bg-white/[0.04] px-2 py-1 text-[11px] text-white/50 hover:text-white hover:bg-white/[0.08]"
+                      >
+                        {m.name}
+                      </button>
+                    ))}
+                  </div>
                 )}
-                测试连接
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={!canSave || isSaving}
-                className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-gradient-brand px-4 py-2.5 text-sm font-semibold text-white shadow-glow-blue disabled:opacity-40"
-              >
-                {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
-                {editing ? "保存修改" : "添加模型"}
-              </button>
+                <fieldset className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-3">
+                  <legend className="px-1 text-xs text-white/55">任务角色</legend>
+                  <p className="mb-3 text-[11px] leading-5 text-white/35">
+                    Agent 会优先选择匹配角色的在线模型；没有匹配项时才回退到默认模型。
+                  </p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {MODEL_ROLES.map((role) => {
+                      const checked = roles.includes(role.value);
+                      return (
+                        <label key={role.value} className={`flex cursor-pointer items-start gap-2 rounded-lg border p-2.5 ${checked ? "border-wealth/25 bg-wealth/[0.06]" : "border-white/[0.06]"}`}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(event) => setRoles((current) => event.target.checked
+                              ? [...current, role.value]
+                              : current.filter((item) => item !== role.value))}
+                            className="mt-0.5 accent-wealth"
+                          />
+                          <span>
+                            <span className="block text-[11px] text-slate-200">{role.label}</span>
+                            <span className="mt-0.5 block text-[9px] leading-4 text-slate-500">{role.description}</span>
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  {roles.length === 0 && <p className="mt-2 text-[10px] text-amber-300">未选择角色时，此模型只能被明确指定调用。</p>}
+                </fieldset>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="温度 (0–1)">
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="1"
+                      value={temperature}
+                      onChange={(e) => setTemperature(e.target.value)}
+                      className="input"
+                    />
+                  </Field>
+                  <Field label="Max Tokens">
+                    <input
+                      type="number"
+                      step="256"
+                      min="1"
+                      max="128000"
+                      value={maxTokens}
+                      onChange={(e) => setMaxTokens(e.target.value)}
+                      className="input"
+                    />
+                  </Field>
+                </div>
+                <p className="-mt-1 text-[11px] text-white/35">
+                  温度越高输出越发散（建议 0.3–0.8）；Max Tokens 控制单次回复长度上限。
+                </p>
+              </div>
+            )}
+
+            {step === 2 && (
+              <div className="space-y-3">
+                <p className="text-xs leading-6 text-white/50">
+                  确认配置：<span className="text-white/80">{displayName || preset.label}</span> · <span className="font-mono">{modelId}</span>
+                  {" "}· <span className="font-mono text-[11px]">{baseUrl}</span>
+                </p>
+                <button
+                  onClick={handleTest}
+                  disabled={isTesting === "draft" || !modelId.trim() || !baseUrl.trim()}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-white hover:bg-white/[0.08] disabled:opacity-40"
+                >
+                  {isTesting === "draft" ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Plug className="h-4 w-4" />
+                  )}
+                  发送真实测试请求
+                </button>
+                {testState && (
+                  <div
+                    className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm ${
+                      testState.ok
+                        ? "bg-semantic-success/10 text-semantic-success"
+                        : "bg-semantic-risk/10 text-semantic-risk"
+                    }`}
+                  >
+                    {testState.ok ? (
+                      <CheckCircle2 className="h-4 w-4 shrink-0" />
+                    ) : (
+                      <XCircle className="h-4 w-4 shrink-0" />
+                    )}
+                    <span className="flex-1">{testState.msg}</span>
+                    {testState.latency !== undefined && testState.ok && (
+                      <span className="text-xs text-white/40">{testState.latency}ms</span>
+                    )}
+                  </div>
+                )}
+                <p className="text-[11px] leading-5 text-white/35">
+                  测试通过后保存即可设为默认模型；密钥只在服务端加密保存。
+                </p>
+              </div>
+            )}
+
+            <div className="mt-5 flex items-center gap-3">
+              {step > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setStep((s) => s - 1)}
+                  className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-white/70 hover:bg-white/[0.08]"
+                >
+                  上一步
+                </button>
+              )}
+              {step < 2 ? (
+                <button
+                  type="button"
+                  onClick={() => setStep((s) => s + 1)}
+                  disabled={!canNext}
+                  className="flex-1 rounded-xl bg-gradient-brand px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
+                >
+                  下一步
+                </button>
+              ) : (
+                <button
+                  onClick={handleSave}
+                  disabled={!canSave || isSaving}
+                  className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-gradient-brand px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
+                >
+                  {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {editing ? "保存修改" : "保存并启用"}
+                </button>
+              )}
             </div>
           </motion.div>
 
@@ -384,7 +444,7 @@ export default function ModelFormDialog({ open, onClose, editing }: Props) {
               transition: border-color 0.2s;
             }
             :global(.input:focus) {
-              border-color: rgba(59, 130, 246, 0.5);
+              border-color: rgba(25, 195, 125, 0.5);
             }
             :global(.input::placeholder) {
               color: rgba(255, 255, 255, 0.25);

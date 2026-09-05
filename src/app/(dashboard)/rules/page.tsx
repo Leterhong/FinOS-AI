@@ -19,6 +19,7 @@ export default function RulesPage() {
   const [formNotice, setFormNotice] = useState("");
   const [testingRule, setTestingRule] = useState<EnterpriseRule | null>(null);
   const [deletingRule, setDeletingRule] = useState<EnterpriseRule | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const rules = allRules.filter((rule) => `${rule.code}${rule.name}${rule.domain}`.toLowerCase().includes(query.toLowerCase()));
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
@@ -75,7 +76,61 @@ export default function RulesPage() {
     <Panel>
       <div className="flex flex-col gap-3 border-b border-white/[0.07] p-4 sm:flex-row sm:items-center"><label className="flex flex-1 items-center gap-2 rounded-xl border border-white/[0.08] bg-black/10 px-3"><Search className="h-3.5 w-3.5 text-slate-600" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索规则编号、名称或业务域" className="h-10 flex-1 bg-transparent text-xs text-white outline-none placeholder:text-slate-600" /></label><span className="text-[10px] text-slate-600">本地工作区自动保存</span></div>
       <div className="divide-y divide-white/[0.06]">
-        {rules.map((rule) => <div key={rule.id} className="grid gap-3 px-5 py-5 text-left transition hover:bg-white/[0.025] sm:grid-cols-[.55fr_1.5fr_.7fr_.5fr_.9fr] sm:items-center"><div><span className="rounded-md border border-cyan-400/15 bg-cyan-400/[0.06] px-2 py-1 text-[10px] font-semibold text-cyan-300">{rule.code}</span></div><div><p className="text-xs font-medium text-slate-200">{rule.name}</p><p className="mt-1 text-[10px] text-slate-600">更新于 {formatWhen(rule.updated)} · {rule.coverage} · {rule.testRecords?.length ?? 0} 个测试样本</p></div><span className="text-xs text-slate-400">{rule.domain}</span><span className="numeric text-xs text-slate-500">{rule.version}</span><div>{rule.conditions?.length ? <button onClick={() => setTestingRule(rule)} className="rounded-lg border border-amber-400/20 bg-amber-400/[0.06] px-2.5 py-1.5 text-[10px] text-amber-200 transition hover:bg-amber-400/[0.12]">运行测试样本</button> : <span className="text-[9px] text-slate-600">缺少结构化条件，不能自动测试</span>}<div className="mt-2 flex justify-between text-[10px] text-slate-600"><span>通过率</span><span>{rule.coverageRate}%</span></div><div className="mt-1.5 h-1 rounded-full bg-white/[0.07]"><div className={`h-full rounded-full transition-all ${rule.coverage === "测试未通过" ? "bg-rose-400" : "bg-emerald-400"}`} style={{ width: `${rule.coverageRate}%` }} /></div></div><button onClick={() => setDeletingRule(rule)} title="删除规则" aria-label={`删除规则 ${rule.code}`} className="mt-2 justify-self-end rounded-lg p-1.5 text-slate-600 transition hover:bg-rose-400/10 hover:text-rose-300"><Trash2 className="h-3.5 w-3.5" /></button></div>)}
+        {rules.map((rule) => (
+          <div
+            key={rule.id}
+            onClick={() => setExpandedId(expandedId === rule.id ? null : rule.id)}
+            className="cursor-pointer grid gap-3 px-5 py-5 text-left transition hover:bg-white/[0.025] sm:grid-cols-[.55fr_1.5fr_.7fr_.5fr_.9fr] sm:items-center"
+          >
+            <div><span className="rounded-md border border-cyan-400/15 bg-cyan-400/[0.06] px-2 py-1 text-[10px] font-semibold text-cyan-300">{rule.code}</span></div>
+            <div>
+              <p className="text-xs font-medium text-slate-200">{rule.name}</p>
+              <p className="mt-1 text-[10px] text-slate-600">更新于 {formatWhen(rule.updated)} · {rule.coverage} · {rule.testRecords?.length ?? 0} 个测试样本</p>
+            </div>
+            <span className="text-xs text-slate-400">{rule.domain}</span>
+            <span className="numeric text-xs text-slate-500">{rule.version}</span>
+            <div>
+              {rule.conditions?.length ? (
+                <button
+                  onClick={(event) => { event.stopPropagation(); setTestingRule(rule); }}
+                  className="rounded-lg border border-amber-400/20 bg-amber-400/[0.06] px-2.5 py-1.5 text-[10px] text-amber-200 transition hover:bg-amber-400/[0.12]"
+                >
+                  运行测试样本
+                </button>
+              ) : (
+                <span className="text-[9px] text-slate-600">缺少结构化条件，不能自动测试</span>
+              )}
+              <div className="mt-2 flex justify-between text-[10px] text-slate-600"><span>通过率</span><span>{rule.coverageRate}%</span></div>
+              <div className="mt-1.5 h-1 rounded-full bg-white/[0.07]">
+                <div className={`h-full rounded-full transition-all ${rule.coverage === "测试未通过" ? "bg-rose-400" : "bg-emerald-400"}`} style={{ width: `${rule.coverageRate}%` }} />
+              </div>
+            </div>
+            <button
+              onClick={(event) => { event.stopPropagation(); setDeletingRule(rule); }}
+              title="删除规则"
+              aria-label={`删除规则 ${rule.code}`}
+              className="justify-self-end rounded-lg p-1.5 text-slate-600 transition hover:bg-rose-400/10 hover:text-rose-300"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+            {expandedId === rule.id && (rule.conditions?.length ?? 0) > 0 && (
+              <div className="col-span-full rounded-xl border border-white/[0.07] bg-black/20 p-4">
+                <p className="text-[10px] font-semibold uppercase tracking-[.15em] text-slate-600">决策逻辑（Visual View）</p>
+                <div className="mt-3 space-y-1.5 text-xs text-slate-300">
+                  {rule.conditions!.map((condition, index) => (
+                    <div key={index} className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-md border border-cyan-400/20 bg-cyan-400/[0.05] px-2 py-0.5 text-[9px] font-semibold text-cyan-300">{index === 0 ? "IF" : "AND"}</span>
+                      <span className="text-slate-200">{condition.metric}</span>
+                      <span className="text-[10px] text-slate-500">{condition.op === "lt" ? "<" : condition.op === "lte" ? "≤" : condition.op === "gt" ? ">" : condition.op === "gte" ? "≥" : "="}</span>
+                      <span className="numeric text-amber-200">{condition.value.toLocaleString()} 元</span>
+                    </div>
+                  ))}
+                  <p className="pt-1 text-[10px] text-slate-600">THEN · 满足全部条件时生成风险信号，由规则引擎对已抽取事实确定性判定。</p>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
         {rules.length === 0 && <EmptyStateCard title={allRules.length === 0 ? "还没有业务规则" : "没有匹配的规则"} description={allRules.length === 0 ? "根据企业适用制度创建真实规则。新增规则默认标记为“待测试”，不会生成虚假的覆盖率或命中次数。" : "请调整搜索条件。"} action={allRules.length === 0 ? <button onClick={() => setOpen(true)} className="rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]">新建首条规则</button> : undefined} />}
       </div>
     </Panel>
