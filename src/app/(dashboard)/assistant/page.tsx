@@ -7,6 +7,7 @@ import { EmptyStateCard, PageIntro, Panel } from "@/components/enterprise/Enterp
 import CaseContextSelector from "@/components/enterprise/CaseContextSelector";
 import { useActiveEnterpriseCase } from "@/hooks/use-active-enterprise-case";
 import { streamEnterpriseAI } from "@/lib/enterprise-ai";
+import { classifyError } from "@/components/feedback/ErrorState";
 import { useEnterpriseStore } from "@/store/enterprise-store";
 import { useModelStore } from "@/store/model-store";
 
@@ -130,13 +131,21 @@ export default function AssistantPage() {
         caseId: activeCase.id,
       });
     } catch (error) {
-      // 流式中途失败：把已生成的部分保留为错误消息，不静默丢弃。
-      const partial = streamTextRef.current ? `（流式中断，已生成部分如下）
+      // 流式中途失败：把已生成的部分保留为错误消息，并按错误类型给出建议。
+      const rawMessage = error instanceof Error ? error.message : "AI 调用失败，请检查模型连接。";
+      const classified = classifyError(rawMessage);
+      const partial = streamTextRef.current
+        ? `（流式中断，已生成部分如下）
 
-${streamTextRef.current}` : undefined;
+${streamTextRef.current}`
+        : undefined;
       appendAssistantMessage({
         role: "assistant",
-        content: partial ?? (error instanceof Error ? error.message : "AI 调用失败，请检查模型连接。"),
+        content: partial
+          ? `【${classified.title}】${partial}`
+          : `【${classified.title}】${rawMessage}
+
+建议：${classified.hint}`,
         error: !partial,
         caseId: activeCase.id,
       });
