@@ -24,6 +24,7 @@ import ModelFormDialog from "@/components/models/ModelFormDialog";
 import { PROVIDER_PRESETS } from "@/ai/model-center/providers/presets";
 import type { PublicProviderConfig } from "@/ai/model-center/types";
 import { useModelStore } from "@/store/model-store";
+import { ErrorState } from "@/components/feedback/ErrorState";
 
 const statusMeta = {
   online: { label: "连接正常", className: "text-emerald-300", dot: "bg-emerald-400" },
@@ -95,7 +96,7 @@ export default function ModelsPage() {
       actions={<Button variant="primary" onClick={openAdd}><Plus className="h-3.5 w-3.5" />添加模型</Button>}
     />
 
-    {error && <div role="alert" className="rounded-xl border border-rose-400/20 bg-rose-400/[0.06] px-4 py-3 text-xs text-rose-200">{error}</div>}
+    {error && <ErrorState message={error} onRetry={() => void refresh()} retryLabel="重新加载" />}
 
     <div className="grid gap-4 lg:grid-cols-[.8fr_1.2fr]">
       <Panel className="p-5">

@@ -7,7 +7,7 @@
  * 分页、自定义行渲染；不依赖第三方表格库。
  * 列可见性与批量操作由调用方按需扩展，本组件预留 rows 全量数据。
  */
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { ChevronDown, ChevronUp, Search, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -33,6 +33,11 @@ export function EnterpriseDataTable<Row extends { id: string }>({
   pageSize = 10,
   onRowClick,
   toolbar,
+  /** 传入时启用行展开：返回该行的展开内容（如 Visual View / 详情）。 */
+  expandedRowRender,
+  /** 受控行展开 id（配合 onExpandedChange）；不传则由组件内部管理。 */
+  expandedId: controlledExpandedId,
+  onExpandedChange,
 }: {
   columns: Array<DataTableColumn<Row>>;
   rows: Row[];
@@ -45,11 +50,20 @@ export function EnterpriseDataTable<Row extends { id: string }>({
   onRowClick?: (row: Row) => void;
   /** 顶栏右侧自定义区域（如筛选、批量操作）。 */
   toolbar?: React.ReactNode;
+  expandedRowRender?: (row: Row) => React.ReactNode;
+  expandedId?: string | null;
+  onExpandedChange?: (id: string | null) => void;
 }) {
   const [query, setQuery] = useState("");
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [page, setPage] = useState(0);
+  const [innerExpandedId, setInnerExpandedId] = useState<string | null>(null);
+  const expandedId = controlledExpandedId !== undefined ? controlledExpandedId : innerExpandedId;
+  const setExpandedId = (id: string | null) => {
+    if (onExpandedChange) onExpandedChange(id);
+    else setInnerExpandedId(id);
+  };
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -150,19 +164,35 @@ export function EnterpriseDataTable<Row extends { id: string }>({
               </tr>
             </thead>
             <tbody>
-              {pageRows.map((row) => (
-                <tr
-                  key={rowKey(row)}
-                  onClick={onRowClick ? () => onRowClick(row) : undefined}
-                  className={cn("border-t border-white/[0.04] transition hover:bg-white/[0.03]", onRowClick && "cursor-pointer")}
-                >
-                  {columns.map((column) => (
-                    <td key={column.key} className={cn("px-4 py-3 align-middle", column.className)}>
-                      {column.render(row)}
-                    </td>
-                  ))}
-                </tr>
-              ))}
+              {pageRows.map((row) => {
+                const rowId = rowKey(row);
+                const isExpanded = expandedRowRender != null && expandedId === rowId;
+                return (
+                  <Fragment key={rowId}>
+                    <tr
+                      onClick={onRowClick ? () => onRowClick(row) : expandedRowRender ? () => setExpandedId(isExpanded ? null : rowId) : undefined}
+                      className={cn(
+                        "border-t border-white/[0.04] transition hover:bg-white/[0.03]",
+                        (onRowClick || expandedRowRender) && "cursor-pointer",
+                        isExpanded && "bg-white/[0.03]"
+                      )}
+                    >
+                      {columns.map((column) => (
+                        <td key={column.key} className={cn("px-4 py-3 align-middle", column.className)}>
+                          {column.render(row)}
+                        </td>
+                      ))}
+                    </tr>
+                    {isExpanded && (
+                      <tr className="border-t border-white/[0.04] bg-black/20">
+                        <td colSpan={columns.length} className="px-5 py-4">
+                          {expandedRowRender!(row)}
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>

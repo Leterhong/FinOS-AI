@@ -9,6 +9,8 @@ import { useActiveEnterpriseCase } from "@/hooks/use-active-enterprise-case";
 import { callEnterpriseAI } from "@/lib/enterprise-ai";
 import { useEnterpriseStore } from "@/store/enterprise-store";
 import { useModelStore } from "@/store/model-store";
+import { AIExecutionTimeline } from "@/components/intelligence/AIExecutionTimeline";
+import { toast } from "@/components/feedback/toast";
 
 const capabilities = [
   [FileSearch, "资料理解", "读取当前项目关联的资料元数据，识别可用事实与缺口"],
@@ -32,6 +34,7 @@ export default function AgentsPage() {
   const active = useModelStore((state) => state.active);
   const [running, setRunning] = useState(false);
   const [notice, setNotice] = useState("");
+  const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
 
   const caseDocuments = useMemo(() => documents.filter((item) => item.caseId === activeCaseId), [activeCaseId, documents]);
   const caseRisks = useMemo(() => risks.filter((item) => item.caseId === activeCaseId), [activeCaseId, risks]);
@@ -65,13 +68,13 @@ export default function AgentsPage() {
   const promoteToRisk = (run: (typeof runs)[number]) => {
     const relatedCase = cases.find((item) => item.id === run.caseId);
     if (!relatedCase) {
-      setNotice(`运行 ${run.id} 未记录项目归属，请在当前项目重新运行后再登记风险`);
+      toast.warning(`该运行未记录项目归属，请在当前项目重新运行后再登记`);
       return;
     }
     const title = `Agent 研判发现：${run.task}`.slice(0, 80);
     const existing = risks.find((risk) => risk.caseId === relatedCase.id && risk.title === title);
     if (existing) {
-      setNotice(`运行 ${run.id} 已登记为风险 ${existing.id}，不会重复创建`);
+      toast.info(`该运行已登记为风险，不会重复创建`);
       return;
     }
     const hitOutcomes = caseDocuments.flatMap((document) => document.ruleOutcomes ?? []).filter((outcome) => outcome.hit);
@@ -96,7 +99,7 @@ export default function AgentsPage() {
       ruleCodes: [...new Set(versionedRuleCodes)],
       sourceRunId: run.id,
     });
-    setNotice(`已将运行 ${run.id} 的输出登记为待核验风险 ${risk.id}，请在风险中心补全并核验`);
+    toast.success(`已将研判输出登记为待核验风险，请在风险中心补全并核验`);
   };
 
   /** 把 Agent 研判输出转为流程中心的补充/核验任务。 */
@@ -121,7 +124,7 @@ export default function AgentsPage() {
       due: dueDate,
       priority: "medium",
     });
-    setNotice(`已基于运行 ${run.id} 创建流程任务，请在流程中心推进`);
+    toast.success(`已基于研判输出创建流程任务，请在流程中心推进`);
   };
 
   const missing = [
@@ -140,7 +143,24 @@ export default function AgentsPage() {
     {!canRun && <Panel><EmptyStateCard icon={active?.configured ? FileSearch : Cpu} title="研判链路尚未就绪" description={`还需要：${missing.join("、")}。配置完成后，运行按钮会发起真实模型请求并保存输出。`} action={<div className="flex flex-wrap justify-center gap-2">{!active?.configured && <Link href="/models" className="rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]">配置模型</Link>}{!activeCase && <Link href="/cases" className="rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-300">创建项目</Link>}{activeCase && caseDocuments.length === 0 && <Link href={`/documents?caseId=${encodeURIComponent(activeCase.id)}`} className="rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-300">上传当前项目资料</Link>}</div>} /></Panel>}
 
     <div className="grid gap-4 xl:grid-cols-[1.35fr_.65fr]">
-      <Panel><PanelHeader eyebrow="Execution history" title="真实运行记录" description="记录项目归属、模型、耗时、状态和完整输出" />{runs.length === 0 ? <EmptyStateCard icon={Bot} title="尚无 Agent 运行" description="满足项目、资料和模型三个前置条件后，可发起第一次研判。" /> : <div className="divide-y divide-white/[0.06]">{notice && <p className="mx-5 mt-4 rounded-xl border border-cyan-400/15 bg-cyan-400/[0.05] px-3 py-2 text-[11px] text-cyan-200">{notice}</p>}{runs.map((item) => <article key={item.id} className="p-5"><div className="flex flex-wrap items-center gap-2"><span className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[10px] ${item.status === "已完成" ? "border-emerald-400/15 text-emerald-300" : item.status === "失败" ? "border-rose-400/15 text-rose-300" : "border-cyan-400/15 text-cyan-300"}`}>{item.status === "已完成" ? <CheckCircle2 className="h-3 w-3" /> : item.status === "失败" ? <XCircle className="h-3 w-3" /> : <Clock3 className="h-3 w-3" />}{item.status}</span><span className="font-mono text-[9px] text-slate-700">{item.id}</span><span className="rounded-md border border-white/[0.07] px-2 py-1 text-[9px] text-slate-500">{item.company || "历史记录未标注项目"}</span><span className="ml-auto text-[10px] text-slate-600">{item.model || "未记录模型"} · {item.duration}</span></div><h3 className="mt-3 text-sm font-medium text-slate-100">{item.task}</h3><p className={`mt-3 whitespace-pre-wrap text-xs leading-6 ${item.error ? "text-rose-200/80" : "text-slate-400"}`}>{item.output || item.error || "模型正在处理…"}</p>{item.status === "已完成" && <div className="mt-4 flex flex-wrap gap-2"><button onClick={() => promoteToRisk(item)} className="rounded-lg border border-white/10 px-3 py-1.5 text-[10px] text-slate-300 transition hover:border-rose-400/25 hover:text-rose-200">登记为风险信号</button><button onClick={() => promoteToTask(item)} className="rounded-lg border border-white/10 px-3 py-1.5 text-[10px] text-slate-300 transition hover:border-cyan-400/25 hover:text-cyan-200">转为流程任务</button></div>}</article>)}</div>}</Panel>
+      <Panel><PanelHeader eyebrow="Execution history" title="真实运行记录" description="记录项目归属、模型、耗时、状态和完整输出" />{runs.length === 0 ? <EmptyStateCard icon={Bot} title="尚无 Agent 运行" description="满足项目、资料和模型三个前置条件后，可发起第一次研判。" /> : <div className="divide-y divide-white/[0.06]">{notice && <p className="mx-5 mt-4 rounded-xl border border-cyan-400/15 bg-cyan-400/[0.05] px-3 py-2 text-[11px] text-cyan-200">{notice}</p>}{runs.map((item) => <article key={item.id} className="p-5"><div className="flex flex-wrap items-center gap-2"><span className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[10px] ${item.status === "已完成" ? "border-emerald-400/15 text-emerald-300" : item.status === "失败" ? "border-rose-400/15 text-rose-300" : "border-cyan-400/15 text-cyan-300"}`}>{item.status === "已完成" ? <CheckCircle2 className="h-3 w-3" /> : item.status === "失败" ? <XCircle className="h-3 w-3" /> : <Clock3 className="h-3 w-3" />}{item.status}</span><span className="font-mono text-[9px] text-slate-700">{item.id}</span><span className="rounded-md border border-white/[0.07] px-2 py-1 text-[9px] text-slate-500">{item.company || "历史记录未标注项目"}</span><span className="ml-auto text-[10px] text-slate-600">{item.model || "未记录模型"} · {item.duration}</span></div><h3 className="mt-3 text-sm font-medium text-slate-100">{item.task}</h3><p className={`mt-3 line-clamp-3 whitespace-pre-wrap text-xs leading-6 ${item.error ? "text-rose-200/80" : "text-slate-400"}`}>{item.output || item.error || "模型正在处理…"}</p>
+<div className="mt-3 flex gap-2">
+  <button type="button" onClick={() => setExpandedRunId(expandedRunId === item.id ? null : item.id)} className="rounded-lg border border-white/10 px-2.5 py-1 text-[10px] text-slate-400 transition hover:border-cyan-400/25 hover:text-cyan-200">
+    {expandedRunId === item.id ? "收起执行轨迹" : "查看执行轨迹"}
+  </button>
+</div>
+{expandedRunId === item.id && (
+  <div className="mt-4 rounded-xl border border-white/[0.07] bg-black/20 p-4">
+    <p className="mb-3 text-[10px] font-semibold uppercase tracking-[.15em] text-slate-600">执行轨迹（Run {item.id}）</p>
+    <AIExecutionTimeline
+      stages={[
+        { label: "加载工作区上下文", state: "done", detail: "项目、资料、规则与既有风险已注入" },
+        { label: `模型研判（${item.model || "未记录模型"}）`, state: item.status === "失败" ? "failed" : "done", detail: item.status === "失败" ? item.error : `耗时 ${item.duration}` },
+        { label: item.status === "失败" ? "运行失败，等待重试" : "产出已保存，等待人工复核", state: item.status === "失败" ? "failed" : item.status === "运行中" ? "active" : "done" },
+      ]}
+    />
+  </div>
+)}{item.status === "已完成" && <div className="mt-4 flex flex-wrap gap-2"><button onClick={() => promoteToRisk(item)} className="rounded-lg border border-white/10 px-3 py-1.5 text-[10px] text-slate-300 transition hover:border-rose-400/25 hover:text-rose-200">登记为风险信号</button><button onClick={() => promoteToTask(item)} className="rounded-lg border border-white/10 px-3 py-1.5 text-[10px] text-slate-300 transition hover:border-cyan-400/25 hover:text-cyan-200">转为流程任务</button></div>}</article>)}</div>}</Panel>
       <div className="space-y-4"><Panel><PanelHeader eyebrow="Runtime context" title="本次可用上下文" /><div className="grid grid-cols-2 gap-2 p-4">{[["当前项目",activeCase ? 1 : 0],["项目资料",caseDocuments.length],["全局规则",rules.length],["项目风险",caseRisks.length]].map(([label,value]) => <div key={String(label)} className="rounded-xl border border-white/[0.07] p-3 text-center"><p className="numeric text-xl text-white">{value}</p><p className="mt-1 text-[9px] text-slate-600">{label}</p></div>)}</div></Panel><Panel><PanelHeader eyebrow="Governance" title="执行边界" /><ul className="space-y-2 p-4 text-[10px] leading-5 text-slate-600"><li>· 仅读取当前企业项目的业务数据</li><li>· 不编造未提供的证据和外部来源</li><li>· 不执行审批、付款或对外发送</li><li>· 输出必须经过授权人员复核</li></ul></Panel></div>
     </div>
   </div>;
