@@ -162,9 +162,17 @@ interface StageDeps {
   project: string;
   rules: string;
   extracted: ExtractionBundle;
+  /** 请求级取消信号（客户端断开时中止上游模型调用）。 */
+  signal?: AbortSignal;
 }
 
 type StageOutcome = { result: Record<string, unknown> } | { error: string };
+
+/** 合并固定超时与请求级取消信号，先触发者生效。 */
+function withTimeout(timeoutMs: number, signal?: AbortSignal): AbortSignal {
+  const timeout = AbortSignal.timeout(timeoutMs);
+  return signal ? AbortSignal.any([signal, timeout]) : timeout;
+}
 
 /** 资料研判三阶段管线：事实抽取（LLM）→ 规则引擎判定 → 叙述生成（LLM）。 */
 async function runStages(deps: StageDeps, onStage: StageEmitter): Promise<StageOutcome> {
@@ -194,7 +202,7 @@ async function runStages(deps: StageDeps, onStage: StageEmitter): Promise<StageO
       temperature: 0,
       maxTokens: Math.min(3072, 4096),
       responseFormat: "json",
-      signal: AbortSignal.timeout(60_000),
+      signal: withTimeout(60_000, deps.signal),
     });
     const parsed = JSON.parse(extraction.content || "{}") as {
       facts?: LocatedFact[];
@@ -253,7 +261,7 @@ async function runStages(deps: StageDeps, onStage: StageEmitter): Promise<StageO
       model: modelId,
       temperature: 0.2,
       maxTokens: 8192,
-      signal: AbortSignal.timeout(90_000),
+      signal: withTimeout(90_000, deps.signal),
     });
     onStage("narrative", "done");
     return {
@@ -348,22 +356,37 @@ export async function POST(req: NextRequest) {
   // ── 流式模式（?stream=1）：按真实管线阶段推送进度，前端渲染执行清单 ──
   if (req.nextUrl.searchParams.get("stream") === "1") {
     const encoder = new TextEncoder();
+    const abort = new AbortController();
+    let closed = false;
     const stream = new ReadableStream<Uint8Array>({
       async start(controller) {
         const send = (payload: Record<string, unknown>) => {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
+          if (closed) return;
+          try {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
+          } catch {
+            closed = true;
+          }
         };
         try {
           send({ stage: "parse", state: "active" });
           send({ stage: "parse", state: "done", extractionMethod: extracted.extractionMethod, ocrUsed: extracted.ocrUsed });
-          const outcome = await runStages(deps, (stage, state) => send({ stage, state }));
+          const outcome = await runStages({ ...deps, signal: abort.signal }, (stage, state) => send({ stage, state }));
           if ("error" in outcome) send({ error: outcome.error });
           else send({ result: outcome.result });
         } catch (error) {
-          send({ error: error instanceof Error ? error.message : "模型分析失败" });
+          send({ error: abort.signal.aborted ? "请求已取消" : error instanceof Error ? error.message : "模型分析失败" });
         } finally {
-          controller.close();
+          closed = true;
+          try {
+            controller.close();
+          } catch {
+            /* 流已被客户端取消 */
+          }
         }
+      },
+      cancel() {
+        abort.abort();
       },
     });
     return new Response(stream, {

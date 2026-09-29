@@ -166,7 +166,7 @@ def _db_assets(ctx, limit: int = 50) -> dict:
 
     rows = list(
         ctx.db.scalars(
-            select(Asset).where(Asset.user_id == ctx.user.id).limit(min(int(limit), 200))
+            select(Asset).where(Asset.user_id == ctx.user.id).limit(max(1, min(int(limit), 200)))
         )
     )
     return {
@@ -201,7 +201,7 @@ def _db_transactions(ctx, limit: int = 30) -> dict:
             select(Transaction)
             .where(Transaction.user_id == ctx.user.id)
             .order_by(Transaction.date.desc())
-            .limit(min(int(limit), 200))
+            .limit(max(1, min(int(limit), 200)))
         )
     )
     return {

@@ -4,16 +4,18 @@
 // 用户必须接入自己的 AI 模型 API，系统负责管理/连接/调用/切换/统一管理。
 
 /** 支持的 Provider 类型（均走 OpenAI Compatible API 协议或其变体）。 */
-export type ProviderType =
-  | "openai"
-  | "deepseek"
-  | "qwen"
-  | "claude"
-  | "gemini"
-  | "zhipu"
-  | "moonshot"
-  | "ollama"
-  | "custom";
+export const MODEL_PROVIDERS = [
+  "openai",
+  "deepseek",
+  "qwen",
+  "claude",
+  "gemini",
+  "zhipu",
+  "moonshot",
+  "ollama",
+  "custom",
+] as const;
+export type ProviderType = (typeof MODEL_PROVIDERS)[number];
 
 /** 模型连接状态。 */
 export type ModelStatus = "untested" | "online" | "offline" | "error";

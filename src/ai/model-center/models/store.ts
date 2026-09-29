@@ -47,6 +47,11 @@ function coerceMaxTokens(value: unknown): number | undefined {
   return typeof n === "number" && Number.isInteger(n) && n > 0 && n <= 1_000_000 ? n : undefined;
 }
 
+/** 字符串兜底：非字符串输入一律返回空串，避免对对象/数字调用 .trim() 抛错。 */
+function safeTrim(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
 class ModelConfigStore {
   private cache = new Map<string, AIProviderConfig[]>();
 
@@ -177,7 +182,7 @@ class ModelConfigStore {
     const configs = await this.load(userId);
     const preset = getPreset(input.providerName);
     const now = new Date().toISOString();
-    const baseUrl = (input.baseUrl?.trim() || preset.baseUrl).replace(/\/+$/, "");
+    const baseUrl = (safeTrim(input.baseUrl) || preset.baseUrl).replace(/\/+$/, "");
     // 出站边界：落库前校验 Base URL（拒绝云元数据/链路本地，生产默认禁内网）。
     await assertSafeBaseUrl(baseUrl);
     const config: AIProviderConfig = {
@@ -185,11 +190,11 @@ class ModelConfigStore {
       userId,
       providerName: input.providerName,
       providerType: input.providerName,
-      displayName: input.displayName?.trim() || preset.label,
-      modelName: input.modelName?.trim() || input.modelId,
+      displayName: safeTrim(input.displayName) || preset.label,
+      modelName: safeTrim(input.modelName) || input.modelId,
       modelId: input.modelId.trim(),
       baseUrl,
-      encryptedApiKey: input.apiKey ? encryptApiKey(input.apiKey.trim()) : undefined,
+      encryptedApiKey: typeof input.apiKey === "string" && input.apiKey.trim() ? encryptApiKey(input.apiKey.trim()) : undefined,
       temperature: coerceTemperature(input.temperature),
       maxTokens: coerceMaxTokens(input.maxTokens),
       status: "untested",
@@ -215,11 +220,11 @@ class ModelConfigStore {
       c.providerName = input.providerName;
       c.providerType = input.providerName;
     }
-    if (input.displayName !== undefined) c.displayName = input.displayName.trim() || c.displayName;
-    if (input.modelName !== undefined) c.modelName = input.modelName.trim() || c.modelName;
-    if (input.modelId !== undefined) c.modelId = input.modelId.trim() || c.modelId;
+    if (input.displayName !== undefined) c.displayName = safeTrim(input.displayName) || c.displayName;
+    if (input.modelName !== undefined) c.modelName = safeTrim(input.modelName) || c.modelName;
+    if (input.modelId !== undefined) c.modelId = safeTrim(input.modelId) || c.modelId;
     if (input.baseUrl !== undefined) {
-      const nextBaseUrl = input.baseUrl.trim().replace(/\/+$/, "") || c.baseUrl;
+      const nextBaseUrl = safeTrim(input.baseUrl).replace(/\/+$/, "") || c.baseUrl;
       await assertSafeBaseUrl(nextBaseUrl);
       c.baseUrl = nextBaseUrl;
     }
@@ -230,7 +235,7 @@ class ModelConfigStore {
     const maxTokens = coerceMaxTokens(input.maxTokens);
     if (maxTokens !== undefined) c.maxTokens = maxTokens;
     // apiKey 留空表示不修改；提供则重新加密。
-    if (input.apiKey) c.encryptedApiKey = encryptApiKey(input.apiKey.trim());
+    if (typeof input.apiKey === "string" && input.apiKey.trim()) c.encryptedApiKey = encryptApiKey(input.apiKey.trim());
     c.status = "untested"; // 配置变更后需重新测试
     c.updatedAt = new Date().toISOString();
     await this.persist(userId, configs);

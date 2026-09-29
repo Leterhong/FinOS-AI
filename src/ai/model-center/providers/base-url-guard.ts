@@ -17,35 +17,102 @@ import { lookup } from "node:dns/promises";
 export class UnsafeBaseUrlError extends Error {}
 
 const PRIVATE_V4 = [/^10\./, /^127\./, /^192\.168\./, /^172\.(1[6-9]|2\d|3[01])\./, /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./];
+const FORBIDDEN_V4 = [/^0\./, /^169\.254\./, /^224\./, /^240\./, /^255\./];
 
-function isPrivateIp(ip: string): boolean {
-  if (ip.startsWith("::ffff:")) return isPrivateIp(ip.slice(7));
-  if (isIP(ip) === 6) {
-    const lowered = ip.toLowerCase();
-    return (
-      lowered === "::1" ||
-      lowered.startsWith("fc") ||
-      lowered.startsWith("fd") ||
-      lowered.startsWith("fe80")
-    );
+/** 解析 IPv6 为 128 位大整数（含内嵌 IPv4 与压缩形式），非法输入返回 null。 */
+const B16 = BigInt(16);
+const B32 = BigInt(32);
+const B96 = BigInt(96);
+const B112 = BigInt(112);
+const MASK32 = BigInt(0xffffffff);
+const V4_MAPPED_PREFIX = BigInt(0xffff);
+const LOOPBACK6 = BigInt(1);
+const UNSET6 = BigInt(0);
+const ULA6 = BigInt(0xfc00) << B112;
+const LINK_LOCAL6 = BigInt(0xfe80) << B112;
+const SITE_LOCAL6 = BigInt(0xfec0) << B112;
+const MULTICAST6 = BigInt(0xff00) << B112;
+const IMDS6 = (BigInt(0xfd000ec2) << B96) + BigInt(0x254);
+
+function parseIpv6(ip: string): bigint | null {
+  if (isIP(ip) !== 6) return null;
+  const zoneIndex = ip.indexOf("%");
+  const addr = zoneIndex >= 0 ? ip.slice(0, zoneIndex) : ip;
+  const parts = addr.split("::");
+  if (parts.length > 2) return null;
+  const expand = (segment: string): string[] =>
+    segment
+      ? segment.split(":").flatMap((group) => {
+          if (group.includes(".")) {
+            const octets = group.split(".").map(Number);
+            if (octets.length !== 4 || octets.some((o) => !Number.isInteger(o) || o < 0 || o > 255)) return [];
+            return [((octets[0] << 8) | octets[1]).toString(16), ((octets[2] << 8) | octets[3]).toString(16)];
+          }
+          return [group];
+        })
+      : [];
+  const head = expand(parts[0]);
+  const tail = parts.length === 2 ? expand(parts[1]) : [];
+  const missing = 8 - head.length - tail.length;
+  if (missing < 0) return null;
+  const groups = [...head, ...Array<string>(missing).fill("0"), ...tail];
+  if (groups.length !== 8) return null;
+  let value = BigInt(0);
+  for (const group of groups) {
+    if (!/^[0-9a-fA-F]{1,4}$/.test(group)) return null;
+    value = (value << B16) | BigInt(parseInt(group, 16));
   }
+  return value;
+}
+
+/** 从 IPv4 映射/兼容的 IPv6 中提取内嵌 IPv4；非此类地址返回 null。 */
+function embeddedV4(value: bigint): string | null {
+  if (value >> B32 === V4_MAPPED_PREFIX || (value >> B32 === UNSET6 && value > LOOPBACK6)) {
+    const n = Number(value & MASK32);
+    return `${(n >>> 24) & 0xff}.${(n >>> 16) & 0xff}.${(n >>> 8) & 0xff}.${n & 0xff}`;
+  }
+  return null;
+}
+
+function inV6Subnet(value: bigint, base: bigint, prefix: number): boolean {
+  const shift = BigInt(128 - prefix);
+  return value >> shift === base >> shift;
+}
+
+function isPrivateV4(ip: string): boolean {
   return PRIVATE_V4.some((re) => re.test(ip));
 }
 
-function isAlwaysForbidden(ip: string): boolean {
-  if (ip.startsWith("::ffff:")) return isAlwaysForbidden(ip.slice(7));
-  if (isIP(ip) === 6) {
-    const lowered = ip.toLowerCase();
-    return lowered === "::" || lowered.startsWith("fe80") || lowered.startsWith("169.254") || lowered.startsWith("fec0");
+function isForbiddenV4(ip: string): boolean {
+  return FORBIDDEN_V4.some((re) => re.test(ip));
+}
+
+function isPrivateIp(ip: string): boolean {
+  const value = parseIpv6(ip);
+  if (value !== null) {
+    const mapped = embeddedV4(value);
+    if (mapped) return isPrivateV4(mapped);
+    return value === LOOPBACK6 || inV6Subnet(value, ULA6, 7) || inV6Subnet(value, LINK_LOCAL6, 10);
   }
-  // 169.254/16 链路本地（含云元数据）、0.0.0.0、组播与保留段。
-  return (
-    ip === "0.0.0.0" ||
-    ip.startsWith("169.254.") ||
-    ip.startsWith("224.") ||
-    ip.startsWith("240.") ||
-    ip.startsWith("255.")
-  );
+  if (isIP(ip) === 4) return isPrivateV4(ip);
+  return false;
+}
+
+function isAlwaysForbidden(ip: string): boolean {
+  const value = parseIpv6(ip);
+  if (value !== null) {
+    const mapped = embeddedV4(value);
+    if (mapped) return isForbiddenV4(mapped);
+    return (
+      value === UNSET6 ||
+      inV6Subnet(value, LINK_LOCAL6, 10) ||
+      inV6Subnet(value, SITE_LOCAL6, 10) ||
+      inV6Subnet(value, MULTICAST6, 8) ||
+      value === IMDS6
+    );
+  }
+  if (isIP(ip) === 4) return isForbiddenV4(ip);
+  return false;
 }
 
 function allowPrivateEndpoints(): boolean {
@@ -68,8 +135,8 @@ export async function assertSafeBaseUrl(rawUrl: string): Promise<string> {
   if (parsed.username || parsed.password) {
     throw new UnsafeBaseUrlError("模型接口地址不能包含用户名或密码");
   }
-  const host = parsed.hostname;
-  let allowPrivate = allowPrivateEndpoints();
+  const host = parsed.hostname.replace(/^\[|\]$/g, "");
+  const allowPrivate = allowPrivateEndpoints();
 
   if (isIP(host)) {
     if (isAlwaysForbidden(host)) {
@@ -98,7 +165,6 @@ export async function assertSafeBaseUrl(rawUrl: string): Promise<string> {
       throw new UnsafeBaseUrlError("模型接口地址不允许指向链路本地/云元数据地址");
     }
     if (isPrivateIp(address) && !allowPrivate) {
-      allowPrivate = false;
       throw new UnsafeBaseUrlError(
         "生产环境默认禁止指向本机/内网的模型地址；如为自托管服务请设置 FINOS_ALLOW_PRIVATE_AI_ENDPOINTS=true"
       );

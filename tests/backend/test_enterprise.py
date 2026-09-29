@@ -60,6 +60,21 @@ def test_cross_user_access_returns_404(client, user_a, user_b):
     assert any(c["id"] == case_id for c in snap_a2["cases"])
 
 
+def test_snapshot_does_not_leak_caseless_documents(client, user_a, user_b):
+    """回归：B 无任何项目时，快照不得命中 A 中 case_id 为空的资料（曾用 or [""] 回退导致越权）。"""
+    doc_id = f"DOC-{uuid.uuid4().hex[:8]}"
+    resp = client.post(
+        "/api/enterprise/documents",
+        json={"id": doc_id, "name": "未关联资料.pdf", "kind": "企业资料", "status": "已解析"},
+        headers=user_a["headers"],
+    )
+    assert resp.status_code == 200, resp.text
+    snap_b = client.get("/api/enterprise/snapshot", headers=user_b["headers"]).json()["data"]
+    assert not any(d["id"] == doc_id for d in snap_b["documents"])
+    snap_a = client.get("/api/enterprise/snapshot", headers=user_a["headers"]).json()["data"]
+    assert any(d["id"] == doc_id for d in snap_a["documents"])
+
+
 def test_document_and_risk_upsert_with_counts(client, auth):
     assert client.post(
         "/api/enterprise/cases",

@@ -59,17 +59,17 @@ export function decryptApiKey(blob: EncryptedApiKey): string {
 }
 
 /**
- * 掩码 API Key 用于前端展示：sk-abcd****wxyz。
- * 短 key 仅保留首尾各 2 位，避免泄露。
+ * 掩码 API Key 用于前端展示：abcd********wxyz。
+ * 可见字符数按长度收缩（最多 4 位），短 key 仅保留首 1 位，避免泄露。
  */
 export function maskApiKey(plain: string | undefined): string {
   if (!plain) return "—";
   const s = plain.trim();
+  if (!s) return "—";
   if (s.length <= 8) {
-    const head = s.slice(0, 2);
-    return `${head}${"*".repeat(Math.max(4, s.length - 2))}`;
+    const head = s.slice(0, 1);
+    return `${head}${"*".repeat(Math.max(4, s.length - 1))}`;
   }
-  const head = s.slice(0, 4);
-  const tail = s.slice(-4);
-  return `${head}****${tail}`;
+  const visible = Math.min(4, Math.floor(s.length / 4));
+  return `${s.slice(0, visible)}${"*".repeat(8)}${s.slice(-visible)}`;
 }

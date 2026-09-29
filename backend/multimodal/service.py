@@ -196,7 +196,7 @@ def list_inputs(db: Session, user: User, limit: int = 20) -> list[dict]:
             select(MultimodalInput)
             .where(MultimodalInput.user_id == user.id)
             .order_by(MultimodalInput.created_at.desc())
-            .limit(min(limit, 100))
+            .limit(max(1, min(limit, 100)))
         )
     )
     if not rows:
@@ -223,7 +223,7 @@ def list_pending(db: Session, user: User, limit: int = 100) -> list[dict]:
             ExtractionResult.status == STATUS_NEEDS_CONFIRM,
         )
         .order_by(ExtractionResult.created_at.desc())
-        .limit(min(limit, 200))
+        .limit(max(1, min(limit, 200)))
     )
     return [serialize_extraction(x) for x in rows]
 

@@ -102,10 +102,18 @@ export async function POST(req: NextRequest) {
   if (body.stream === true) {
     const encoder = new TextEncoder();
     const started = Date.now();
+    const abort = new AbortController();
+    const timeout = setTimeout(() => abort.abort(), 120_000);
+    let closed = false;
     const sse = new ReadableStream<Uint8Array>({
       async start(controller) {
         const send = (payload: Record<string, unknown>) => {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
+          if (closed) return;
+          try {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
+          } catch {
+            closed = true;
+          }
         };
         try {
           for await (const chunk of provider.stream({
@@ -123,15 +131,26 @@ ${safeQuestion}` },
             model: model.modelId,
             temperature: model.temperature ?? 0.3,
             maxTokens: Math.min(model.maxTokens ?? 2048, 8192),
+            signal: abort.signal,
           })) {
             if (chunk.content) send({ delta: chunk.content });
           }
           send({ done: true, model: model.modelId, latencyMs: Date.now() - started });
         } catch (error) {
-          send({ error: error instanceof Error ? error.message : "模型流式调用失败" });
+          send({ error: abort.signal.aborted ? "模型流式调用超时或已取消" : error instanceof Error ? error.message : "模型流式调用失败" });
         } finally {
-          controller.close();
+          clearTimeout(timeout);
+          closed = true;
+          try {
+            controller.close();
+          } catch {
+            /* 流已被客户端取消 */
+          }
         }
+      },
+      cancel() {
+        clearTimeout(timeout);
+        abort.abort();
       },
     });
     return new Response(sse, {

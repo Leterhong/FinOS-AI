@@ -12,7 +12,7 @@ import json
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import or_, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session
 
 from backend.core import get_current_user, ok
@@ -370,11 +370,11 @@ def snapshot(user: User = Depends(get_current_user), db: Session = Depends(get_d
     cases = accessible_cases(db, user)
     case_ids = [item.id for item in cases]
     org_ids = [item.organization_id for item in memberships_for_user(db, user)]
-    documents = list(db.scalars(select(EnterpriseDocument).where(or_(EnterpriseDocument.user_id == user.id, EnterpriseDocument.case_id.in_(case_ids or [""])))))
-    risks = list(db.scalars(select(EnterpriseRisk).where(or_(EnterpriseRisk.user_id == user.id, EnterpriseRisk.case_id.in_(case_ids or [""])))))
-    rules = [item for item in db.scalars(select(EnterpriseRule).where(or_(EnterpriseRule.user_id == user.id, EnterpriseRule.organization_id.in_(org_ids or [""])))) if rule_accessible(db, user, item)]
-    tasks = list(db.scalars(select(EnterpriseTask).where(or_(EnterpriseTask.user_id == user.id, EnterpriseTask.case_id.in_(case_ids or [""])))))
-    briefs = list(db.scalars(select(EnterpriseBrief).where(or_(EnterpriseBrief.user_id == user.id, EnterpriseBrief.case_id.in_(case_ids or [""])))))
+    documents = list(db.scalars(select(EnterpriseDocument).where(or_(EnterpriseDocument.user_id == user.id, EnterpriseDocument.case_id.in_(case_ids)))))
+    risks = list(db.scalars(select(EnterpriseRisk).where(or_(EnterpriseRisk.user_id == user.id, EnterpriseRisk.case_id.in_(case_ids)))))
+    rules = [item for item in db.scalars(select(EnterpriseRule).where(or_(EnterpriseRule.user_id == user.id, EnterpriseRule.organization_id.in_(org_ids)))) if rule_accessible(db, user, item)]
+    tasks = list(db.scalars(select(EnterpriseTask).where(or_(EnterpriseTask.user_id == user.id, EnterpriseTask.case_id.in_(case_ids)))))
+    briefs = list(db.scalars(select(EnterpriseBrief).where(or_(EnterpriseBrief.user_id == user.id, EnterpriseBrief.case_id.in_(case_ids)))))
     db.commit()
     return ok({
         "cases": [_case_out(c) for c in cases],
@@ -415,6 +415,8 @@ def delete_case(case_id: str, request: Request, user: User = Depends(get_current
     if row is None or not can_access_case(db, user, row, "admin"):
         return fail("项目不存在", status_code=404)
     record_governance_audit(db, user=user, action="case.delete", resource_type="case", resource_id=row.id, organization_id=row.organization_id, case_id=row.id, request=request)
+    for model in (EnterpriseDocument, EnterpriseRisk, EnterpriseTask, EnterpriseBrief):
+        db.execute(delete(model).where(model.case_id == case_id))
     db.delete(row)
     db.commit()
     return ok({"deleted": True})
@@ -494,7 +496,11 @@ def upsert_rule(body: RuleIn, request: Request, user: User = Depends(get_current
     org = ensure_default_organization(db, user)
     row = db.get(EnterpriseRule, body.id)
     if row is None:
-        row = EnterpriseRule(id=body.id, user_id=user.id, organization_id=body.organizationId or org.id)
+        organization_id = body.organizationId or org.id
+        member = next((item for item in memberships_for_user(db, user) if item.organization_id == organization_id and item.role in {"owner", "admin", "analyst"}), None)
+        if member is None:
+            return fail("无权在该组织创建规则", status_code=403)
+        row = EnterpriseRule(id=body.id, user_id=user.id, organization_id=organization_id)
         db.add(row)
         action = "rule.create"
     elif not rule_accessible(db, user, row, "analyst"):

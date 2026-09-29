@@ -190,10 +190,10 @@ def generate_strategies(
     goal = pred.get("goal") or {}
     if goal.get("available"):
         impact.append(f"当前节奏下财富目标达成概率约 {goal['probability']:.0%}。")
-    # milestones 为 {1: …, 3: …, 5: …, 10: …, 20: …, 30: …}，明确取 10 年期；
-    # 此前取 [-1]（30 年）当作「10 年后」展示。
-    milestones = pred.get("milestones") if isinstance(pred.get("milestones"), dict) else {}
-    ten_year = milestones.get(10) or {}
+    # prediction 返回的 milestones 是 list[{year, netWorth, ...}]，按年份取 10 年期。
+    milestone_list = pred.get("milestones") if isinstance(pred.get("milestones"), list) else []
+    by_year = {m.get("year"): m for m in milestone_list if isinstance(m, dict)}
+    ten_year = by_year.get(10) or {}
     impact.append(f"按现有假设，10 年后净资产约 ¥{ten_year.get('netWorth', 0):,.0f}。")
     advice = [a["title"] for bucket in buckets.values() for a in bucket if a["priority"] == "high"][:4]
 
@@ -233,6 +233,7 @@ def save_strategies(db: Session, user: User, result: dict) -> list[str]:
             tier=result.get("tier", "local"),
         )
         db.add(row)
+        db.flush()
         ids.append(row.id)
     db.commit()
     return ids

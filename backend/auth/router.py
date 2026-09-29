@@ -105,6 +105,17 @@ def _issue_tokens(db: Session, user: User) -> dict:
     return {"token": access, "refreshToken": refresh}
 
 
+def _revoke_refresh_family(db: Session, user_id: str | None) -> None:
+    """检测到刷新令牌复用时，吊销该用户全部未吊销刷新令牌，强制重新登录。"""
+    if not user_id:
+        return
+    db.execute(
+        update(RefreshToken)
+        .where(RefreshToken.user_id == user_id, RefreshToken.revoked == False)  # noqa: E712
+        .values(revoked=True)
+    )
+
+
 def _secure_request(request: Request) -> bool:
     return request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
 
@@ -252,6 +263,7 @@ def refresh(body: RefreshIn, request: Request, response: Response, db: Session =
             details="检测到已吊销/未知的刷新令牌",
             request=request,
         )
+        _revoke_refresh_family(db, payload.get("sub"))
         db.commit()
         log_event(logger, "warning", "auth.refresh.reuse", user_id=payload.get("sub"), ip=client_ip(request))
         return fail("刷新令牌无效或已过期", status_code=401)
@@ -286,11 +298,13 @@ def refresh(body: RefreshIn, request: Request, response: Response, db: Session =
             details="并发刷新检测到重复使用同一刷新令牌",
             request=request,
         )
+        _revoke_refresh_family(db, user.id)
         db.commit()
         log_event(logger, "warning", "auth.refresh.reuse", user_id=user.id, ip=client_ip(request))
         return fail("刷新令牌无效或已过期", status_code=401)
     tokens = _issue_tokens(db, user)
     _set_refresh_cookie(response, tokens["refreshToken"], request)
+    db.commit()
     log_event(logger, "info", "auth.refresh.ok", user_id=user.id, ip=client_ip(request))
     return ok({"token": tokens["token"], "user": _user_public(user, db)}, "令牌已刷新")
 

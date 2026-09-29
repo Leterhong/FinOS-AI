@@ -152,8 +152,7 @@ API Key 通过 HttpOnly 工作区会话隔离，在服务端使用 AES-256-GCM �
 
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r backend
-equirements.txt
+.\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
 .\.venv\Scripts\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8300 --reload
 
 # 另一个终端

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { testDraftModel } from "@/ai/model-center/tester";
-import type { ProviderConfigInput } from "@/ai/model-center/types";
+import { MODEL_PROVIDERS, type ProviderConfigInput } from "@/ai/model-center/types";
 import { getSessionUserId } from "@/auth/session";
 import { withModelStoreErrors } from "@/ai/model-center/models/route-guard";
 
@@ -19,8 +19,11 @@ async function POST_impl(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: "请求体不是合法 JSON" }, { status: 400 });
   }
-  if (!body?.providerName || !body?.modelId?.trim()) {
-    return NextResponse.json({ error: "缺少 providerName 或 modelId" }, { status: 400 });
+  if (!body || typeof body.providerName !== "string" || !(MODEL_PROVIDERS as readonly string[]).includes(body.providerName)) {
+    return NextResponse.json({ error: "providerName 不合法" }, { status: 400 });
+  }
+  if (typeof body.modelId !== "string" || !body.modelId.trim()) {
+    return NextResponse.json({ error: "缺少 modelId" }, { status: 400 });
   }
   const result = await testDraftModel(body);
   return NextResponse.json({ result });

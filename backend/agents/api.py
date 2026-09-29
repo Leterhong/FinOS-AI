@@ -125,7 +125,7 @@ def runs(limit: int = 20, user: User = Depends(get_current_user), db: Session = 
         select(AgentRunLog)
         .where(AgentRunLog.user_id == user.id)
         .order_by(AgentRunLog.created_at.desc())
-        .limit(min(limit, 100))
+        .limit(max(1, min(limit, 100)))
     )
     items = []
     for r in rows:

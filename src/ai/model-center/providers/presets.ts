@@ -115,7 +115,9 @@ export const PROVIDER_PRESETS: Record<ProviderType, ProviderPreset> = {
 };
 
 export function getPreset(type: ProviderType): ProviderPreset {
-  return PROVIDER_PRESETS[type] ?? PROVIDER_PRESETS.custom;
+  return Object.prototype.hasOwnProperty.call(PROVIDER_PRESETS, type)
+    ? PROVIDER_PRESETS[type]
+    : PROVIDER_PRESETS.custom;
 }
 
 export const ALL_PRESETS: ProviderPreset[] = Object.values(PROVIDER_PRESETS);

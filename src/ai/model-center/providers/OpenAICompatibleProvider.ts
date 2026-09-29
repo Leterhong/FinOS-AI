@@ -245,26 +245,31 @@ export class OpenAICompatibleProvider {
         return null;
       }
     };
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() ?? "";
-      for (const line of lines) {
-        const chunk = parseLine(line);
-        if (!chunk) continue;
-        if (chunk.done) return;
-        receivedContent = true;
-        yield chunk;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          const chunk = parseLine(line);
+          if (!chunk) continue;
+          if (chunk.done) return;
+          receivedContent = true;
+          yield chunk;
+        }
       }
-    }
-    if (buffer.trim()) {
-      const chunk = parseLine(buffer);
-      if (chunk && !chunk.done) {
-        receivedContent = true;
-        yield chunk;
+      if (buffer.trim()) {
+        const chunk = parseLine(buffer);
+        if (chunk && !chunk.done) {
+          receivedContent = true;
+          yield chunk;
+        }
       }
+    } finally {
+      // 消费者提前终止（客户端断开）时取消上游读取，避免连接与内存泄漏。
+      await reader.cancel().catch(() => undefined);
     }
     if (!receivedContent) {
       throw new Error(`[user:${this.m.providerType}] 流式响应中没有可用内容`);
@@ -279,6 +284,7 @@ export class OpenAICompatibleProvider {
       headers: this.headers(),
       body: JSON.stringify({ model: this.m.modelId, input: texts }),
       redirect: "manual",
+      signal: AbortSignal.timeout(60_000),
     });
     if (res.status >= 300 && res.status < 400) {
       throw new Error(`[user:${this.m.providerType}] 请求被重定向（不允许），状态码 ${res.status}`);

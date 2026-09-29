@@ -140,6 +140,17 @@ def test_refresh_rotates_token(client, user_a):
     assert replay.status_code in (401, 403), "旧 Refresh Token 重放必须失败"
 
 
+def test_refresh_new_token_can_refresh_again(client, user_a):
+    """回归：轮换签发的新 Refresh Token 必须已持久化，可用于下一次刷新。"""
+    first = client.post(f"{API}/auth/refresh", json={"refreshToken": user_a["refreshToken"]})
+    assert first.status_code == 200
+    new_refresh = first.cookies.get("finos_refresh")
+    assert new_refresh and new_refresh != user_a["refreshToken"]
+    second = client.post(f"{API}/auth/refresh", json={"refreshToken": new_refresh})
+    assert second.status_code == 200, "新 Refresh Token 再次刷新必须成功"
+    assert assert_envelope(second)["token"]
+
+
 def test_refresh_with_garbage_fails(client):
     resp = client.post(f"{API}/auth/refresh", json={"refreshToken": "garbage-token"})
     assert resp.status_code in (400, 401, 403)

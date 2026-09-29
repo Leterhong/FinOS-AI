@@ -186,7 +186,7 @@ def list_reports(db: Session, user: User, limit: int = 20) -> list[dict]:
         select(WealthReport)
         .where(WealthReport.user_id == user.id)
         .order_by(WealthReport.created_at.desc())
-        .limit(min(limit, 100))
+        .limit(max(1, min(limit, 100)))
     )
     return [
         {

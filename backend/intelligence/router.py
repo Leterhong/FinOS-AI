@@ -134,7 +134,7 @@ def get_score_history(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    return ok({"items": score_history(db, user, min(limit, 100))}, "评分历史")
+    return ok({"items": score_history(db, user, max(1, min(limit, 100)))}, "评分历史")
 
 
 # ------------------------------------------------------------------ 事件模拟
@@ -177,7 +177,7 @@ def simulations(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    return ok({"items": list_simulations(db, user, min(limit, 100))}, "模拟历史")
+    return ok({"items": list_simulations(db, user, max(1, min(limit, 100)))}, "模拟历史")
 
 
 @router.post("/compare")
@@ -219,7 +219,7 @@ def strategies(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    return ok({"items": list_strategies(db, user, min(limit, 100))}, "策略历史")
+    return ok({"items": list_strategies(db, user, max(1, min(limit, 100)))}, "策略历史")
 
 
 # ------------------------------------------------------------------ 多 Agent 工作流
@@ -245,7 +245,7 @@ def memories(
     db: Session = Depends(get_db),
 ):
     kinds = (kind,) if kind else None
-    return ok({"items": recall(db, user, kinds, min(limit, 100), mark_hit=False)}, "长期记忆")
+    return ok({"items": recall(db, user, kinds, max(1, min(limit, 100)), mark_hit=False)}, "长期记忆")
 
 
 @router.post("/memories")

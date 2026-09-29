@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { modelConfigStore } from "@/ai/model-center/models/store";
 import { getActiveModelSummary } from "@/ai/model-center/models/resolver";
-import { MODEL_ROLES, type ProviderConfigInput, type ProviderType } from "@/ai/model-center/types";
+import { MODEL_PROVIDERS, MODEL_ROLES, type ProviderConfigInput, type ProviderType } from "@/ai/model-center/types";
 import { getSessionUserId } from "@/auth/session";
 import { withModelStoreErrors } from "@/ai/model-center/models/route-guard";
 
@@ -33,11 +33,11 @@ async function POST_impl(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: "请求体不是合法 JSON" }, { status: 400 });
   }
-  if (!body?.providerName || !body?.modelId?.trim()) {
-    return NextResponse.json(
-      { error: "缺少 providerName 或 modelId" },
-      { status: 400 }
-    );
+  if (!body || typeof body.providerName !== "string" || !(MODEL_PROVIDERS as readonly string[]).includes(body.providerName)) {
+    return NextResponse.json({ error: "providerName 不合法" }, { status: 400 });
+  }
+  if (typeof body.modelId !== "string" || !body.modelId.trim()) {
+    return NextResponse.json({ error: "缺少 modelId" }, { status: 400 });
   }
   if (body.roles !== undefined && (!Array.isArray(body.roles) || body.roles.length > MODEL_ROLES.length || body.roles.some((role) => !MODEL_ROLES.includes(role)))) {
     return NextResponse.json({ error: "模型任务角色不合法" }, { status: 400 });

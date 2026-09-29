@@ -20,10 +20,10 @@ def upgrade() -> None:
         ("governance_reviews", "governance_reviews", "ix_governance_reviews_org", "organization_id"),
         ("project_grants", "project_grants", "ix_project_grants_org", "organization_id"),
         ("enterprise_connectors", "enterprise_connectors", "ix_enterprise_connectors_org", "organization_id"),
-        ("governance_audit", "governance_audit", "ix_governance_audit_org_created", "organization_id"),
+        ("governance_audit_logs", "governance_audit_logs", "ix_governance_audit_org_created", "organization_id"),
         ("model_eval_runs", "model_eval_runs", "ix_model_eval_runs_org", "organization_id"),
         ("model_eval_cases", "model_eval_cases", "ix_model_eval_cases_org", "organization_id"),
-        ("rule_revisions", "rule_revisions", "ix_rule_revisions_org", "organization_id"),
+        ("enterprise_rule_revisions", "enterprise_rule_revisions", "ix_rule_revisions_org", "organization_id"),
         ("organization_members", "organization_members", "ix_organization_members_org", "organization_id"),
     ]
     # 逐个尝试：仅当迁移 7f17 建表时漏建该索引才补建。
