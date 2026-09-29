@@ -69,7 +69,7 @@ export default function Sidebar({ open = false, onClose }: { open?: boolean; onC
           {collapsed ? <PanelLeftOpen className="h-3.5 w-3.5" /> : <PanelLeftClose className="h-3.5 w-3.5" />}
         </button>
       </div>
-      <nav className={cn("scrollbar-thin min-h-0 flex-1 py-4", collapsed ? "lg:px-2" : "px-3")}>
+      <nav className={cn("min-h-0 flex-1 py-4", collapsed ? "scrollbar-none lg:px-2" : "scrollbar-thin px-3")}>
         {groups.map(group => <div key={group.label} className="mb-5">
           <p className={cn("mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-[.18em] text-slate-600", collapsed && "lg:hidden")}>{group.label}</p>
           <div className="space-y-0.5">{group.items.map(item => {
@@ -84,7 +84,7 @@ export default function Sidebar({ open = false, onClose }: { open?: boolean; onC
                 aria-label={collapsed ? item.label : undefined}
                 className={cn(
                   "group/nav relative flex items-center rounded-lg text-[13px] font-medium transition duration-150",
-                  collapsed ? "lg:h-9 lg:justify-center lg:px-0" : "gap-3 px-3 py-2",
+                  collapsed ? "lg:mx-auto lg:grid lg:h-9 lg:w-9 lg:place-items-center" : "gap-3 px-3 py-2",
                   activeItem ? "bg-white/[0.055] text-white" : "text-slate-500 hover:bg-white/[0.035] hover:text-slate-200"
                 )}
               >
@@ -107,7 +107,7 @@ export default function Sidebar({ open = false, onClose }: { open?: boolean; onC
             <Link
               href="/models"
               aria-label={modelReady ? "AI 已连接" : "模型未配置"}
-              className={cn("flex h-9 items-center justify-center rounded-lg transition", modelReady ? "text-wealth hover:bg-white/[0.05]" : "text-amber-400 hover:bg-white/[0.05]")}
+              className={cn("mx-auto flex h-9 w-9 items-center justify-center rounded-lg transition", modelReady ? "text-wealth hover:bg-white/[0.05]" : "text-amber-400 hover:bg-white/[0.05]")}
             >
               {modelReady ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
             </Link>
