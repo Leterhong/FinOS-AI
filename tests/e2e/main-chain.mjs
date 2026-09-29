@@ -140,7 +140,7 @@ async function phaseA() {
     method: "POST",
     headers: { "Content-Type": "application/json", cookie },
     body: JSON.stringify({
-      providerName: "openai-compatible",
+      providerName: "custom",
       displayName: "Mock 模型",
       modelId: "mock-model",
       baseUrl: `${MOCK}/v1`,
