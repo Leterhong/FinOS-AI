@@ -19,8 +19,10 @@ function readInitial(): boolean {
 export const useUiStore = create<{
   sidebarCollapsed: boolean;
   toggleSidebar: () => void;
+  hydrateSidebar: () => void;
 }>((set) => ({
-  sidebarCollapsed: readInitial(),
+  // 初始为 false，保证服务端与客户端首帧一致；持久化值在挂载后 hydrate。
+  sidebarCollapsed: false,
   toggleSidebar: () =>
     set((state) => {
       const next = !state.sidebarCollapsed;
@@ -31,4 +33,5 @@ export const useUiStore = create<{
       }
       return { sidebarCollapsed: next };
     }),
+  hydrateSidebar: () => set({ sidebarCollapsed: readInitial() }),
 }));

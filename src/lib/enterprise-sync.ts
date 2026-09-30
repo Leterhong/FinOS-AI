@@ -37,11 +37,21 @@ function storeToken(token: string): void {
   }
 }
 
+function clearToken(): void {
+  cachedToken = null;
+  try {
+    window.sessionStorage.removeItem(TOKEN_KEY);
+  } catch {
+    // 忽略存储不可用。
+  }
+}
+
 /** 用 HttpOnly refresh cookie 静默换取访问令牌（幂等：bootstrap 会复用未过期会话）。 */
-export async function ensureBackendSession(): Promise<string | null> {
-  if (readStoredToken()) return cachedToken;
-  if (bootstrapPromise) return bootstrapPromise;
-  bootstrapPromise = (async () => {
+export async function ensureBackendSession(force = false): Promise<string | null> {
+  if (!force && readStoredToken()) return cachedToken;
+  if (force) clearToken();
+  if (!force && bootstrapPromise) return bootstrapPromise;
+  const operation = (async () => {
     try {
       const resp = await fetch(`${BASE}/api/auth/bootstrap`, {
         method: "POST",
@@ -58,10 +68,37 @@ export async function ensureBackendSession(): Promise<string | null> {
     } catch {
       return null;
     } finally {
-      bootstrapPromise = null;
+      if (bootstrapPromise) bootstrapPromise = null;
     }
   })();
-  return bootstrapPromise;
+  bootstrapPromise = operation;
+  return operation;
+}
+
+/**
+ * 带后端访问令牌的 fetch：令牌过期/失效（401）时用 refresh cookie 重新换发并重试一次。
+ * 访问令牌仅 15 分钟有效，必须处理过期而不是永久复用缓存令牌。
+ */
+export async function backendAuthedFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const send = (token: string) =>
+    fetch(`${BASE}${path}`, {
+      ...init,
+      credentials: "include",
+      headers: {
+        ...(init.body ? { "Content-Type": "application/json" } : {}),
+        ...(init.headers ?? {}),
+        Authorization: `Bearer ${token}`,
+      },
+    });
+  let token = await ensureBackendSession();
+  if (!token) throw new Error("企业服务暂不可用");
+  let response = await send(token);
+  if (response.status === 401) {
+    token = await ensureBackendSession(true);
+    if (!token) throw new Error("登录状态已失效，请刷新页面");
+    response = await send(token);
+  }
+  return response;
 }
 
 export interface EnterpriseSnapshot {
@@ -75,13 +112,8 @@ export interface EnterpriseSnapshot {
 
 /** 拉取服务端快照；任何失败返回 null（调用方按离线处理）。 */
 export async function pullSnapshot(): Promise<EnterpriseSnapshot | null> {
-  const token = await ensureBackendSession();
-  if (!token) return null;
   try {
-    const resp = await fetch(`${BASE}/api/enterprise/snapshot`, {
-      credentials: "include",
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const resp = await backendAuthedFetch("/api/enterprise/snapshot");
     if (!resp.ok) return null;
     const payload = (await resp.json()) as { data?: EnterpriseSnapshot };
     return payload?.data ?? null;
@@ -95,13 +127,9 @@ export type EnterpriseKind = "cases" | "documents" | "risks" | "rules" | "tasks"
 /** 幂等 upsert；fire-and-forget，失败静默（本地已是第一真相）。 */
 export function pushEntity(kind: EnterpriseKind, payload: Record<string, unknown>): void {
   void (async () => {
-    const token = await ensureBackendSession();
-    if (!token) return;
     try {
-      await fetch(`${BASE}/api/enterprise/${kind}`, {
+      await backendAuthedFetch(`/api/enterprise/${kind}`, {
         method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify(payload),
       });
     } catch {
@@ -112,14 +140,8 @@ export function pushEntity(kind: EnterpriseKind, payload: Record<string, unknown
 
 export function pushDelete(kind: EnterpriseKind, id: string): void {
   void (async () => {
-    const token = await ensureBackendSession();
-    if (!token) return;
     try {
-      await fetch(`${BASE}/api/enterprise/${kind}/${encodeURIComponent(id)}`, {
-        method: "DELETE",
-        credentials: "include",
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await backendAuthedFetch(`/api/enterprise/${kind}/${encodeURIComponent(id)}`, { method: "DELETE" });
     } catch {
       // 离线：静默。
     }

@@ -38,6 +38,7 @@ export default function DashboardLayout({
   // 服务端持久化：进入工作区后拉取云端快照做跨设备恢复/备份
   //（后端不可达时静默跳过，localStorage 仍是第一真相）。
   useEffect(() => {
+    useUiStore.getState().hydrateSidebar();
     void useEnterpriseStore.getState().syncFromServer();
     void useModelStore.getState().loadActive();
   }, []);
@@ -66,9 +67,9 @@ export default function DashboardLayout({
     >
       <div className="relative h-screen overflow-hidden">
         <Sidebar open={mobileNavOpen} onClose={() => setMobileNavOpen(false)} />
-        {/* Phase 7.5 #359：左边距与 Sidebar 宽度联动（w-60 / xl:w-64），
-            并按视口收敛内边距，1366×768 笔记本不再出现横向滚动。 */}
-        <main className={`flex h-screen min-w-0 flex-col overflow-hidden px-3 py-3 md:px-5 md:py-4 ${sidebarCollapsed ? 'lg:ml-[4.25rem]' : 'lg:ml-60 xl:ml-64'} xl:px-7 xl:py-6 2xl:px-8`}>
+        {/* Phase 7.5 #359：左边距与 Sidebar 宽度严格联动（折叠 4.25rem / 展开 16rem），
+            避免 lg 断点下 Sidebar 覆盖主内容。 */}
+        <main className={`flex h-screen min-w-0 flex-col overflow-hidden px-3 py-3 md:px-5 md:py-4 ${sidebarCollapsed ? 'lg:ml-[4.25rem]' : 'lg:ml-64'} xl:px-7 xl:py-6 2xl:px-8`}>
           <div className="mx-auto flex h-full w-full min-w-0 max-w-[1600px] flex-col">
             <DashboardHeader onMenuToggle={() => setMobileNavOpen(true)} />
             <div className="scrollbar-thin flex min-h-0 flex-1 flex-col overflow-y-auto pr-1">
