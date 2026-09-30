@@ -298,3 +298,24 @@ def test_snapshot_hides_audit_from_viewer_but_owner_sees(client, user_a, user_b)
     assert len(owner_view["audits"]) > 0
     viewer_view = client.get(f"/api/governance/snapshot?organizationId={org_id}", headers=user_b["headers"]).json()["data"]
     assert viewer_view["audits"] == [] and viewer_view["members"] == []
+
+
+def test_owner_membership_cannot_be_demoted(client, user_a):
+    """回归：通过成员表单不能修改组织所有者角色，也不能把自己降级。"""
+    snap = client.get("/api/governance/snapshot", headers=user_a["headers"]).json()["data"]
+    owner_email = next(m["email"] for m in snap["members"] if m["role"] == "owner")
+    resp = client.post(
+        "/api/governance/members",
+        json={"email": owner_email, "role": "analyst", "clearance": "internal"},
+        headers=user_a["headers"],
+    )
+    assert resp.status_code == 409, resp.text
+    after = client.get("/api/governance/snapshot", headers=user_a["headers"]).json()["data"]
+    assert any(m["role"] == "owner" for m in after["members"]), "所有者角色不应被覆盖"
+    # 所有者仍保留管理员能力：可以继续邀请成员
+    invite = client.post(
+        "/api/governance/members",
+        json={"email": "newbie@finos.test", "role": "analyst", "clearance": "internal"},
+        headers=user_a["headers"],
+    )
+    assert invite.status_code == 200, invite.text

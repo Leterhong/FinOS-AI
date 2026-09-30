@@ -14,6 +14,7 @@ import re
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.ai.gateway import GatewayError, PUBLIC_GATEWAY_ERROR, generate_sync as gw_generate_sync
@@ -96,7 +97,8 @@ def _member_out(row: OrganizationMember) -> dict:
     return {
         "id": row.id, "organizationId": row.organization_id, "userId": row.user_id,
         "email": row.email, "role": row.role, "clearance": row.clearance,
-        "status": row.status, "createdAt": row.created_at.isoformat(),
+        "status": row.status,
+        "createdAt": row.created_at.isoformat() if row.created_at else None,
     }
 
 
@@ -285,12 +287,20 @@ def add_member(body: MemberIn, request: Request, user: User = Depends(get_curren
         # 避免管理员填写他人邮箱即可静默授予数据访问权。
         row = OrganizationMember(organization_id=org.id, user_id=target.id if target else None, email=email, status="invited")
         db.add(row)
-    elif row.status != "active":
-        row.status = "invited"
+    else:
+        # 组织所有者由创建者持有：不允许通过成员表单修改其角色/数据权限（否则会把 owner 降级）。 
+        if row.role == "owner":
+            return fail("不能修改组织所有者的角色或数据权限", status_code=409)
+        if row.status != "active":
+            row.status = "invited"
     row.role, row.clearance = body.role, body.clearance
-    db.flush()
-    record_governance_audit(db, user=user, action="member.upsert", resource_type="member", resource_id=row.id, organization_id=org.id, details={"email": email, "role": body.role, "clearance": body.clearance, "status": row.status}, request=request)
-    db.commit()
+    try:
+        db.flush()
+        record_governance_audit(db, user=user, action="member.upsert", resource_type="member", resource_id=row.id, organization_id=org.id, details={"email": email, "role": body.role, "clearance": body.clearance, "status": row.status}, request=request)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        return fail("该邮箱已在组织中，请刷新后重试", status_code=409)
     return ok(_member_out(row), "成员权限已保存" if row.status == "active" else "邀请已保存；待成员本人登录确认后生效")
 
 
@@ -299,7 +309,7 @@ def accept_invite(member_id: str, request: Request, user: User = Depends(get_cur
     """受邀成员本人登录确认：仅当邀请邮箱与当前账号一致时激活。"""
     row = db.get(OrganizationMember, member_id)
     if row is None or row.email != user.email.strip().lower():
-        return fail("邀请不存在或与当前账号不符", status_code=404)
+        return fail("该邀请邮箱与当前登录账号不一致，请使用被邀请邮箱登录后再确认", status_code=404)
     if row.status == "active":
         return ok(_member_out(row))
     row.status = "active"
