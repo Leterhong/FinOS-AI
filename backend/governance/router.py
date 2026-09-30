@@ -14,7 +14,7 @@ import re
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from backend.ai.gateway import GatewayError, PUBLIC_GATEWAY_ERROR, generate_sync as gw_generate_sync
@@ -298,9 +298,9 @@ def add_member(body: MemberIn, request: Request, user: User = Depends(get_curren
         db.flush()
         record_governance_audit(db, user=user, action="member.upsert", resource_type="member", resource_id=row.id, organization_id=org.id, details={"email": email, "role": body.role, "clearance": body.clearance, "status": row.status}, request=request)
         db.commit()
-    except IntegrityError:
+    except SQLAlchemyError:
         db.rollback()
-        return fail("该邮箱已在组织中，请刷新后重试", status_code=409)
+        return fail("成员写入冲突（邮箱重复或数据库繁忙），请刷新后重试", status_code=409)
     return ok(_member_out(row), "成员权限已保存" if row.status == "active" else "邀请已保存；待成员本人登录确认后生效")
 
 
