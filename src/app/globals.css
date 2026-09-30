@@ -76,6 +76,21 @@
     text-rendering: optimizeLegibility;
   }
 
+  /* 原生表单控件使用深色方案，避免下拉选项在深色主题下白底白字不可读。 */
+  html {
+    color-scheme: dark;
+  }
+
+  select,
+  option {
+    color-scheme: dark;
+  }
+
+  select option {
+    background-color: #0f151c;
+    color: #e5edf7;
+  }
+
   button, a, input, textarea, select {
     -webkit-tap-highlight-color: transparent;
   }
