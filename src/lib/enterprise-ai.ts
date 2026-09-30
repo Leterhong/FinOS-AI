@@ -2,6 +2,16 @@
 
 import { ensureWorkspaceSession } from "@/lib/workspace-session";
 
+/** 统一把网关 HTML 错误（如 nginx 500）、超时/中断映射为可读文案。 */
+function friendlyAIError(raw: string | null | undefined, fallback: string): string {
+  const text = (raw || "").trim();
+  if (!text) return fallback;
+  if (/abort|timeout|timed out|ETIMEDOUT|UND_ERR|502|504|nginx|html/i.test(text)) {
+    return "AI 服务响应超时或网关错误，请重试，或在模型中心更换响应更快的模型";
+  }
+  return text;
+}
+
 export interface EnterpriseAIContext {
   cases: unknown[];
   documents: unknown[];
@@ -37,7 +47,7 @@ export async function callEnterpriseAI(input: {
     | { result?: EnterpriseAIResult; error?: string; code?: string }
     | null;
   if (!response.ok || !payload?.result) {
-    const error = new Error(payload?.error || "AI 调用失败") as Error & { code?: string };
+    const error = new Error(friendlyAIError(payload?.error, "AI 服务无响应或网关错误，请稍后重试")) as Error & { code?: string };
     error.code = payload?.code;
     throw error;
   }
@@ -98,7 +108,7 @@ export async function streamEnterpriseAI(
   });
   if (!response.ok || !response.body) {
     const payload = await response.json().catch(() => null) as { error?: string; code?: string } | null;
-    const error = new Error(payload?.error || "AI 调用失败") as Error & { code?: string };
+    const error = new Error(friendlyAIError(payload?.error, "AI 服务无响应或网关错误，请稍后重试")) as Error & { code?: string };
     error.code = payload?.code;
     throw error;
   }
@@ -141,7 +151,7 @@ export async function streamEnterpriseAI(
   }
   if (buffer) handleEvent(buffer.trim());
 
-  if (streamError) throw new Error(streamError);
+  if (streamError) throw new Error(friendlyAIError(streamError, "模型返回错误"));
   if (!answer.trim()) throw new Error("模型返回了空回复，请检查模型网关的流式响应兼容性");
   return { answer, model, provider: "user", latencyMs, usage };
 }
@@ -181,7 +191,7 @@ export async function analyzeEnterpriseDocument(input: {
   if (streaming) {
     if (!response.ok || !response.body) {
       const errorPayload = await response.json().catch(() => null) as { error?: string } | null;
-      throw new Error(errorPayload?.error || "资料 AI 分析失败");
+      throw new Error(friendlyAIError(errorPayload?.error, "资料 AI 服务无响应或网关错误，请稍后重试"));
     }
     return await consumeStageStream(response.body!, input.onStage!);
   }
@@ -189,7 +199,7 @@ export async function analyzeEnterpriseDocument(input: {
     | { result?: { analysis: string; facts?: DocumentFact[]; ruleHits?: DocumentRuleHit[]; uncertainties?: string[]; extractionFailed?: boolean; guardFlags?: string[]; extractionMethod?: "text" | "ocr" | "table"; ocrUsed?: boolean; tables?: DocumentTable[]; model: string; latencyMs: number }; error?: string }
     | null;
   if (!response.ok || !payload?.result) {
-    throw new Error(payload?.error || "资料 AI 分析失败");
+    throw new Error(friendlyAIError(payload?.error, "资料 AI 服务无响应或网关错误，请稍后重试"));
   }
   return {
     analysis: payload.result.analysis,
@@ -273,7 +283,7 @@ async function consumeStageStream(
     for (const line of lines) handleEvent(line.trim());
   }
   if (buffer) handleEvent(buffer.trim());
-  if (failure) throw new Error(failure);
+  if (failure) throw new Error(friendlyAIError(failure, "资料 AI 分析未返回结果"));
   if (!final) throw new Error("资料 AI 分析未返回结果");
   return final;
 }

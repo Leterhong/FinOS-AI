@@ -324,7 +324,7 @@ export const useEnterpriseStore = create<EnterpriseState>()(
       failDocumentAnalysis: (id, error) => {
         withProgress(set, (state) => ({
           documents: state.documents.map((document) => document.id === id
-            ? { ...document, status: "待复核", error }
+            ? { ...document, status: "分析失败" as const, error }
             : document),
         }));
         const doc = get().documents.find((d) => d.id === id);

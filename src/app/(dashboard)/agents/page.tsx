@@ -6,7 +6,7 @@ import { Bot, Braces, CheckCircle2, Clock3, Cpu, FileSearch, GitBranch, Loader2,
 import { EmptyStateCard, PageIntro, Panel, PanelHeader } from "@/components/enterprise/EnterpriseUI";
 import CaseContextSelector from "@/components/enterprise/CaseContextSelector";
 import { useActiveEnterpriseCase } from "@/hooks/use-active-enterprise-case";
-import { callEnterpriseAI } from "@/lib/enterprise-ai";
+import { streamEnterpriseAI } from "@/lib/enterprise-ai";
 import { useEnterpriseStore } from "@/store/enterprise-store";
 import { useModelStore } from "@/store/model-store";
 import { AIExecutionTimeline } from "@/components/intelligence/AIExecutionTimeline";
@@ -51,11 +51,15 @@ export default function AgentsPage() {
     });
     setRunning(true);
     try {
-      const result = await callEnterpriseAI({
-        mode: "agent",
-        question: "请执行一次完整的企业经营与风险研判，列出可用事实、适用规则、风险观察、信息缺口和人工复核清单。",
-        context: { cases: [activeCase!], documents: caseDocuments, rules, risks: caseRisks },
-      });
+      // 走 SSE 流式：推理模型首字节可能远晚于 60s，非流式会被反向代理按 idle 超时切断。
+      const result = await streamEnterpriseAI(
+        {
+          mode: "agent",
+          question: "请执行一次完整的企业经营与风险研判，列出可用事实、适用规则、风险观察、信息缺口和人工复核清单。",
+          context: { cases: [activeCase!], documents: caseDocuments, rules, risks: caseRisks },
+        },
+        () => {},
+      );
       completeAgentRun(currentRun.id, result.answer, `${((performance.now() - startedAt) / 1000).toFixed(1)}s`);
     } catch (error) {
       failAgentRun(currentRun.id, error instanceof Error ? error.message : "模型调用失败", `${((performance.now() - startedAt) / 1000).toFixed(1)}s`);

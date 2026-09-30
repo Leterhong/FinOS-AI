@@ -95,7 +95,7 @@ async function extractImageWithVision(
     temperature: 0,
     maxTokens: 4096,
     responseFormat: "json",
-    signal: AbortSignal.timeout(90_000),
+    signal: AbortSignal.timeout(600_000),
   });
   const parsed = JSON.parse(response.content || "{}") as {
     text?: string;
@@ -174,6 +174,15 @@ function withTimeout(timeoutMs: number, signal?: AbortSignal): AbortSignal {
   return signal ? AbortSignal.any([signal, timeout]) : timeout;
 }
 
+/** 把底层超时/中断错误映射为可读中文，避免把英文 abort 文案直接暴露给用户。 */
+function friendlyModelError(error: unknown): string {
+  const raw = error instanceof Error ? error.message : "";
+  if (/abort|timeout|timed out|ETIMEDOUT|UND_ERR/i.test(raw)) {
+    return "模型响应超时或被中断，请重试，或在模型中心更换响应更快的模型";
+  }
+  return raw || "模型分析失败";
+}
+
 /** 资料研判三阶段管线：事实抽取（LLM）→ 规则引擎判定 → 叙述生成（LLM）。 */
 async function runStages(deps: StageDeps, onStage: StageEmitter): Promise<StageOutcome> {
   const { provider, modelId, fileName, text, guardedText, guardFlags, documentGuard, project, rules, extracted } = deps;
@@ -202,7 +211,7 @@ async function runStages(deps: StageDeps, onStage: StageEmitter): Promise<StageO
       temperature: 0,
       maxTokens: Math.min(3072, 4096),
       responseFormat: "json",
-      signal: withTimeout(60_000, deps.signal),
+      signal: withTimeout(600_000, deps.signal),
     });
     const parsed = JSON.parse(extraction.content || "{}") as {
       facts?: LocatedFact[];
@@ -228,7 +237,7 @@ async function runStages(deps: StageDeps, onStage: StageEmitter): Promise<StageO
     // 但必须留痕（extractionFailed + uncertainties），不能让「空结果」伪装成「没有事实」。
     facts = [];
     extractionFailed = true;
-    uncertainties = [...uncertainties, `事实抽取阶段失败（${error instanceof Error ? error.message : "未知错误"}），本报告未经过结构化事实校验，请人工复核全文`];
+    uncertainties = [...uncertainties, `事实抽取阶段失败（${friendlyModelError(error)}），本报告未经过结构化事实校验，请人工复核全文`];
   }
   onStage("facts", "done");
 
@@ -261,7 +270,7 @@ async function runStages(deps: StageDeps, onStage: StageEmitter): Promise<StageO
       model: modelId,
       temperature: 0.2,
       maxTokens: 8192,
-      signal: withTimeout(90_000, deps.signal),
+      signal: withTimeout(600_000, deps.signal),
     });
     onStage("narrative", "done");
     return {
@@ -281,7 +290,7 @@ async function runStages(deps: StageDeps, onStage: StageEmitter): Promise<StageO
       },
     };
   } catch (error) {
-    return { error: error instanceof Error ? error.message : "模型分析失败" };
+    return { error: friendlyModelError(error) };
   }
 }
 
@@ -360,6 +369,15 @@ export async function POST(req: NextRequest) {
     let closed = false;
     const stream = new ReadableStream<Uint8Array>({
       async start(controller) {
+        // 心跳注释行：事实抽取/叙述生成阶段耗时较长，避免反向代理按 idle 超时切断连接。
+        const heartbeat = setInterval(() => {
+          if (closed) return;
+          try {
+            controller.enqueue(encoder.encode(": ping\n\n"));
+          } catch {
+            closed = true;
+          }
+        }, 15_000);
         const send = (payload: Record<string, unknown>) => {
           if (closed) return;
           try {
@@ -375,8 +393,9 @@ export async function POST(req: NextRequest) {
           if ("error" in outcome) send({ error: outcome.error });
           else send({ result: outcome.result });
         } catch (error) {
-          send({ error: abort.signal.aborted ? "请求已取消" : error instanceof Error ? error.message : "模型分析失败" });
+          send({ error: abort.signal.aborted ? "请求已取消" : friendlyModelError(error) });
         } finally {
+          clearInterval(heartbeat);
           closed = true;
           try {
             controller.close();

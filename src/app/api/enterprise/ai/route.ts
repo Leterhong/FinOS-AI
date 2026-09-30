@@ -49,6 +49,15 @@ function serializeContext(value: unknown): string {
   }
 }
 
+/** 把底层超时/中断错误映射为可读中文，避免把英文 abort 文案直接暴露给用户。 */
+function friendlyModelError(error: unknown): string {
+  const raw = error instanceof Error ? error.message : "";
+  if (/abort|timeout|timed out|ETIMEDOUT|UND_ERR/i.test(raw)) {
+    return "模型响应超时或被中断，请重试，或在模型中心更换响应更快的模型";
+  }
+  return raw || "模型调用失败";
+}
+
 export async function POST(req: NextRequest) {
   const userId = await getSessionUserId();
   if (!userId) {
@@ -103,10 +112,19 @@ export async function POST(req: NextRequest) {
     const encoder = new TextEncoder();
     const started = Date.now();
     const abort = new AbortController();
-    const timeout = setTimeout(() => abort.abort(), 120_000);
+    const timeout = setTimeout(() => abort.abort(), 600_000);
     let closed = false;
     const sse = new ReadableStream<Uint8Array>({
       async start(controller) {
+        // 心跳注释行：推理模型长时间无输出时，避免反向代理按 idle 超时切断连接。
+        const heartbeat = setInterval(() => {
+          if (closed) return;
+          try {
+            controller.enqueue(encoder.encode(": ping\n\n"));
+          } catch {
+            closed = true;
+          }
+        }, 15_000);
         const send = (payload: Record<string, unknown>) => {
           if (closed) return;
           try {
@@ -137,8 +155,9 @@ ${safeQuestion}` },
           }
           send({ done: true, model: model.modelId, latencyMs: Date.now() - started });
         } catch (error) {
-          send({ error: abort.signal.aborted ? "模型流式调用超时或已取消" : error instanceof Error ? error.message : "模型流式调用失败" });
+          send({ error: abort.signal.aborted ? "模型流式调用超时或已取消" : friendlyModelError(error) });
         } finally {
+          clearInterval(heartbeat);
           clearTimeout(timeout);
           closed = true;
           try {
@@ -171,7 +190,7 @@ ${safeQuestion}` },
       model: model.modelId,
       temperature: model.temperature ?? 0.3,
       maxTokens: Math.min(model.maxTokens ?? 2048, 8192),
-      signal: AbortSignal.timeout(60_000),
+      signal: AbortSignal.timeout(600_000),
     });
     return NextResponse.json({
       result: {
@@ -183,7 +202,7 @@ ${safeQuestion}` },
       },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "模型调用失败";
+    const message = friendlyModelError(error);
     return NextResponse.json({ error: message, code: "MODEL_CALL_FAILED" }, { status: 502 });
   }
 }

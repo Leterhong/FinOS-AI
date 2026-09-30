@@ -9,7 +9,7 @@ import { EmptyStateCard, PageIntro, Panel, PanelHeader } from "@/components/ente
 import EnterpriseDialog from "@/components/enterprise/EnterpriseDialog";
 import CaseContextSelector from "@/components/enterprise/CaseContextSelector";
 import { useActiveEnterpriseCase } from "@/hooks/use-active-enterprise-case";
-import { callEnterpriseAI } from "@/lib/enterprise-ai";
+import { streamEnterpriseAI } from "@/lib/enterprise-ai";
 import { useEnterpriseStore } from "@/store/enterprise-store";
 import { useModelStore } from "@/store/model-store";
 
@@ -41,11 +41,15 @@ export default function ResearchPage() {
     setGenerating(true);
     setError("");
     try {
-      const result = await callEnterpriseAI({
-        mode: "research",
-        question: `研究主题：${topic}${scope ? `\n研究范围：${scope}` : ""}`,
-        context: { cases: [activeCase], documents: caseDocuments, rules, risks: caseRisks },
-      });
+      // 走 SSE 流式，避免非流式长请求被反向代理按 idle 超时切断。
+      const result = await streamEnterpriseAI(
+        {
+          mode: "research",
+          question: `研究主题：${topic}${scope ? `\n研究范围：${scope}` : ""}`,
+          context: { cases: [activeCase], documents: caseDocuments, rules, risks: caseRisks },
+        },
+        () => {},
+      );
       addBrief({ caseId: activeCase.id, topic, title: `${topic} · AI 研究底稿`, summary: result.answer, model: result.model });
       toast.success("研究底稿已生成");
       setOpen(false);
