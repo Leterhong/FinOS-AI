@@ -83,6 +83,7 @@ export default function CommandPalette() {
       { href: "/rules", label: "规则库", group: "Pages", icon: Sparkles },
       { href: "/research", label: "投研中心", group: "Pages", icon: Files },
       { href: "/agents", label: "Agent 中心", group: "Pages", icon: Bot },
+      { href: "/skills", label: "专属技能中心", group: "Pages", icon: Sparkles },
       { href: "/workflows", label: "流程中心", group: "Pages", icon: Files },
       { href: "/governance", label: "企业治理", group: "Pages", icon: ShieldAlert },
       { href: "/models", label: "AI 模型中心", group: "Pages", icon: Cpu },

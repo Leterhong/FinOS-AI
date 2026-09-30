@@ -5,6 +5,7 @@ import { ModelStoreDecryptError } from "@/ai/model-center/models/store";
 import { OpenAICompatibleProvider } from "@/ai/model-center/providers/OpenAICompatibleProvider";
 import { inspectPrompt, promptGuardInstruction, redactPromptSecrets, shouldBlockPrompt } from "@/security/prompt-guard";
 import { selectSkill } from "@/ai/skills/registry";
+import { getEnabledSkillIds } from "@/ai/skills/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -106,8 +107,9 @@ export async function POST(req: NextRequest) {
   const context = redactPromptSecrets(rawContext);
   const guardInstruction = promptGuardInstruction([...new Set([...questionFlags, ...contextFlags])]);
   const safeQuestion = redactPromptSecrets(question);
-  // 专属技能选择：按 mode + 关键词命中，拼接到系统提示词，并随响应返回供前端展示。
-  const skill = selectSkill({ mode, question });
+  // 专属技能选择：仅在该工作区已启用的技能中，按 mode + 关键词命中挑选，并随响应返回。
+  const enabledSkillIds = await getEnabledSkillIds(userId);
+  const skill = selectSkill({ mode, question }, enabledSkillIds);
   const skillBlock = skill ? `\n\n${skill.playbook}` : "";
   const skillInfo = skill ? { id: skill.id, name: skill.name } : undefined;
   const provider = new OpenAICompatibleProvider(model);

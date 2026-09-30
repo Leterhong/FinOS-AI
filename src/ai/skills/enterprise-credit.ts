@@ -10,6 +10,9 @@ export const enterpriseCreditSkill: DomainSkill = {
   id: "enterprise-credit",
   name: "企业授信尽调与风险研判",
   summary: "按偿债/盈利/营运/现金流/关联交易/合规检查清单输出风险信号与人工复核清单。",
+  category: "授信与风险",
+  source: "FinOS AI 内置",
+  version: "1.0.0",
   modes: ["agent", "research", "chat"],
   triggers: [
     "授信", "尽调", "尽职调查", "贷款", "融资", "授信额度", "担保", "抵押",

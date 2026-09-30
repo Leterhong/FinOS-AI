@@ -17,6 +17,11 @@ export interface DomainSkill {
   name: string;
   /** 一句话说明，用于 UI 展示。 */
   summary: string;
+  /** 技能分类（用于统一管理页分组）。 */
+  category?: string;
+  /** 来源（如移植自某开源 Skill）。 */
+  source?: string;
+  version?: string;
   /** 触发关键词（命中即计分）。 */
   triggers: string[];
   /** 系统提示词追加片段（检查清单 / 输出契约 / 口径与护栏）。 */
