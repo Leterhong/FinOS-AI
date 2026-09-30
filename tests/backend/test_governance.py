@@ -337,3 +337,44 @@ def test_snapshot_lists_pending_invitations_for_invitee(client, user_a, user_b):
     ), snap_b.get("invitations")
     accepted = client.post(f"/api/governance/members/{invited.json()['data']['id']}/accept", headers=user_b["headers"])
     assert accepted.status_code == 200, accepted.text
+
+
+def test_org_members_read_all_projects_policy(client, user_a, user_b):
+    """组织策略：默认关闭（最小权限）；开启后成员可读全部组织项目，但写操作仍需授权。"""
+    org_a = client.get("/api/governance/snapshot", headers=user_a["headers"]).json()["data"]["organization"]["id"]
+    case_id = "CASE-POLICY-1"
+    assert client.post("/api/enterprise/cases", json={"id": case_id, "company": "策略企业", "title": "t"}, headers=user_a["headers"]).status_code == 200
+    invite = client.post(
+        "/api/governance/members",
+        json={"email": user_b["email"], "role": "analyst", "clearance": "internal"},
+        headers=user_a["headers"],
+    ).json()["data"]
+    assert client.post(f"/api/governance/members/{invite['id']}/accept", headers=user_b["headers"]).status_code == 200
+
+    # 默认关闭：B 看不到 A 的项目
+    before = client.get("/api/enterprise/snapshot", headers=user_b["headers"]).json()["data"]
+    assert not any(c["id"] == case_id for c in before["cases"])
+
+    # 开启策略
+    patched = client.patch(
+        "/api/governance/organization",
+        json={"organizationId": org_a, "membersReadAllProjects": True},
+        headers=user_a["headers"],
+    )
+    assert patched.status_code == 200 and patched.json()["data"]["membersReadAllProjects"] is True
+
+    # 开启后：B 可读该项目
+    after = client.get("/api/enterprise/snapshot", headers=user_b["headers"]).json()["data"]
+    assert any(c["id"] == case_id for c in after["cases"])
+
+    # 只放宽读取：B 仍不能编辑（需要项目授权）
+    edit = client.post("/api/enterprise/cases", json={"id": case_id, "company": "被改", "title": "t"}, headers=user_b["headers"])
+    assert edit.status_code == 404
+
+    # 仅管理员可切换策略
+    forbidden = client.patch(
+        "/api/governance/organization",
+        json={"organizationId": org_a, "membersReadAllProjects": False},
+        headers=user_b["headers"],
+    )
+    assert forbidden.status_code == 403

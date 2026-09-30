@@ -90,7 +90,13 @@ def _organization_context(
 
 
 def _org_out(org: Organization) -> dict:
-    return {"id": org.id, "name": org.name, "ownerUserId": org.user_id, "createdAt": org.created_at.isoformat()}
+    return {
+        "id": org.id,
+        "name": org.name,
+        "ownerUserId": org.user_id,
+        "membersReadAllProjects": bool(getattr(org, "members_read_all_projects", False)),
+        "createdAt": org.created_at.isoformat(),
+    }
 
 
 def _member_out(row: OrganizationMember) -> dict:
@@ -167,7 +173,8 @@ def _guard_prompt(prompt: str) -> list[str]:
 
 
 class OrganizationIn(BaseModel):
-    name: str = Field(min_length=1, max_length=200)
+    name: str | None = Field(default=None, max_length=200)
+    membersReadAllProjects: bool | None = None
     organizationId: str | None = Field(default=None, max_length=32)
 
 
@@ -276,8 +283,13 @@ def governance_snapshot(organizationId: str | None = None, auditLimit: int = 200
 def update_organization(body: OrganizationIn, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     org, _ = _organization_context(db, user, body.organizationId)
     _require_admin(db, user, org.id)
-    org.name = body.name.strip()
-    record_governance_audit(db, user=user, action="organization.update", resource_type="organization", resource_id=org.id, organization_id=org.id, details={"name": org.name}, request=request)
+    if body.name is not None:
+        if not body.name.strip():
+            return fail("组织名称不能为空", status_code=422)
+        org.name = body.name.strip()
+    if body.membersReadAllProjects is not None:
+        org.members_read_all_projects = bool(body.membersReadAllProjects)
+    record_governance_audit(db, user=user, action="organization.update", resource_type="organization", resource_id=org.id, organization_id=org.id, details={"name": org.name, "membersReadAllProjects": bool(getattr(org, "members_read_all_projects", False))}, request=request)
     db.commit()
     return ok(_org_out(org))
 

@@ -75,6 +75,27 @@ def init_db() -> None:
     # create_all 不会给已存在表加列，这里幂等补列自愈。
     _ensure_ai_usage_logs_columns(engine)
     _ensure_enterprise_scope_columns(engine)
+    _ensure_organization_settings_columns(engine)
+
+
+def _ensure_organization_settings_columns(engine) -> None:
+    """开发库自愈：organizations 表补充 members_read_all_projects 策略列。"""
+    from sqlalchemy import inspect, text
+
+    insp = inspect(engine)
+    if not insp.has_table("organizations"):
+        return
+    existing = {column["name"] for column in insp.get_columns("organizations")}
+    if "members_read_all_projects" in existing:
+        return
+    is_sqlite = engine.dialect.name == "sqlite"
+    statement = (
+        "ALTER TABLE organizations ADD COLUMN members_read_all_projects BOOLEAN NOT NULL DEFAULT 0"
+        if is_sqlite
+        else "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS members_read_all_projects BOOLEAN NOT NULL DEFAULT FALSE"
+    )
+    with engine.begin() as conn:
+        conn.execute(text(statement))
 
 
 def _ensure_ai_usage_logs_columns(engine) -> None:

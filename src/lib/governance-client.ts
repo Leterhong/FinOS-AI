@@ -12,3 +12,7 @@ export async function governanceApi<T>(path: string, init?: RequestInit): Promis
 export function governancePost<T>(path: string, body: unknown): Promise<T> {
   return governanceApi<T>(path, { method: "POST", body: JSON.stringify(body) });
 }
+
+export function governancePatch<T>(path: string, body: unknown): Promise<T> {
+  return governanceApi<T>(path, { method: "PATCH", body: JSON.stringify(body) });
+}

@@ -109,6 +109,12 @@ def can_access_case(db: Session, user: User, case: EnterpriseCase, required: str
         return False
     if member.role in {"owner", "admin"}:
         return True
+    # 组织策略：开启「成员可读全部项目」后，组织成员获得组织内项目的只读访问
+    # （受密级约束；编辑/管理等写操作仍需项目授权或更高角色）。
+    if required == "viewer":
+        organization = db.get(Organization, organization_id)
+        if organization is not None and getattr(organization, "members_read_all_projects", False):
+            return True
     grant = db.scalar(
         select(ProjectGrant).where(ProjectGrant.case_id == case.id, ProjectGrant.user_id == user.id)
     )

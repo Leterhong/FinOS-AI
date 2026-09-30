@@ -24,6 +24,8 @@ class Organization(Base):
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_id)
     user_id: Mapped[str] = mapped_column(String(32), unique=True, index=True, nullable=False)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
+    # 组织级策略：开启后组织成员可读全部组织项目（仅放宽读取；编辑/管理仍需角色或项目授权）。
+    members_read_all_projects: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
 
