@@ -1,0 +1,5 @@
+# 演示视频的中间产物（可随时由 plan.json 重新生成）
+work/
+tts/
+cards/
+qa/

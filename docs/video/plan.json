@@ -1,0 +1,58 @@
+{
+  "output": "FinOS-AI-demo-30s.mp4",
+  "brand": "FinOS AI",
+  "accent": "0x00D68F",
+
+  "voice": "zh-CN-YunyangNeural",
+  "rate": "+18%",
+
+  "width": 1920,
+  "height": 1080,
+  "fps": 30,
+
+  "gap": 0.07,
+  "tail": 0.25,
+  "bgm_volume": 0.05,
+  "loudness": -16,
+
+  "segments": [
+    {
+      "visual": "cards/card_intro.png",
+      "card": true,
+      "zoom": 0.05,
+      "voice": "FinOS AI，面向企业经营与风险研判的开源金融 Agent。",
+      "caption": ""
+    },
+    {
+      "visual": "../assets/01-dashboard.jpg",
+      "zoom": 0.10,
+      "voice": "上传企业资料，自动完成解析、事实抽取和规则匹配。",
+      "caption": "企业经营与风险决策台 · 上传资料即启动研判"
+    },
+    {
+      "visual": "../assets/02-guide.jpg",
+      "zoom": 0.10,
+      "voice": "上千页文档里的风险信号被逐条挑出，带原文证据。",
+      "caption": "8 步走完 · 资料上传 → 风险信号 → 流程任务"
+    },
+    {
+      "visual": "../assets/04-agents.jpg",
+      "zoom": 0.10,
+      "voice": "资料理解、规则匹配、风险研判、流程辅助，四个智能体分工协作。",
+      "caption": "四个 Agent 分工协作"
+    },
+    {
+      "visual": "../assets/03-deployment.jpg",
+      "zoom": 0.10,
+      "voice": "结论可追溯到原文，关键判断保留人工核验，数据留在自己服务器。",
+      "caption": "证据可追溯 · 人工核验 · 私有化部署"
+    },
+    {
+      "visual": "cards/card_flow.png",
+      "card": true,
+      "zoom": 0.05,
+      "voice": "零预置数据，代码开源。让企业风险看得见，说得清，查得到。",
+      "caption": ""
+    }
+  ]
+}
