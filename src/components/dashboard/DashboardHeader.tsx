@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Bell, ChevronDown, Cpu, Menu, Plus, Search, UserRound } from "lucide-react";
 import CommandPalette, { openCommandPalette } from "@/components/dashboard/CommandPalette";
 import AccountDialog from "@/components/account/AccountDialog";
-import { type BackendAccount, fetchAccount, logoutAccount } from "@/lib/enterprise-sync";
+import { type BackendAccount, bindWorkspaceToAccount, fetchAccount, logoutAccount, resetWorkspaceSession } from "@/lib/enterprise-sync";
 import { useEnterpriseStore } from "@/store/enterprise-store";
 
 const titles: Record<string, string> = { "/": "企业经营决策台", "/cases": "项目中心", "/documents": "资料研判", "/risk": "风险中心", "/research": "投研中心", "/rules": "规则库", "/models": "AI 模型中心", "/agents": "Agent 中心", "/workflows": "流程中心", "/assistant": "智能研判助手", "/governance": "治理与复核中心", "/deployment": "部署与合规准备", "/guide": "使用指引" };
@@ -19,7 +19,22 @@ export default function DashboardHeader({ onMenuToggle }: { onMenuToggle?: () =>
   const [bellOpen,setBellOpen] = useState(false); const [workspaceOpen,setWorkspaceOpen] = useState(false);
   const [account, setAccount] = useState<BackendAccount | null>(null);
   const [accountOpen, setAccountOpen] = useState(false);
-  useEffect(() => { void fetchAccount().then(setAccount); }, []);
+  const [inviteEmail, setInviteEmail] = useState("");
+  useEffect(() => {
+    void (async () => {
+      const current = await fetchAccount();
+      setAccount(current);
+      if (current && !current.guest) await bindWorkspaceToAccount();
+    })();
+    // 邀请链接：?invite=<memberId>&email=<invitedEmail> → 打开账号对话框并预填被邀请邮箱
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("invite")) {
+        setInviteEmail(params.get("email") ?? "");
+        setAccountOpen(true);
+      }
+    }
+  }, []);
   const accountLabel = account && !account.guest ? (account.email.split("@")[0] || account.email) : "登录 / 注册";
   const pending = risks.filter(risk => risk.status === "待核验");
   const pageTitle = pathname.startsWith("/cases/") ? "项目研判工作台" : (titles[pathname] ?? "FinOS 企业金融 Agent");
@@ -36,9 +51,10 @@ export default function DashboardHeader({ onMenuToggle }: { onMenuToggle?: () =>
     <AccountDialog
       open={accountOpen}
       account={account}
+      initialEmail={inviteEmail}
       onClose={() => setAccountOpen(false)}
       onSuccess={() => window.location.reload()}
-      onLogout={() => { void logoutAccount().then(() => window.location.reload()); }}
+      onLogout={() => { void logoutAccount().then(resetWorkspaceSession).then(() => window.location.reload()); }}
     />
   </header>;
 }

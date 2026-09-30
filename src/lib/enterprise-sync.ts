@@ -124,6 +124,40 @@ export function pushDelete(kind: EnterpriseKind, id: string): void {
   })();
 }
 
+/** 可等待的 upsert：登录迁移等需要确保写完成时使用。 */
+export async function pushEntityAwait(kind: EnterpriseKind, payload: Record<string, unknown>): Promise<void> {
+  const resp = await backendAuthedFetch(`/api/enterprise/${kind}`, { method: "POST", body: JSON.stringify(payload) });
+  if (!resp.ok) throw new Error(`推送 ${kind} 失败`);
+}
+
+/** 把 Next 侧工作区（模型中心等）绑定到当前后端账号。 */
+export async function bindWorkspaceToAccount(): Promise<void> {
+  const token = cachedToken ?? (await ensureBackendSession());
+  if (!token) return;
+  try {
+    await fetch("/api/workspace/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ backendToken: token }),
+    });
+  } catch {
+    // 忽略：绑定失败时仍以访客工作区运行。
+  }
+}
+
+/** 退出登录后重建匿名访客工作区。 */
+export async function resetWorkspaceSession(): Promise<void> {
+  try {
+    await fetch("/api/workspace/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reset: true }),
+    });
+  } catch {
+    // 忽略。
+  }
+}
+
 // ── 邮箱账号（可选）：登录后企业/治理数据归属真实账号，邀请才能按邮箱绑定生效。 ──
 
 export interface BackendAccount {

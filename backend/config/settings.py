@@ -98,6 +98,8 @@ class Settings(BaseSettings):
 
     # --- 安全限制 ---
     api_rate_limit_per_minute: int = 300
+    # 登录/注册/bootstrap 严格限流：次 / 分钟 / IP（可配置以便本地联调与压测）
+    auth_rate_limit_per_minute: int = 10
     ai_rate_limit_per_minute: int = 30
     ai_max_tokens: int = 8192
     ai_max_input_chars: int = 100_000

@@ -5,6 +5,7 @@ import { persist } from "zustand/middleware";
 import {
   pushDelete,
   pushEntity,
+  pushEntityAwait,
   pullSnapshot,
   type EnterpriseKind,
 } from "@/lib/enterprise-sync";
@@ -69,6 +70,8 @@ interface EnterpriseState {
   clearAssistantHistory: (caseId?: string) => void;
   /** 从服务端拉取快照并合并（跨设备恢复/备份；后端不可达时静默跳过）。 */
   syncFromServer: () => Promise<{ pulled: boolean; merged: number }>;
+  /** 把本地工作区全部实体推送到当前后端身份（登录后用于把访客数据迁移到账号）。 */
+  pushAllToBackend: () => Promise<void>;
   /** 服务端同步状态（页脚徽标）：synced=已上云，local-only=后端不可达。 */
   serverSync: "unknown" | "synced" | "local-only";
   deleteDocument: (id: string) => void;
@@ -518,6 +521,66 @@ export const useEnterpriseStore = create<EnterpriseState>()(
           ? state.assistantMessages.filter((message) => message.caseId !== caseId)
           : [],
       })),
+      pushAllToBackend: async () => {
+        // 目标账号已有数据时不迁移，避免重复导入；仅把访客本地工作区迁移到空账号。
+        const existing = await pullSnapshot();
+        if (existing) {
+          const total = existing.cases.length + existing.documents.length + existing.risks.length + existing.rules.length + existing.tasks.length + existing.briefs.length;
+          if (total > 0) return;
+        }
+        const state = get();
+        if (!state.cases.length && !state.documents.length && !state.risks.length && !state.rules.length && !state.tasks.length && !state.briefs.length) return;
+
+        // 重新生成 id 并重写跨实体引用：避免与访客已存在的服务端行主键冲突（跨用户 upsert 会被拒绝）。
+        const newId = (prefix: string) => `${prefix}-${(globalThis.crypto?.randomUUID?.() ?? `${Date.now()}${Math.random()}`).replace(/-/g, "").slice(0, 18).toUpperCase()}`;
+        const caseIdMap = new Map<string, string>();
+        const factIdMap = new Map<string, string>();
+        for (const item of state.cases) caseIdMap.set(item.id, newId("CASE"));
+        for (const item of state.documents) for (const fact of item.factItems ?? []) factIdMap.set(fact.id, newId("FACT"));
+        const remapCase = (id: string): string => caseIdMap.get(id) ?? id;
+
+        const cases = state.cases.map((item) => ({ ...item, id: caseIdMap.get(item.id)!, organizationId: undefined }));
+        const docIdMap = new Map<string, string>();
+        for (const item of state.documents) docIdMap.set(item.id, newId("DOC"));
+        const documents = state.documents.map((item) => {
+          const id = docIdMap.get(item.id)!;
+          return {
+            ...item,
+            id,
+            caseId: remapCase(item.caseId),
+            factItems: (item.factItems ?? []).map((fact) => ({ ...fact, id: factIdMap.get(fact.id)!, caseId: remapCase(fact.caseId), documentId: id })),
+          };
+        });
+        const risks = state.risks.map((item) => ({ ...item, id: newId("RISK"), caseId: remapCase(item.caseId), factIds: (item.factIds ?? []).map((fid) => factIdMap.get(fid) ?? fid), sourceRunId: undefined }));
+        const rules = state.rules.map((item) => ({ ...item, id: newId("RULE"), organizationId: undefined }));
+        const tasks = state.tasks.map((item) => ({ ...item, id: newId("TASK"), caseId: item.caseId ? remapCase(item.caseId) : item.caseId }));
+        const briefs = state.briefs.map((item) => ({ ...item, id: newId("BRIEF"), caseId: item.caseId ? remapCase(item.caseId) : item.caseId }));
+
+        const push = async (kind: SyncKind, items: Array<{ id: string }>) => {
+          const build = syncMap[kind].payload as unknown as (item: unknown) => Record<string, unknown>;
+          for (const item of items) {
+            try {
+              const payload: Record<string, unknown> = { ...build(item) };
+              delete payload.organizationId; // 由后端归入账号默认组织
+              await pushEntityAwait(syncMap[kind].api, payload);
+            } catch {
+              // 单条失败不阻断其余迁移。
+            }
+          }
+        };
+        await push("cases", cases);
+        await push("documents", documents);
+        await push("risks", risks);
+        await push("rules", rules);
+        await push("tasks", tasks);
+        await push("briefs", briefs);
+
+        // 本地切换为迁移后的实体，保持与服务端一致，避免重载后出现重复。
+        set(() => {
+          const derived = deriveCaseProgress({ cases, documents, risks, tasks });
+          return { cases: derived.cases, documents: derived.documents, risks, rules, tasks, briefs };
+        });
+      },
       syncFromServer: async () => {
         const snapshot = await pullSnapshot();
         if (!snapshot) {

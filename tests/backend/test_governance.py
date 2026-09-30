@@ -319,3 +319,21 @@ def test_owner_membership_cannot_be_demoted(client, user_a):
         headers=user_a["headers"],
     )
     assert invite.status_code == 200, invite.text
+
+
+def test_snapshot_lists_pending_invitations_for_invitee(client, user_a, user_b):
+    """回归：被邀请人快照应跨组织列出待接受邀请（否则只能看到自己默认组织、无法接受）。"""
+    snap_a = client.get("/api/governance/snapshot", headers=user_a["headers"]).json()["data"]
+    invited = client.post(
+        "/api/governance/members",
+        json={"email": user_b["email"], "role": "analyst", "clearance": "internal"},
+        headers=user_a["headers"],
+    )
+    assert invited.status_code == 200, invited.text
+    snap_b = client.get("/api/governance/snapshot", headers=user_b["headers"]).json()["data"]
+    assert any(
+        inv["organizationId"] == snap_a["organization"]["id"] and inv["role"] == "analyst"
+        for inv in snap_b["invitations"]
+    ), snap_b.get("invitations")
+    accepted = client.post(f"/api/governance/members/{invited.json()['data']['id']}/accept", headers=user_b["headers"])
+    assert accepted.status_code == 200, accepted.text

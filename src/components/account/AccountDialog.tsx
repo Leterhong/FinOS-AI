@@ -6,44 +6,58 @@
  * 登录后企业数据与治理权限归属该邮箱账号，被邀请成员可用被邀请邮箱登录后确认加入。
  * 未登录时保持免登录 guest 工作区（单机体验）。
  */
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import EnterpriseDialog from "@/components/enterprise/EnterpriseDialog";
-import { type BackendAccount, loginAccount, registerAccount } from "@/lib/enterprise-sync";
+import { type BackendAccount, bindWorkspaceToAccount, loginAccount, registerAccount } from "@/lib/enterprise-sync";
+import { useEnterpriseStore } from "@/store/enterprise-store";
 import { toast } from "@/components/feedback/toast";
 
 export default function AccountDialog({
   open,
   account,
+  initialEmail,
   onClose,
   onSuccess,
   onLogout,
 }: {
   open: boolean;
   account: BackendAccount | null;
+  initialEmail?: string;
   onClose: () => void;
   onSuccess: () => void;
   onLogout: () => void;
 }) {
   const [mode, setMode] = useState<"login" | "register">("login");
+  const [email, setEmail] = useState(initialEmail ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const signedIn = Boolean(account && !account.guest);
 
+  useEffect(() => {
+    if (open && initialEmail) {
+      setEmail(initialEmail);
+      setMode("register");
+    }
+  }, [open, initialEmail]);
+
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const email = String(form.get("email") || "").trim();
+    const value = (email || String(form.get("email") || "")).trim();
     const password = String(form.get("password") || "");
-    if (!email || !password) {
+    if (!value || !password) {
       setError("请填写邮箱和密码");
       return;
     }
     setBusy(true);
     setError("");
     try {
-      if (mode === "login") await loginAccount(email, password);
-      else await registerAccount(email, password);
-      toast.success(mode === "login" ? "已登录账号" : "账号已创建并登录");
+      if (mode === "login") await loginAccount(value, password);
+      else await registerAccount(value, password);
+      // 绑定 Next 工作区并迁移本地访客数据到该账号，然后重载以刷新全部会话。
+      await bindWorkspaceToAccount();
+      await useEnterpriseStore.getState().pushAllToBackend();
+      toast.success(mode === "login" ? "已登录账号，本地数据已迁移" : "账号已创建并登录，本地数据已迁移");
       onSuccess();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "账号操作失败");
@@ -89,7 +103,7 @@ export default function AccountDialog({
             <form onSubmit={submit} className="space-y-4">
               <label className="block">
                 <span className="mb-1.5 block text-[11px] text-slate-400">邮箱</span>
-                <input required name="email" type="email" autoComplete="email" placeholder="name@company.com" className="field-control" />
+                <input required name="email" type="email" autoComplete="email" placeholder="name@company.com" value={email} onChange={(event) => setEmail(event.target.value)} className="field-control" />
               </label>
               <label className="block">
                 <span className="mb-1.5 block text-[11px] text-slate-400">密码</span>
