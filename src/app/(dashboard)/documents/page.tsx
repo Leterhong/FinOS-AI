@@ -61,6 +61,7 @@ export default function DocumentsPage() {
   const [uploading, setUploading] = useState(false);
   const [failedUploads, setFailedUploads] = useState<Array<{ documentId: string; caseId: string; file: File }>>([]);
   const [reviewingFact, setReviewingFact] = useState<EvidenceFact | null>(null);
+  const [reviewError, setReviewError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const queryCaseApplied = useRef(false);
 
@@ -158,6 +159,15 @@ export default function DocumentsPage() {
     toast.success(`已删除资料「${document.name}」`);
   };
 
+  /** 解析失败资料的「删除后重新上传」：直接移除失败项并打开文件选择，不再二次确认，避免操作卡住。 */
+  const discardAndReupload = (document: AnalysisDocument) => {
+    deleteDocument(document.id);
+    setFailedUploads((current) => current.filter((item) => item.documentId !== document.id));
+    if (selected?.id === document.id) setSelected(null);
+    toast.success(`已移除失败资料「${document.name}」，请重新选择文件`);
+    window.setTimeout(() => fileRef.current?.click(), 50);
+  };
+
   const upload = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
     event.target.value = "";
@@ -166,6 +176,7 @@ export default function DocumentsPage() {
     setUploading(true);
     let succeeded = 0;
     const failures: string[] = [];
+    const processingIds: number[] = [];
     for (const file of files) {
       if (file.size > 10 * 1024 * 1024) {
         failures.push(`${file.name} 超过 10MB`);
@@ -173,7 +184,7 @@ export default function DocumentsPage() {
       }
       const item = addDocument(file, caseId);
       setSelected(item);
-      toast.processing(`正在分析 ${succeeded + failures.length + 1}/${files.length}：${file.name}`);
+      processingIds.push(toast.processing(`正在分析 ${succeeded + failures.length + 1}/${files.length}：${file.name}`));
       try {
         const result = await analyzeEnterpriseDocument({ file, project, rules, onStage: (stage, state) => setStageState((current) => ({ ...current, [stage]: state })) });
         completeDocumentAnalysis(item.id, result.analysis, result.model, {
@@ -194,6 +205,7 @@ export default function DocumentsPage() {
       }
     }
     setUploading(false);
+    processingIds.forEach((id) => toast.dismiss(id));
     toast.success(`批量处理完成：${succeeded} 成功`);
     if (failures.length) toast.error(`失败 ${failures.length} 个：${failures.join("；")}`);
   };
@@ -206,9 +218,10 @@ export default function DocumentsPage() {
     setFailedUploads((current) => current.filter((item) => item.caseId !== caseId));
     let succeeded = 0;
     const failures: string[] = [];
+    const processingIds: number[] = [];
     for (const [index, item] of queue.entries()) {
       setSelected(documents.find((document) => document.id === item.documentId) ?? null);
-      toast.processing(`正在重试 ${index + 1}/${queue.length}：${item.file.name}`);
+      processingIds.push(toast.processing(`正在重试 ${index + 1}/${queue.length}：${item.file.name}`));
       try {
         const result = await analyzeEnterpriseDocument({ file: item.file, project, rules, onStage: (stage, state) => setStageState((current) => ({ ...current, [stage]: state })) });
         completeDocumentAnalysis(item.documentId, result.analysis, result.model, {
@@ -228,6 +241,7 @@ export default function DocumentsPage() {
       }
     }
     setUploading(false);
+    processingIds.forEach((id) => toast.dismiss(id));
     toast.success(`重试完成：${succeeded} 成功`);
     if (failures.length) toast.error(`仍失败 ${failures.length} 个：${failures.join("；")}`);
   };
@@ -236,11 +250,17 @@ export default function DocumentsPage() {
     event.preventDefault();
     if (!selected || !reviewingFact) return;
     const data = new FormData(event.currentTarget);
+    const reviewer = String(data.get("reviewer") || "").trim();
+    if (!reviewer) {
+      setReviewError("请填写复核人后再保存");
+      return;
+    }
     reviewFact(selected.id, reviewingFact.id, {
       status: String(data.get("status")) as EvidenceFact["reviewStatus"],
-      reviewer: String(data.get("reviewer")),
+      reviewer,
       note: String(data.get("note") || ""),
     });
+    setReviewError("");
     setReviewingFact(null);
   };
 
@@ -256,8 +276,8 @@ export default function DocumentsPage() {
         <button key={value} type="button" onClick={() => setMobileView(value)} className={`rounded-xl border px-3 py-2 text-xs transition ${mobileView === value ? "border-cyan-400/30 bg-cyan-400/[0.08] text-cyan-100" : "border-white/[0.08] bg-white/[0.02] text-slate-500"}`}>{label}</button>
       ))}
     </div>}<div className={mobileView === "detail" ? "hidden min-h-[560px] gap-4 xl:grid xl:grid-cols-[.8fr_1.4fr]" : "grid min-h-[560px] gap-4 xl:grid-cols-[.8fr_1.4fr]"}>
-      <Panel className={`flex min-h-0 flex-col ${mobileView === "detail" ? "hidden xl:flex" : ""}`}><div className="border-b border-white/[0.07] p-4"><p className="text-xs font-semibold text-slate-200">当前项目资料</p><p className="mt-1 text-[10px] text-slate-600">{projectDocuments.length} 份 · 文件上限 10MB</p></div>{projectDocuments.length === 0 ? <EmptyStateCard icon={Upload} className="flex-1" title="当前项目还没有资料" description="支持 PDF、Word、Excel、CSV、文本和 PNG/JPEG/WebP 图片 OCR。扫描 PDF 可逐页转为图片上传。" /> : <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto p-2">{projectDocuments.map((document) => { const Icon = document.kind === "经营数据" ? FileSpreadsheet : FileText; return <button key={document.id} onClick={() => setSelected(document)} className={`mb-1 w-full rounded-xl border p-3 text-left transition ${selected?.id === document.id ? "border-cyan-400/20 bg-cyan-400/[0.07]" : "border-transparent hover:bg-white/[0.035]"}`}><div className="flex gap-3"><div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-white/[0.07] bg-white/[0.04]"><Icon className="h-4 w-4 text-cyan-300" /></div><div className="min-w-0 flex-1"><p className="truncate text-xs font-medium text-slate-200">{document.name}</p><p className="mt-1 text-[10px] text-slate-600">{document.kind} · {formatWhen(document.uploadedAt)}{document.ocrUsed ? " · OCR" : ""}</p><p className={`mt-2 text-[10px] ${document.status === "已解析" ? "text-emerald-300" : document.status === "分析失败" ? "text-rose-300" : document.error ? "text-rose-300" : "text-amber-300"}`}>{document.status === "分析失败" || document.error ? "分析失败" : document.status}</p></div></div></button>; })}</div>}</Panel>
-      <Panel className={`flex min-h-0 flex-col ${mobileView === "list" ? "hidden xl:flex" : ""}`}>{!selected ? <EmptyStateCard icon={ScanSearch} className="flex-1" title="选择一份资料查看 AI 输出" description="分析结果来自实际文件提取文本，并应由业务人员对照原文件复核。" /> : <><div className="border-b border-white/[0.07] px-5 py-4"><div className="flex items-center justify-between gap-2"><p className="truncate text-sm font-semibold text-slate-100">{selected.name}</p><div className="flex shrink-0 gap-1.5">{selected.status === "已解析" && <Tooltip label="重跑规则评估"><button type="button" onClick={() => rerunRules(selected)} className="rounded-lg border border-white/10 p-1.5 text-slate-500 hover:border-cyan-400/25 hover:text-cyan-200"><RefreshCcw className="h-3.5 w-3.5" /></button></Tooltip>}<Tooltip label="复制为 Markdown"><button type="button" onClick={() => copyAnalysis(selected)} className="rounded-lg border border-white/10 p-1.5 text-slate-500 hover:border-cyan-400/25 hover:text-cyan-200"><ClipboardCopy className="h-3.5 w-3.5" /></button></Tooltip><Tooltip label="删除该资料"><button type="button" onClick={() => removeDocument(selected)} className="rounded-lg border border-white/10 p-1.5 text-slate-500 hover:border-rose-400/30 hover:text-rose-300"><Trash2 className="h-3.5 w-3.5" /></button></Tooltip></div></div><div className="mt-2 flex flex-wrap gap-2 text-[9px] text-slate-600"><span>{selected.kind}</span><span>{selected.status}</span>{selected.model && <span className="font-mono">{selected.model}</span>}</div></div><div className="scrollbar-thin flex-1 overflow-y-auto p-5">{selected.analysis ? <><div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[.16em] text-cyan-300/70"><ScanSearch className="h-3.5 w-3.5" />AI 资料研判</div><div className="mt-4 grid gap-3 sm:grid-cols-2">{selected.facts > 0 && <div className="rounded-xl border border-white/[0.06] bg-black/10 p-3"><p className="text-[10px] font-semibold uppercase tracking-[.15em] text-cyan-300/70">已抽取事实</p><p className="numeric mt-1 text-lg text-white">{selected.facts}</p><p className="mt-1 text-[10px] text-slate-600">逐条携带原文引用，可在下方逐项复核</p></div>}{selected.ruleHits > 0 && <div className="rounded-xl border border-white/[0.06] bg-black/10 p-3"><p className="text-[10px] font-semibold uppercase tracking-[.15em] text-amber-300/70">确定性规则命中</p><p className="numeric mt-1 text-lg text-white">{selected.ruleHits}</p><p className="mt-1 text-[10px] text-slate-600">由规则引擎对事实判定，可在规则库复核</p></div>}</div><FactLedger facts={selected.factItems ?? []} onReview={setReviewingFact} onPromote={promoteFactToRisk} onLocate={locateFact} />{(selected.ruleOutcomes ?? []).length > 0 && <section className="mt-5"><p className="text-[10px] font-semibold uppercase tracking-[.15em] text-slate-600">规则执行结果</p><div className="mt-2 space-y-2">{selected.ruleOutcomes?.map((outcome) => <div key={outcome.code} className="rounded-xl border border-white/[0.07] p-3"><p className={`text-xs ${outcome.hit ? "text-amber-200" : "text-slate-400"}`}>{outcome.code} · {outcome.name} · {outcome.hit ? "命中" : "未命中"}</p><p className="mt-1 text-[10px] leading-5 text-slate-600">{outcome.reason}</p></div>)}</div></section>}<p className="mt-5 whitespace-pre-wrap text-xs leading-7 text-slate-300">{highlightEvidence(selected.analysis ?? "", selected.factItems ?? [], focusedFactId)}</p><div className="mt-5 rounded-xl border border-amber-400/10 bg-amber-400/[0.035] p-3 text-[10px] leading-5 text-amber-100/60">模型输出可能存在遗漏或错误。请对照原文件核验所有金额、条款、主体和引用，再进入风险或审批流程。</div></> : selected.error || selected.status === "分析失败" ? <div className="flex h-full flex-col justify-center p-6"><ErrorState message={selected.error || "分析在会话结束前未完成"} onRetry={() => { removeDocument(selected); fileRef.current?.click(); }} retryLabel="删除后重新上传" /></div> : <div className="flex h-full min-h-72 flex-col justify-center gap-3 px-6 text-xs text-slate-500">
+      <Panel className={`flex min-h-0 flex-col ${mobileView === "detail" ? "hidden xl:flex" : ""}`}><div className="border-b border-white/[0.07] p-4"><p className="text-xs font-semibold text-slate-200">当前项目资料</p><p className="mt-1 text-[10px] text-slate-600">{projectDocuments.length} 份 · 文件上限 10MB</p></div>{projectDocuments.length === 0 ? <EmptyStateCard icon={Upload} className="flex-1" title="当前项目还没有资料" description="支持 PDF、Word、Excel、CSV、文本和 PNG/JPEG/WebP 图片 OCR。扫描 PDF 可逐页转为图片上传。" /> : <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto p-2">{projectDocuments.map((document) => { const Icon = document.kind === "经营数据" ? FileSpreadsheet : FileText; return <button key={document.id} onClick={() => setSelected(document)} className={`mb-1 w-full rounded-xl border p-3 text-left transition ${selected?.id === document.id ? "border-cyan-400/20 bg-cyan-400/[0.07]" : "border-transparent hover:bg-white/[0.035]"}`}><div className="flex gap-3"><div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-white/[0.07] bg-white/[0.04]"><Icon className="h-4 w-4 text-cyan-300" /></div><div className="min-w-0 flex-1"><p className="truncate text-xs font-medium text-slate-200">{document.name}</p><p className="mt-1 text-[10px] text-slate-600">{document.kind} · {formatWhen(document.uploadedAt)}{document.ocrUsed ? " · OCR" : ""} · <span className="font-mono">#{document.id.slice(-6)}</span></p><p className={`mt-2 text-[10px] ${document.status === "已解析" ? "text-emerald-300" : document.status === "分析失败" ? "text-rose-300" : document.error ? "text-rose-300" : "text-amber-300"}`}>{document.status === "分析失败" || document.error ? "分析失败" : document.status}</p></div></div></button>; })}</div>}</Panel>
+      <Panel className={`flex min-h-0 flex-col ${mobileView === "list" ? "hidden xl:flex" : ""}`}>{!selected ? <EmptyStateCard icon={ScanSearch} className="flex-1" title="选择一份资料查看 AI 输出" description="分析结果来自实际文件提取文本，并应由业务人员对照原文件复核。" /> : <><div className="border-b border-white/[0.07] px-5 py-4"><div className="flex items-center justify-between gap-2"><p className="truncate text-sm font-semibold text-slate-100">{selected.name}</p><div className="flex shrink-0 gap-1.5">{selected.status === "已解析" && <Tooltip label="重跑规则评估"><button type="button" onClick={() => rerunRules(selected)} className="rounded-lg border border-white/10 p-1.5 text-slate-500 hover:border-cyan-400/25 hover:text-cyan-200"><RefreshCcw className="h-3.5 w-3.5" /></button></Tooltip>}<Tooltip label="复制为 Markdown"><button type="button" onClick={() => copyAnalysis(selected)} className="rounded-lg border border-white/10 p-1.5 text-slate-500 hover:border-cyan-400/25 hover:text-cyan-200"><ClipboardCopy className="h-3.5 w-3.5" /></button></Tooltip><Tooltip label="删除该资料"><button type="button" onClick={() => removeDocument(selected)} className="rounded-lg border border-white/10 p-1.5 text-slate-500 hover:border-rose-400/30 hover:text-rose-300"><Trash2 className="h-3.5 w-3.5" /></button></Tooltip></div></div><div className="mt-2 flex flex-wrap gap-2 text-[9px] text-slate-600"><span>{selected.kind}</span><span>{selected.status}</span><span className="font-mono">#{selected.id.slice(-6)}</span>{selected.model && <span className="font-mono">{selected.model}</span>}</div></div><div className="scrollbar-thin flex-1 overflow-y-auto p-5">{selected.analysis ? <><div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[.16em] text-cyan-300/70"><ScanSearch className="h-3.5 w-3.5" />AI 资料研判</div><div className="mt-4 grid gap-3 sm:grid-cols-2">{selected.facts > 0 && <div className="rounded-xl border border-white/[0.06] bg-black/10 p-3"><p className="text-[10px] font-semibold uppercase tracking-[.15em] text-cyan-300/70">已抽取事实</p><p className="numeric mt-1 text-lg text-white">{selected.facts}</p><p className="mt-1 text-[10px] text-slate-600">逐条携带原文引用，可在下方逐项复核</p></div>}{selected.ruleHits > 0 && <div className="rounded-xl border border-white/[0.06] bg-black/10 p-3"><p className="text-[10px] font-semibold uppercase tracking-[.15em] text-amber-300/70">确定性规则命中</p><p className="numeric mt-1 text-lg text-white">{selected.ruleHits}</p><p className="mt-1 text-[10px] text-slate-600">由规则引擎对事实判定，可在规则库复核</p></div>}</div><FactLedger facts={selected.factItems ?? []} onReview={(fact) => { setReviewError(""); setReviewingFact(fact); }} onPromote={promoteFactToRisk} onLocate={locateFact} />{(selected.ruleOutcomes ?? []).length > 0 && <section className="mt-5"><p className="text-[10px] font-semibold uppercase tracking-[.15em] text-slate-600">规则执行结果</p><div className="mt-2 space-y-2">{selected.ruleOutcomes?.map((outcome) => <div key={outcome.code} className="rounded-xl border border-white/[0.07] p-3"><p className={`text-xs ${outcome.hit ? "text-amber-200" : "text-slate-400"}`}>{outcome.code} · {outcome.name} · {outcome.hit ? "命中" : "未命中"}</p><p className="mt-1 text-[10px] leading-5 text-slate-600">{outcome.reason}</p></div>)}</div></section>}<p className="mt-5 whitespace-pre-wrap text-xs leading-7 text-slate-300">{highlightEvidence(selected.analysis ?? "", selected.factItems ?? [], focusedFactId)}</p><div className="mt-5 rounded-xl border border-amber-400/10 bg-amber-400/[0.035] p-3 text-[10px] leading-5 text-amber-100/60">模型输出可能存在遗漏或错误。请对照原文件核验所有金额、条款、主体和引用，再进入风险或审批流程。</div></> : selected.error || selected.status === "分析失败" ? <div className="flex h-full flex-col justify-center p-6"><ErrorState message={selected.error || "分析在会话结束前未完成"} onRetry={() => discardAndReupload(selected)} retryLabel="删除后重新上传" /></div> : <div className="flex h-full min-h-72 flex-col justify-center gap-3 px-6 text-xs text-slate-500">
         <AIProcessingState
           mode="detailed"
           title={`模型正在研判「${selected.name}」`}
@@ -271,6 +291,6 @@ export default function DocumentsPage() {
         />
       </div>}</div></>}</Panel>
     </div>{(selected ?? projectDocuments[0]) && <TableLedger document={(selected ?? projectDocuments[0])!} focusedFact={focusedFact} />}</>}
-    <EnterpriseDialog open={Boolean(reviewingFact)} onClose={() => setReviewingFact(null)} title="复核结构化事实" description={reviewingFact ? `${reviewingFact.topic} · ${reviewingFact.value}${reviewingFact.unit}` : undefined}><form onSubmit={submitReview} className="space-y-4"><div className="rounded-xl border border-white/[0.07] p-3 text-[11px] leading-6 text-slate-400">原文：{reviewingFact?.quote}<br />位置：{reviewingFact?.location || "模型未提供，请对照原文件查找"}</div><label className="block"><span className="mb-1.5 block text-[11px] text-slate-400">复核结论</span><Select name="status" defaultValue="已确认" options={[{ value: "已确认", label: "已确认" }, { value: "已驳回", label: "已驳回" }, { value: "待复核", label: "待复核" }]} /></label><label className="block"><span className="mb-1.5 block text-[11px] text-slate-400">复核人</span><input required name="reviewer" placeholder="填写真实复核人" className="field-control" /></label><label className="block"><span className="mb-1.5 block text-[11px] text-slate-400">复核意见</span><textarea name="note" rows={3} placeholder="说明核对结果、修正依据或驳回原因" className="field-control resize-none" /></label><div className="flex justify-end gap-2"><button type="button" onClick={() => setReviewingFact(null)} className="rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-400">取消</button><button type="submit" className="rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]">保存复核</button></div></form></EnterpriseDialog>
+    <EnterpriseDialog open={Boolean(reviewingFact)} onClose={() => { setReviewingFact(null); setReviewError(""); }} title="复核结构化事实" description={reviewingFact ? `${reviewingFact.topic} · ${reviewingFact.value}${reviewingFact.unit}` : undefined}><form onSubmit={submitReview} className="space-y-4"><div className="rounded-xl border border-white/[0.07] p-3 text-[11px] leading-6 text-slate-400">原文：{reviewingFact?.quote}<br />位置：{reviewingFact?.location || "模型未提供，请对照原文件查找"}</div><label className="block"><span className="mb-1.5 block text-[11px] text-slate-400">复核结论</span><Select name="status" defaultValue="已确认" options={[{ value: "已确认", label: "已确认" }, { value: "已驳回", label: "已驳回" }, { value: "待复核", label: "待复核" }]} /></label><label className="block"><span className="mb-1.5 block text-[11px] text-slate-400">复核人</span><input name="reviewer" placeholder="填写真实复核人（必填）" aria-invalid={Boolean(reviewError)} className="field-control" />{reviewError && <p className="mt-1 text-[9px] text-rose-300">{reviewError}</p>}</label><label className="block"><span className="mb-1.5 block text-[11px] text-slate-400">复核意见</span><textarea name="note" rows={3} placeholder="说明核对结果、修正依据或驳回原因" className="field-control resize-none" /></label><div className="flex justify-end gap-2"><button type="button" onClick={() => setReviewingFact(null)} className="rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-400">取消</button><button type="submit" className="rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]">保存复核</button></div></form></EnterpriseDialog>
   </div>;
 }

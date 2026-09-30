@@ -1,4 +1,5 @@
 import type { EvidenceFact } from "@/types/enterprise";
+import { metricTopicMatches } from "@/lib/metric-aliases";
 
 export interface FinancialMetric {
   id: string;
@@ -25,8 +26,7 @@ function normalized(fact: EvidenceFact): number {
 }
 
 function matches(topic: string, names: string[]): boolean {
-  const value = topic.replace(/\s+/g, "").toLowerCase();
-  return names.some((name) => value.includes(name.toLowerCase()));
+  return names.some((name) => metricTopicMatches(topic, name));
 }
 
 function findFact(facts: EvidenceFact[], names: string[]): EvidenceFact | undefined {

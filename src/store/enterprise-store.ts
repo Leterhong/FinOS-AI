@@ -180,7 +180,8 @@ function deriveCaseProgress(state: {
   tasks: WorkflowTask[];
 }): { cases: EnterpriseCase[]; documents: AnalysisDocument[] } {
   const nextCases = state.cases.map((item) => {
-    const docs = state.documents.filter((d) => d.caseId === item.id);
+    // 失败/报错资料不计入进度，也不作为「资料已就绪」依据，否则会永久卡在未完成。
+    const docs = state.documents.filter((d) => d.caseId === item.id && d.status !== "分析失败" && !d.error);
     const docRatio = docs.length ? docs.filter((d) => d.status === "已解析").length / docs.length : 0;
     const risks = state.risks.filter((r) => r.caseId === item.id);
     const riskRatio = risks.length ? risks.filter((r) => RISK_DONE.has(r.status)).length / risks.length : 0;
@@ -293,6 +294,8 @@ export const useEnterpriseStore = create<EnterpriseState>()(
               analysis,
               model,
               error: undefined,
+              // 提取置信度：有结构化事实视为高，无事实视为低（不再停留在易误解的 0）。
+              confidence: factItems.length ? 0.9 : 0.4,
               facts: factItems.length,
               ruleHits: ruleOutcomes.filter((outcome) => outcome.hit).length,
               factItems,

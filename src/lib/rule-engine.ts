@@ -7,6 +7,8 @@
  *  - LLM 只负责事实抽取与解释生成，命中判定永远在这里完成。
  */
 
+import { metricTopicMatches } from "./metric-aliases";
+
 /** 规则条件：对事实主题 + 比较操作 + 阈值。 */
 export interface RuleCondition {
   /** 事实主题，如「货币资金」「资产负债率」。 */
@@ -73,9 +75,7 @@ const OP_LABEL: Record<RuleCondition["op"], string> = {
 };
 
 function topicMatches(factTopic: string, metric: string): boolean {
-  const a = factTopic.trim().toLowerCase();
-  const b = metric.trim().toLowerCase();
-  return a.includes(b) || b.includes(a);
+  return metricTopicMatches(factTopic, metric);
 }
 
 /**

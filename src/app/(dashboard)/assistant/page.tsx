@@ -90,7 +90,7 @@ export default function AssistantPage() {
   const [streamText, setStreamText] = useState("");
   const streamTextRef = useRef("");
 
-  const caseDocuments = useMemo(() => documents.filter((item) => item.caseId === activeCaseId), [activeCaseId, documents]);
+  const caseDocuments = useMemo(() => documents.filter((item) => item.caseId === activeCaseId && item.status === "已解析" && !item.error), [activeCaseId, documents]);
   const caseRisks = useMemo(() => risks.filter((item) => item.caseId === activeCaseId), [activeCaseId, risks]);
 
   // 对话历史持久化在工作区 store：刷新/关闭浏览器后仍可回溯 AI 研判记录。

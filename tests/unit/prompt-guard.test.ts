@@ -17,3 +17,9 @@ test("提示词防护脱敏凭据但保留业务文本", () => {
   assert.doesNotMatch(sanitized, /top-secret-value|sk-abcdefghijklmnop/);
   assert.match(promptGuardInstruction([]), /不可信/);
 });
+
+test("普通尽调资料不被误判为敏感信息外传", () => {
+  const flags = inspectPrompt("合同编号 key-2024-abcdef，主要客户集中度为 78%，需复核应收账款账龄与现金流");
+  assert.equal(flags.includes("secret_exfiltration"), false);
+  assert.equal(shouldBlockPrompt(flags), false);
+});

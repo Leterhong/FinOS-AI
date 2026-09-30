@@ -25,7 +25,7 @@ export default function ResearchPage() {
   const [open, setOpen] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState("");
-  const caseDocuments = useMemo(() => documents.filter((item) => item.caseId === activeCaseId), [activeCaseId, documents]);
+  const caseDocuments = useMemo(() => documents.filter((item) => item.caseId === activeCaseId && item.status === "已解析" && !item.error), [activeCaseId, documents]);
   const caseRisks = useMemo(() => risks.filter((item) => item.caseId === activeCaseId), [activeCaseId, risks]);
   const caseBriefs = useMemo(() => briefs.filter((item) =>
     item.caseId === activeCaseId || (!item.caseId && cases.length === 1),

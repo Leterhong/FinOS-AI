@@ -104,7 +104,7 @@ export default function RulesPage() {
               ) : (
                 <span className="text-[9px] text-slate-600">缺少结构化条件，不能自动测试</span>
               )}
-              <div className="mt-2 flex justify-between text-[10px] text-slate-600"><span>通过率</span><span>{rule.coverageRate}%</span></div>
+              <div className="mt-2 flex justify-between text-[10px] text-slate-600"><span>自测通过率</span><span>{rule.coverageRate}%</span></div>
               <div className="mt-1.5 h-1 rounded-full bg-white/[0.07]">
                 <div className={`h-full rounded-full transition-all ${rule.coverage === "测试未通过" ? "bg-rose-400" : "bg-emerald-400"}`} style={{ width: `${rule.coverageRate}%` }} />
               </div>

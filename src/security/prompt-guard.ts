@@ -3,7 +3,18 @@ export type PromptGuardFlag = "instruction_override" | "secret_exfiltration" | "
 
 const RULES: Array<{ flag: PromptGuardFlag; patterns: RegExp[] }> = [
   { flag: "instruction_override", patterns: [/ignore\s+(all\s+)?previous/i, /忽略.{0,8}(之前|以上|系统)/, /覆盖.{0,6}系统指令/] },
-  { flag: "secret_exfiltration", patterns: [/reveal.{0,20}(system prompt|secret|api.?key)/i, /输出.{0,12}(系统提示|密钥|环境变量|令牌|api.?key)/i, /(?:sk|key)-[a-z0-9_-]{12,}/i] },
+  { flag: "secret_exfiltration", patterns: [
+    /reveal.{0,20}(system prompt|secret|api.?_?key)/i,
+    /输出.{0,12}(系统提示|密钥|环境变量|令牌|api[\s_-]?key)/i,
+    // 仅匹配真实密钥前缀/高熵格式，避免把普通业务文本（如 key-xxx 编号）误判。
+    /\bsk-[a-zA-Z0-9]{20,}\b/,
+    /\bsk-ant-[a-zA-Z0-9-]{20,}\b/,
+    /\bAKIA[0-9A-Z]{16}\b/,
+    /\bghp_[a-zA-Z0-9]{20,}\b/,
+    /\bgithub_pat_[a-zA-Z0-9_]{20,}\b/,
+    /\bxox[baprs]-[a-zA-Z0-9-]{10,}\b/,
+    /\bAIza[0-9A-Za-z_-]{20,}\b/,
+  ] },
   { flag: "tool_escalation", patterns: [/(执行|运行).{0,20}(shell|命令|脚本)/i, /shell\s*命令/i, /(删除|清空).{0,10}(数据库|文件|审计)/, /bypass.{0,12}(permission|approval)/i] },
 ];
 

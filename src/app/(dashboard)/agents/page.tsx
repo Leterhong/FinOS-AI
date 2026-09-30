@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Bot, Braces, CheckCircle2, Clock3, Cpu, FileSearch, GitBranch, Loader2, Play, ShieldCheck, XCircle } from "lucide-react";
 import { EmptyStateCard, PageIntro, Panel, PanelHeader } from "@/components/enterprise/EnterpriseUI";
@@ -34,9 +34,11 @@ export default function AgentsPage() {
   const active = useModelStore((state) => state.active);
   const [running, setRunning] = useState(false);
   const [notice, setNotice] = useState("");
+  const [streamText, setStreamText] = useState("");
+  const abortRef = useRef<AbortController | null>(null);
   const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
 
-  const caseDocuments = useMemo(() => documents.filter((item) => item.caseId === activeCaseId), [activeCaseId, documents]);
+  const caseDocuments = useMemo(() => documents.filter((item) => item.caseId === activeCaseId && item.status === "已解析" && !item.error), [activeCaseId, documents]);
   const caseRisks = useMemo(() => risks.filter((item) => item.caseId === activeCaseId), [activeCaseId, risks]);
   const canRun = Boolean(active?.configured && activeCase && caseDocuments.length > 0);
 
@@ -50,6 +52,9 @@ export default function AgentsPage() {
       company: activeCase!.company,
     });
     setRunning(true);
+    setStreamText("");
+    const controller = new AbortController();
+    abortRef.current = controller;
     try {
       // 走 SSE 流式：推理模型首字节可能远晚于 60s，非流式会被反向代理按 idle 超时切断。
       const result = await streamEnterpriseAI(
@@ -58,15 +63,20 @@ export default function AgentsPage() {
           question: "请执行一次完整的企业经营与风险研判，列出可用事实、适用规则、风险观察、信息缺口和人工复核清单。",
           context: { cases: [activeCase!], documents: caseDocuments, rules, risks: caseRisks },
         },
-        () => {},
+        (delta) => setStreamText((current) => current + delta),
+        controller.signal,
       );
       completeAgentRun(currentRun.id, result.answer, `${((performance.now() - startedAt) / 1000).toFixed(1)}s`);
     } catch (error) {
-      failAgentRun(currentRun.id, error instanceof Error ? error.message : "模型调用失败", `${((performance.now() - startedAt) / 1000).toFixed(1)}s`);
+      const aborted = controller.signal.aborted;
+      failAgentRun(currentRun.id, aborted ? "已取消本次研判" : error instanceof Error ? error.message : "模型调用失败", `${((performance.now() - startedAt) / 1000).toFixed(1)}s`);
     } finally {
       setRunning(false);
+      abortRef.current = null;
     }
   };
+
+  const cancelRun = () => abortRef.current?.abort();
 
   /** 把 Agent 研判输出一键转为待核验风险信号（需人工补全等级与规则依据）。 */
   const promoteToRisk = (run: (typeof runs)[number]) => {
@@ -138,7 +148,9 @@ export default function AgentsPage() {
   ].filter(Boolean) as string[];
 
   return <div className="page-shell">
-    <PageIntro eyebrow="AI agent orchestration" title="企业金融 Agent 中心" description="由当前默认大模型执行真实研判调用。系统不会用计时器模拟运行，也不会在没有项目或资料时生成伪造结果。" actions={<button onClick={() => void run()} disabled={!canRun || running} className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018] disabled:cursor-not-allowed disabled:opacity-40">{running ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}{running ? "模型研判中…" : "运行研判 Agent"}</button>} />
+    <PageIntro eyebrow="AI agent orchestration" title="企业金融 Agent 中心" description="由当前默认大模型执行真实研判调用。系统不会用计时器模拟运行，也不会在没有项目或资料时生成伪造结果。" actions={<><button onClick={() => void run()} disabled={!canRun || running} className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018] disabled:cursor-not-allowed disabled:opacity-40">{running ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}{running ? "模型研判中…" : "运行研判 Agent"}</button>{running && <button onClick={cancelRun} className="rounded-xl border border-white/15 px-4 py-2.5 text-xs text-slate-300 transition hover:border-rose-400/30 hover:text-rose-200">取消</button>}</>} />
+
+    {running && <Panel><PanelHeader eyebrow="Live output" title="模型正在生成（实时）" description="推理模型可能需要数分钟；生成过程实时可见，可随时取消。" /><p className="scrollbar-thin max-h-72 overflow-y-auto whitespace-pre-wrap p-5 text-xs leading-6 text-slate-400">{streamText || "已发送请求，等待模型首个输出…"}</p></Panel>}
 
     <CaseContextSelector cases={cases} value={activeCaseId} onChange={setActiveCaseId} detail={`${caseDocuments.length} 份资料 · ${caseRisks.length} 个既有风险，仅当前项目会进入模型`} />
 

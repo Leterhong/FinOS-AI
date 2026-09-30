@@ -97,7 +97,8 @@ export async function streamEnterpriseAI(
     mode?: "chat" | "agent" | "research";
     context?: EnterpriseAIContext;
   },
-  onDelta: (text: string) => void
+  onDelta: (text: string) => void,
+  signal?: AbortSignal
 ): Promise<EnterpriseAIResult> {
   await ensureWorkspaceSession();
   const response = await fetch("/api/enterprise/ai", {
@@ -105,6 +106,7 @@ export async function streamEnterpriseAI(
     credentials: "same-origin",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ...input, stream: true }),
+    signal,
   });
   if (!response.ok || !response.body) {
     const payload = await response.json().catch(() => null) as { error?: string; code?: string } | null;
