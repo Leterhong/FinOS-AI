@@ -123,3 +123,74 @@ export function pushDelete(kind: EnterpriseKind, id: string): void {
     }
   })();
 }
+
+// ── 邮箱账号（可选）：登录后企业/治理数据归属真实账号，邀请才能按邮箱绑定生效。 ──
+
+export interface BackendAccount {
+  id: string;
+  email: string;
+  name?: string;
+  guest: boolean;
+}
+
+interface AuthEnvelope {
+  data?: { token?: string; user?: { id?: string; email?: string; name?: string }; guest?: boolean };
+  error?: string;
+}
+
+export function isGuestEmail(email: string | undefined | null): boolean {
+  return (email ?? "").endsWith("@guest.finos.local");
+}
+
+async function authRequest(path: string, body: unknown): Promise<BackendAccount> {
+  const resp = await fetch(`${BASE}${path}`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const payload = (await resp.json().catch(() => null)) as AuthEnvelope | null;
+  const user = payload?.data?.user;
+  if (!resp.ok || !payload?.data?.token || !user?.id) {
+    throw new Error(payload?.error || "账号操作失败");
+  }
+  cachedToken = payload.data.token;
+  return { id: user.id, email: user.email ?? "", name: user.name, guest: payload.data.guest ?? isGuestEmail(user.email) };
+}
+
+export function loginAccount(email: string, password: string): Promise<BackendAccount> {
+  return authRequest("/api/auth/login", { email, password });
+}
+
+export function registerAccount(email: string, password: string): Promise<BackendAccount> {
+  return authRequest("/api/auth/register", { email, password });
+}
+
+/** 退出登录：吊销刷新令牌并清空内存访问令牌；随后由 ensureBackendSession 重新建立访客会话。 */
+export async function logoutAccount(): Promise<void> {
+  try {
+    await fetch(`${BASE}/api/auth/logout`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+  } catch {
+    // 忽略网络错误。
+  }
+  cachedToken = null;
+}
+
+/** 读取当前后端账号；失败或无会话返回 null。 */
+export async function fetchAccount(): Promise<BackendAccount | null> {
+  try {
+    const resp = await backendAuthedFetch("/api/auth/me");
+    if (!resp.ok) return null;
+    const payload = (await resp.json()) as { data?: { user?: { id?: string; email?: string; name?: string } } };
+    const user = payload?.data?.user;
+    if (!user?.id) return null;
+    return { id: user.id, email: user.email ?? "", name: user.name, guest: isGuestEmail(user.email) };
+  } catch {
+    return null;
+  }
+}

@@ -244,6 +244,14 @@ def governance_snapshot(organizationId: str | None = None, auditLimit: int = 200
     eval_cases = list(db.scalars(select(ModelEvalCase).where(ModelEvalCase.organization_id == org.id).order_by(ModelEvalCase.created_at.desc())))
     eval_runs = list(db.scalars(select(ModelEvalRun).where(ModelEvalRun.organization_id == org.id).order_by(ModelEvalRun.created_at.desc()).limit(100)))
     connectors = list(db.scalars(select(EnterpriseConnector).where(EnterpriseConnector.organization_id == org.id).order_by(EnterpriseConnector.created_at.desc())))
+    # 待接受邀请：按当前账号邮箱匹配、跨组织列出，避免被邀请人只能看到自己默认组织而错过邀请。
+    my_email = (user.email or "").strip().lower()
+    pending_rows = list(db.scalars(select(OrganizationMember).where(OrganizationMember.email == my_email, OrganizationMember.status == "invited")))
+    invitations = []
+    for row in pending_rows:
+        candidate = db.get(Organization, row.organization_id)
+        if candidate:
+            invitations.append({"memberId": row.id, "organizationId": row.organization_id, "organizationName": candidate.name, "role": row.role, "clearance": row.clearance})
     organizations = []
     seen_orgs: set[str] = set()
     for membership in memberships:
@@ -256,6 +264,7 @@ def governance_snapshot(organizationId: str | None = None, auditLimit: int = 200
     return ok({
         "organization": _org_out(org), "members": [_member_out(x) for x in members],
         "organizations": organizations,
+        "invitations": invitations,
         "grants": [_grant_out(x) for x in grants],
         "audits": [{"id": x.id, "action": x.action, "resourceType": x.resource_type, "resourceId": x.resource_id, "caseId": x.case_id, "outcome": x.outcome, "details": _json(x.details_json, {}), "ip": x.ip, "userId": x.user_id, "operator": email_by_user.get(x.user_id, "系统/未知"), "createdAt": x.created_at.isoformat()} for x in audits],
         "reviews": [_review_out(x) for x in reviews], "evalCases": [_eval_case_out(x) for x in eval_cases],
