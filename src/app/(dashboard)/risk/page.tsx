@@ -7,6 +7,7 @@ import DetailDrawer, { DrawerSection } from "@/components/workspace/DetailDrawer
 import { Tooltip } from "@/components/ui/Tooltip";
 import { EvidenceReference } from "@/components/evidence/EvidenceReference";
 import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
 import { EmptyStateCard, PageIntro, Panel, RiskBadge, riskMeta } from "@/components/enterprise/EnterpriseUI";
 import { useEnterpriseStore } from "@/store/enterprise-store";
 import type { RiskLevel, RiskSignal } from "@/types/enterprise";
@@ -141,9 +142,9 @@ export default function RiskPage() {
     </DetailDrawer>
     <EnterpriseDialog open={open} onClose={() => setOpen(false)} title="登记企业风险" description="仅录入可追溯、可复核的风险信号">
       <form onSubmit={submit} className="space-y-4">
-        <label className="block"><span className="mb-1.5 block text-[11px] text-slate-400">关联项目</span><select required name="caseId" disabled={!cases.length} className="field-control disabled:opacity-50"><option value="">{cases.length ? "选择项目" : "暂无项目，请先到项目中心创建"}</option>{cases.map((item) => <option key={item.id} value={item.id}>{item.company} · {item.title}</option>)}</select></label>
+        <label className="block"><span className="mb-1.5 block text-[11px] text-slate-400">关联项目</span><Select required name="caseId" disabled={!cases.length} placeholder={cases.length ? "选择项目" : "暂无项目，请先到项目中心创建"} options={[{ value: "", label: cases.length ? "选择项目" : "暂无项目，请先到项目中心创建" }, ...cases.map((item) => ({ value: item.id, label: `${item.company} · ${item.title}` }))]} /></label>
         {["title", "evidence", "rule", "impact"].map((name) => { const meta: Record<string, [string, string]> = { title: ["风险标题", "概括需要核验的风险"], evidence: ["关键证据", "填写原始资料中的事实与位置"], rule: ["规则依据", "填写命中的制度或审查规则"], impact: ["潜在影响", "说明对经营、融资或合规的影响"] }; return <label key={name} className="block"><span className="mb-1.5 block text-[11px] text-slate-400">{meta[name][0]}</span><textarea required name={name} rows={name === "title" ? 2 : 3} placeholder={meta[name][1]} className="field-control resize-none" /></label>; })}
-        <label className="block"><span className="mb-1.5 block text-[11px] text-slate-400">风险等级</span><select name="level" className="field-control"><option value="medium">中风险</option><option value="high">高风险</option><option value="critical">重大风险</option><option value="low">低风险</option></select></label>
+        <label className="block"><span className="mb-1.5 block text-[11px] text-slate-400">风险等级</span><Select name="level" defaultValue="medium" options={[{ value: "medium", label: "中风险" }, { value: "high", label: "高风险" }, { value: "critical", label: "重大风险" }, { value: "low", label: "低风险" }]} /></label>
         <div className="flex justify-end gap-2"><button type="button" onClick={() => setOpen(false)} className="rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-400">取消</button><button type="submit" className="rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]">保存并待核验</button></div>
       </form>
     </EnterpriseDialog>
