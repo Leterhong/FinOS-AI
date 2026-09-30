@@ -30,6 +30,10 @@ export function listSkills(): DomainSkill[] {
   return SKILLS;
 }
 
+export function getSkill(id: string): DomainSkill | null {
+  return SKILLS.find((skill) => skill.id === id) ?? null;
+}
+
 export function skillIds(): string[] {
   return SKILLS.map((skill) => skill.id);
 }

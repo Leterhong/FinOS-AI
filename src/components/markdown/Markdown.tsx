@@ -113,11 +113,24 @@ export function Markdown({ content, className }: { content: string; className?: 
       continue;
     }
 
-    // 有序列表
+    // 有序列表（使用原文编号渲染，避免列表被段落打断后每段都从 1 重新计数）
     if (ORDERED.test(line)) {
-      const items: string[] = [];
-      while (i < lines.length && ORDERED.test(lines[i])) { items.push(lines[i].match(ORDERED)![2]); i += 1; }
-      blocks.push(<ol key={`k${key++}`} className="ml-4 list-decimal space-y-1 text-sm leading-7 text-slate-300">{items.map((item, ii) => <li key={ii} className="pl-1">{renderInline(item, `ol${key}-${ii}`)}</li>)}</ol>);
+      const items: Array<{ marker: string; text: string }> = [];
+      while (i < lines.length && ORDERED.test(lines[i])) {
+        const m = lines[i].match(ORDERED)!;
+        items.push({ marker: m[1], text: m[2] });
+        i += 1;
+      }
+      blocks.push(
+        <ul key={`k${key++}`} className="ml-1 list-none space-y-1.5 text-sm leading-7 text-slate-300">
+          {items.map((item, ii) => (
+            <li key={ii} className="flex gap-2">
+              <span className="shrink-0 tabular-nums text-slate-500">{item.marker}.</span>
+              <span className="min-w-0">{renderInline(item.text, `ol${key}-${ii}`)}</span>
+            </li>
+          ))}
+        </ul>,
+      );
       continue;
     }
 

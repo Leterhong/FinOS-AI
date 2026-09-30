@@ -37,6 +37,7 @@ export async function callEnterpriseAI(input: {
   question: string;
   mode?: "chat" | "agent" | "research";
   context?: EnterpriseAIContext;
+  skillId?: string;
 }): Promise<EnterpriseAIResult> {
   await ensureWorkspaceSession();
   const response = await fetch("/api/enterprise/ai", {
@@ -98,6 +99,7 @@ export async function streamEnterpriseAI(
     question: string;
     mode?: "chat" | "agent" | "research";
     context?: EnterpriseAIContext;
+    skillId?: string;
   },
   onDelta: (text: string) => void,
   signal?: AbortSignal

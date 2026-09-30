@@ -34,6 +34,7 @@ export interface AssistantMessage {
   model?: string;
   error?: boolean;
   caseId?: string;
+  skill?: { id: string; name: string };
 }
 
 interface EnterpriseState {

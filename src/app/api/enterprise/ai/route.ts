@@ -4,7 +4,7 @@ import { resolveActiveModel } from "@/ai/model-center/models/resolver";
 import { ModelStoreDecryptError } from "@/ai/model-center/models/store";
 import { OpenAICompatibleProvider } from "@/ai/model-center/providers/OpenAICompatibleProvider";
 import { inspectPrompt, promptGuardInstruction, redactPromptSecrets, shouldBlockPrompt } from "@/security/prompt-guard";
-import { selectSkill } from "@/ai/skills/registry";
+import { getSkill, selectSkill } from "@/ai/skills/registry";
 import { getEnabledSkillIds } from "@/ai/skills/store";
 
 export const runtime = "nodejs";
@@ -20,6 +20,8 @@ interface RequestBody {
   mode?: unknown;
   context?: unknown;
   stream?: unknown;
+  /** 指定技能 id（须已启用）；留空则按问题自动选择。 */
+  skillId?: unknown;
 }
 
 const BASE_SYSTEM_PROMPT = `你是 FinOS AI 的企业经营与风险研判助手。你的任务是辅助资料理解、规则匹配、风险提示、投研整理和流程规划。
@@ -107,9 +109,11 @@ export async function POST(req: NextRequest) {
   const context = redactPromptSecrets(rawContext);
   const guardInstruction = promptGuardInstruction([...new Set([...questionFlags, ...contextFlags])]);
   const safeQuestion = redactPromptSecrets(question);
-  // 专属技能选择：仅在该工作区已启用的技能中，按 mode + 关键词命中挑选，并随响应返回。
+  // 专属技能：优先使用前端指定的技能（须已启用），否则在已启用技能中按 mode + 关键词自动选择。
   const enabledSkillIds = await getEnabledSkillIds(userId);
-  const skill = selectSkill({ mode, question }, enabledSkillIds);
+  const requestedSkillId = typeof body.skillId === "string" ? body.skillId : "";
+  const forcedSkill = requestedSkillId && enabledSkillIds.includes(requestedSkillId) ? getSkill(requestedSkillId) : null;
+  const skill = forcedSkill ?? selectSkill({ mode, question }, enabledSkillIds);
   const skillBlock = skill ? `\n\n${skill.playbook}` : "";
   const skillInfo = skill ? { id: skill.id, name: skill.name } : undefined;
   const provider = new OpenAICompatibleProvider(model);
