@@ -12,45 +12,21 @@
  */
 
 const BASE = (process.env.NEXT_PUBLIC_BACKEND_URL || "").replace(/\/+$/, "");
-const TOKEN_KEY = "finos-be-access-token";
 
 let cachedToken: string | null = null;
 let bootstrapPromise: Promise<string | null> | null = null;
 
-function readStoredToken(): string | null {
-  if (cachedToken) return cachedToken;
-  if (typeof window === "undefined") return null;
-  try {
-    cachedToken = window.sessionStorage.getItem(TOKEN_KEY);
-  } catch {
-    cachedToken = null;
-  }
-  return cachedToken;
-}
-
-function storeToken(token: string): void {
-  cachedToken = token;
-  try {
-    window.sessionStorage.setItem(TOKEN_KEY, token);
-  } catch {
-    // 无痕模式等场景下 sessionStorage 不可用：仅保留内存令牌。
-  }
-}
-
-function clearToken(): void {
-  cachedToken = null;
-  try {
-    window.sessionStorage.removeItem(TOKEN_KEY);
-  } catch {
-    // 忽略存储不可用。
-  }
-}
-
-/** 用 HttpOnly refresh cookie 静默换取访问令牌（幂等：bootstrap 会复用未过期会话）。 */
+/**
+ * 用 HttpOnly refresh cookie 静默换取访问令牌（幂等：bootstrap 会复用未过期会话）。
+ *
+ * 不再信任 sessionStorage 中缓存的旧令牌：它可能属于另一个会话（refresh cookie
+ * 指向的用户已变化，例如退出后换号、Cookie 被替换），继续复用会读到错误或空数据。
+ * 每次页面加载首次调用都重新换取，之后同一页面内复用内存令牌。
+ */
 export async function ensureBackendSession(force = false): Promise<string | null> {
-  if (!force && readStoredToken()) return cachedToken;
-  if (force) clearToken();
+  if (!force && cachedToken) return cachedToken;
   if (!force && bootstrapPromise) return bootstrapPromise;
+  if (force) cachedToken = null;
   const operation = (async () => {
     try {
       const resp = await fetch(`${BASE}/api/auth/bootstrap`, {
@@ -63,7 +39,7 @@ export async function ensureBackendSession(force = false): Promise<string | null
       const payload = (await resp.json()) as { data?: { token?: string } };
       const token = payload?.data?.token;
       if (!token) return null;
-      storeToken(token);
+      cachedToken = token;
       return token;
     } catch {
       return null;
