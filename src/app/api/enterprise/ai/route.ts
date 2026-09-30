@@ -5,7 +5,7 @@ import { ModelStoreDecryptError } from "@/ai/model-center/models/store";
 import { OpenAICompatibleProvider } from "@/ai/model-center/providers/OpenAICompatibleProvider";
 import { inspectPrompt, promptGuardInstruction, redactPromptSecrets, shouldBlockPrompt } from "@/security/prompt-guard";
 import { getSkill, selectSkill } from "@/ai/skills/registry";
-import { getEnabledSkillIds } from "@/ai/skills/store";
+import { getCustomSkills, getEnabledSkillIds } from "@/ai/skills/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -109,11 +109,12 @@ export async function POST(req: NextRequest) {
   const context = redactPromptSecrets(rawContext);
   const guardInstruction = promptGuardInstruction([...new Set([...questionFlags, ...contextFlags])]);
   const safeQuestion = redactPromptSecrets(question);
-  // 专属技能：优先使用前端指定的技能（须已启用），否则在已启用技能中按 mode + 关键词自动选择。
+  // 专属技能：内置 + 用户自定义；优先使用前端指定的技能（须已启用），否则在已启用技能中自动选择。
+  const customSkills = await getCustomSkills(userId);
   const enabledSkillIds = await getEnabledSkillIds(userId);
   const requestedSkillId = typeof body.skillId === "string" ? body.skillId : "";
-  const forcedSkill = requestedSkillId && enabledSkillIds.includes(requestedSkillId) ? getSkill(requestedSkillId) : null;
-  const skill = forcedSkill ?? selectSkill({ mode, question }, enabledSkillIds);
+  const forcedSkill = requestedSkillId && enabledSkillIds.includes(requestedSkillId) ? getSkill(requestedSkillId, customSkills) : null;
+  const skill = forcedSkill ?? selectSkill({ mode, question }, enabledSkillIds, customSkills);
   const skillBlock = skill ? `\n\n${skill.playbook}` : "";
   const skillInfo = skill ? { id: skill.id, name: skill.name } : undefined;
   const provider = new OpenAICompatibleProvider(model);

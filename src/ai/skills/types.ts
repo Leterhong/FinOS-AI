@@ -28,6 +28,8 @@ export interface DomainSkill {
   playbook: string;
   /** 选择权重：mode 强关联的技能优先。 */
   modes: Array<SkillContext["mode"]>;
+  /** 是否为用户自定义技能（用于管理页展示删除按钮）。 */
+  custom?: boolean;
 }
 
 /** 关键词命中计分并选取得分最高的技能；平局取第一个。 */

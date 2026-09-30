@@ -7,11 +7,13 @@ export const SKILLS: DomainSkill[] = [enterpriseCreditSkill, enterpriseDocumentA
 
 /**
  * 按 mode + 问题关键词选择最合适的技能。
- * @param enabledIds 仅在这些技能中挑选；不传则使用全部已注册技能。
+ * @param enabledIds 仅在这些技能中挑选；不传则使用全部（内置 + 自定义）技能。
+ * @param extra 用户自定义技能。
  * 返回 null 表示无技能命中（走通用助手提示）。
  */
-export function selectSkill(context: SkillContext, enabledIds?: string[]): DomainSkill | null {
-  const pool = enabledIds ? SKILLS.filter((skill) => enabledIds.includes(skill.id)) : SKILLS;
+export function selectSkill(context: SkillContext, enabledIds?: string[], extra: DomainSkill[] = []): DomainSkill | null {
+  const all = [...SKILLS, ...extra];
+  const pool = enabledIds ? all.filter((skill) => enabledIds.includes(skill.id)) : all;
   let best: DomainSkill | null = null;
   let bestScore = 0;
   for (const skill of pool) {
@@ -30,8 +32,8 @@ export function listSkills(): DomainSkill[] {
   return SKILLS;
 }
 
-export function getSkill(id: string): DomainSkill | null {
-  return SKILLS.find((skill) => skill.id === id) ?? null;
+export function getSkill(id: string, extra: DomainSkill[] = []): DomainSkill | null {
+  return [...SKILLS, ...extra].find((skill) => skill.id === id) ?? null;
 }
 
 export function skillIds(): string[] {
