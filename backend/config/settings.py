@@ -5,6 +5,7 @@ DATABASE_URL 支持 PostgreSQL（生产）与 SQLite（本地开发降级）。
 """
 from __future__ import annotations
 
+import base64
 import os
 import secrets
 import warnings
@@ -136,6 +137,8 @@ class Settings(BaseSettings):
         self._guard_jwt_secret()
         self._guard_jwt_algorithm()
         self._guard_jwt_expire()
+        self._guard_cors()
+        self._guard_encryption_key()
 
     def _guard_jwt_secret(self) -> None:
         """JWT 密钥强度守卫。
@@ -185,6 +188,34 @@ class Settings(BaseSettings):
                 "JWT_EXPIRE_MINUTES 必须在 "
                 f"{MIN_JWT_EXPIRE_MINUTES}–{MAX_JWT_EXPIRE_MINUTES} 分钟之间"
                 "（超长 Access Token 会使刷新轮换与重放检测形同虚设），拒绝启动。"
+            )
+
+    def _guard_cors(self) -> None:
+        """禁止「通配来源 + 携带凭据」的危险组合（否则任意站点可带凭据跨域调用）。"""
+        if "*" in self.cors_origin_list:
+            raise RuntimeError(
+                "CORS_ORIGINS 不允许使用通配符 '*'（服务端已启用 allow_credentials）。"
+                "请显式列出来源域名。"
+            )
+
+    def _guard_encryption_key(self) -> None:
+        """生产环境必须提供可解码为 32 字节的 ENCRYPTION_MASTER_KEY（开发环境可缺省）。"""
+        if is_dev_environment():
+            return
+        key = (self.encryption_master_key or "").strip()
+        if not key:
+            raise RuntimeError(
+                "ENCRYPTION_MASTER_KEY 未配置，拒绝启动。\n"
+                '生成方式：python -c "import base64,os;print(base64.urlsafe_b64encode(os.urandom(32)).decode())"'
+            )
+        try:
+            padded = key + "=" * (-len(key) % 4)
+            decoded = base64.urlsafe_b64decode(padded)
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError("ENCRYPTION_MASTER_KEY 不是合法的 Base64") from exc
+        if len(decoded) != 32:
+            raise RuntimeError(
+                f"ENCRYPTION_MASTER_KEY 解码后必须为 32 字节（当前 {len(decoded)} 字节）"
             )
 
 

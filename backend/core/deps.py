@@ -15,9 +15,8 @@ from backend.database import get_db
 def get_current_user(request: Request, db: Session = Depends(get_db)):
     auth = request.headers.get("Authorization", "")
     token = auth.removeprefix("Bearer ").strip() if auth.startswith("Bearer ") else ""
-    if not token:
-        # 兼容 cookie 模式
-        token = request.cookies.get("finos_token", "")
+    # 业务接口统一使用 Bearer Access Token；不再回退到从未签发的 Cookie，
+    # 避免误以为存在 Cookie 登录态。
     payload = decode_access_token(token) if token else None
     if not payload or not payload.get("sub"):
         raise HTTPException(status_code=401, detail="未登录或凭证已过期")

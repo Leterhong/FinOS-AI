@@ -36,9 +36,11 @@ logger = get_logger("finos.app")
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    init_db()  # 开发环境自动建表；生产用 Alembic
-    # 开发环境：将既有明文敏感字段原地升级为 AES-256-GCM 密文（幂等）。
+    # 开发/本地降级（SQLite）自动建表；生产 PostgreSQL 一律使用 Alembic 迁移，
+    # 避免绕过迁移记录造成 schema 漂移或多实例启动 DDL 竞争。
     if settings.database_url.startswith("sqlite"):
+        init_db()
+        # 开发环境：将既有明文敏感字段原地升级为 AES-256-GCM 密文（幂等）。
         try:
             with SessionLocal() as db:
                 encrypt_existing_sensitive_data(db)
@@ -68,7 +70,16 @@ async def lifespan(_: FastAPI):
     task_worker.stop_worker()
 
 
-app = FastAPI(title=settings.app_name, lifespan=lifespan, docs_url="/docs")
+# 生产（非本地 SQLite 降级）默认关闭交互式文档与 OpenAPI，减少接口结构暴露面。
+_docs_enabled = settings.debug or settings.database_url.startswith("sqlite")
+
+app = FastAPI(
+    title=settings.app_name,
+    lifespan=lifespan,
+    docs_url="/docs" if _docs_enabled else None,
+    redoc_url="/redoc" if _docs_enabled else None,
+    openapi_url="/openapi.json" if _docs_enabled else None,
+)
 
 app.add_middleware(SecurityMiddleware)
 app.add_middleware(MetricsMiddleware)

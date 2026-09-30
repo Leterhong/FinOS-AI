@@ -17,7 +17,9 @@ class KeyManager:
         if not value:
             raise RuntimeError("ENCRYPTION_MASTER_KEY 未配置")
         try:
-            decoded = base64.urlsafe_b64decode(value.encode("ascii"))
+            # 兼容无 padding 的 URL-safe Base64（如 Node 的 toString("base64url")）。
+            padded = value + "=" * (-len(value) % 4)
+            decoded = base64.urlsafe_b64decode(padded.encode("ascii"))
         except Exception as exc:
             raise RuntimeError("ENCRYPTION_MASTER_KEY 必须是 URL-safe Base64") from exc
         if len(decoded) != 32:

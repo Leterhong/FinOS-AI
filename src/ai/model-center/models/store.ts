@@ -55,6 +55,16 @@ function safeTrim(value: unknown): string {
 class ModelConfigStore {
   private cache = new Map<string, AIProviderConfig[]>();
 
+  /** 每个 userId 的读-改-写串行化队列，避免并发写入相互覆盖。 */
+  private locks = new Map<string, Promise<unknown>>();
+
+  private withLock<T>(userId: string, operation: () => Promise<T>): Promise<T> {
+    const previous = this.locks.get(userId) ?? Promise.resolve();
+    const run = previous.then(operation, operation);
+    this.locks.set(userId, run.then(() => undefined, () => undefined));
+    return run;
+  }
+
   private filePath(userId: string): string {
     return path.join(DATA_DIR, `${sanitize(userId)}.json.enc`);
   }
@@ -71,9 +81,11 @@ class ModelConfigStore {
     } catch (error) {
       const code = (error as NodeJS.ErrnoException)?.code;
       if (code === "ENOENT") {
-        // 全新工作区：没有密文文件是正常状态。
-        this.cache.set(userId, []);
-        return [];
+        // 全新工作区：没有密文文件是正常状态。缓存与返回值必须是同一实例，
+        // 否则并发首个写入会各自持有独立空数组、末次覆盖前次。
+        const empty: AIProviderConfig[] = [];
+        this.cache.set(userId, empty);
+        return empty;
       }
       throw error;
     }
@@ -103,7 +115,11 @@ class ModelConfigStore {
       updatedAt: new Date().toISOString(),
     };
     const blob = encryptJson(file);
-    await fs.writeFile(this.filePath(userId), JSON.stringify(blob), "utf8");
+    const target = this.filePath(userId);
+    // 原子写：先写临时文件再 rename，进程崩溃/磁盘满不会留下半截密文。
+    const tmp = `${target}.${process.pid}.${Date.now()}.tmp`;
+    await fs.writeFile(tmp, JSON.stringify(blob), "utf8");
+    await fs.rename(tmp, target);
     this.cache.set(userId, configs);
   }
 
@@ -178,7 +194,31 @@ class ModelConfigStore {
 
   // ── 变更 ────────────────────────────────────────────────────────────────
 
-  async add(userId: string, input: ProviderConfigInput): Promise<PublicProviderConfig> {
+  add(userId: string, input: ProviderConfigInput): Promise<PublicProviderConfig> {
+    return this.withLock(userId, () => this._add(userId, input));
+  }
+
+  update(userId: string, id: string, input: Partial<ProviderConfigInput>): Promise<PublicProviderConfig | null> {
+    return this.withLock(userId, () => this._update(userId, id, input));
+  }
+
+  remove(userId: string, id: string): Promise<{ removed: boolean; newDefaultId?: string }> {
+    return this.withLock(userId, () => this._remove(userId, id));
+  }
+
+  setDefault(userId: string, id: string): Promise<PublicProviderConfig | null> {
+    return this.withLock(userId, () => this._setDefault(userId, id));
+  }
+
+  recordTest(userId: string, id: string, patch: { status: AIProviderConfig["status"]; latencyMs?: number; error?: string }): Promise<void> {
+    return this.withLock(userId, () => this._recordTest(userId, id, patch));
+  }
+
+  clear(userId: string): Promise<void> {
+    return this.withLock(userId, () => this._clear(userId));
+  }
+
+  private async _add(userId: string, input: ProviderConfigInput): Promise<PublicProviderConfig> {
     const configs = await this.load(userId);
     const preset = getPreset(input.providerName);
     const now = new Date().toISOString();
@@ -208,7 +248,7 @@ class ModelConfigStore {
     return this.toPublic(config);
   }
 
-  async update(
+  private async _update(
     userId: string,
     id: string,
     input: Partial<ProviderConfigInput>
@@ -242,7 +282,7 @@ class ModelConfigStore {
     return this.toPublic(c);
   }
 
-  async remove(userId: string, id: string): Promise<{ removed: boolean; newDefaultId?: string }> {
+  private async _remove(userId: string, id: string): Promise<{ removed: boolean; newDefaultId?: string }> {
     const configs = await this.load(userId);
     const idx = configs.findIndex((c) => c.id === id);
     if (idx === -1) return { removed: false };
@@ -258,7 +298,7 @@ class ModelConfigStore {
     return { removed: true, newDefaultId };
   }
 
-  async setDefault(userId: string, id: string): Promise<PublicProviderConfig | null> {
+  private async _setDefault(userId: string, id: string): Promise<PublicProviderConfig | null> {
     const configs = await this.load(userId);
     const target = configs.find((c) => c.id === id);
     if (!target) return null;
@@ -269,7 +309,7 @@ class ModelConfigStore {
   }
 
   /** 测试后回写状态/延迟。 */
-  async recordTest(
+  private async _recordTest(
     userId: string,
     id: string,
     patch: { status: AIProviderConfig["status"]; latencyMs?: number; error?: string }
@@ -285,7 +325,7 @@ class ModelConfigStore {
     await this.persist(userId, configs);
   }
 
-  async clear(userId: string): Promise<void> {
+  private async _clear(userId: string): Promise<void> {
     await this.persist(userId, []);
   }
 }

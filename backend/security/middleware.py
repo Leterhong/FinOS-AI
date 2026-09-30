@@ -21,10 +21,11 @@ from backend.security.audit import effective_client_ip
 _STRICT_AUTH_PATHS = {"/api/auth/login", "/api/auth/register", "/api/auth/bootstrap"}
 _STRICT_AUTH_LIMIT = 10  # 次 / 分钟 / IP
 
-# CSRF 校验豁免（登录态尚未建立或使用 Refresh Token 的引导端点）
+# CSRF 校验豁免（登录态尚未建立，或使用 Refresh Cookie 引导/续期的端点）
 _CSRF_EXEMPT = {
     "/api/auth/login",
     "/api/auth/register",
+    "/api/auth/bootstrap",
     "/api/auth/refresh",
     "/api/auth/logout",
     "/api/auth/csrf",
@@ -56,8 +57,9 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         auth = request.headers.get("authorization", "")
         if auth.lower().startswith("bearer "):
             return True
-        # 非 Cookie 认证（既无 Bearer 也无认证 Cookie）交由后续鉴权处理，不在此拦截
-        if not request.cookies.get("finos_token"):
+        # 非 Cookie 认证（既无 Bearer 也无认证 Cookie）交由后续鉴权处理，不在此拦截。
+        # 认证 Cookie 名与签发方一致（曾误用从未签发的 finos_token，导致校验形同虚设）。
+        if not request.cookies.get("finos_refresh"):
             return True
         # Cookie 认证的变更请求：双提交校验（常量时间比较，避免时序侧信道）
         cookie_token = request.cookies.get(_CSRF_COOKIE) or ""
