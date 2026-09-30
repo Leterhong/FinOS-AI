@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession, isSecureContext, setSession } from "@/auth/session";
+import { modelConfigStore } from "@/ai/model-center/models/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,6 +39,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "账号令牌无效或已过期" }, { status: 401 });
     }
     const workspaceId = `acct_${account.id}`;
+    // 从访客工作区绑定到账号时，把已配置的模型一并迁移到账号工作区。
+    const previous = await getSession();
+    if (previous?.userId && previous.userId !== workspaceId && previous.userId.startsWith("workspace-")) {
+      await modelConfigStore.migrateWorkspace(previous.userId, workspaceId).catch(() => false);
+    }
     await setSession({ userId: workspaceId, email: account.email }, isSecureContext(req));
     return NextResponse.json({ ok: true, workspaceId, bound: true });
   }

@@ -328,6 +328,33 @@ class ModelConfigStore {
   private async _clear(userId: string): Promise<void> {
     await this.persist(userId, []);
   }
+
+  /** 账号绑定时把访客工作区的模型配置迁移到账号工作区（目标已存在则不覆盖）。 */
+  async migrateWorkspace(fromUserId: string, toUserId: string): Promise<boolean> {
+    if (!fromUserId || !toUserId || fromUserId === toUserId) return false;
+    const target = this.filePath(toUserId);
+    try {
+      await fs.access(target);
+      return false; // 账号已有模型配置，保留账号现有数据
+    } catch {
+      // 目标不存在，继续复制。
+    }
+    try {
+      const raw = await fs.readFile(this.filePath(fromUserId), "utf8");
+      const blob = JSON.parse(raw) as EncryptedBlob;
+      const file = decryptJson<StoreFile>(blob);
+      // 文件内 userId 必须改写为目标身份，否则 load() 的用户隔离校验会返回空数据。
+      const migrated: StoreFile = { ...file, userId: toUserId, updatedAt: new Date().toISOString() };
+      await this.ensureDir();
+      const tmp = `${target}.${process.pid}.${Date.now()}.tmp`;
+      await fs.writeFile(tmp, JSON.stringify(encryptJson(migrated)), "utf8");
+      await fs.rename(tmp, target);
+      this.cache.delete(toUserId);
+      return true;
+    } catch {
+      return false;
+    }
+  }
 }
 
 export const modelConfigStore = new ModelConfigStore();
