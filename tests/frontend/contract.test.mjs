@@ -130,8 +130,8 @@ test("企业 AI 页面必须调用服务端模型网关", () => {
   const research = read(join(SRC, "app", "(dashboard)", "research", "page.tsx"));
   const documents = read(join(SRC, "app", "(dashboard)", "documents", "page.tsx"));
   assert.match(assistant, /(?:call|stream)EnterpriseAI/);
-  assert.match(agents, /callEnterpriseAI/);
-  assert.match(research, /callEnterpriseAI/);
+  assert.match(agents, /(?:call|stream)EnterpriseAI/);
+  assert.match(research, /(?:call|stream)EnterpriseAI/);
   assert.match(documents, /analyzeEnterpriseDocument/);
   assert.ok(existsSync(join(SRC, "app", "api", "enterprise", "ai", "route.ts")));
   assert.ok(existsSync(join(SRC, "app", "api", "enterprise", "ai", "document", "route.ts")));
