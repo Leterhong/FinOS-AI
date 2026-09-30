@@ -29,6 +29,8 @@ export interface EnterpriseAIResult {
     completionTokens: number;
     totalTokens: number;
   };
+  /** 本次命中的专属技能（供 UI 展示）。 */
+  skill?: { id: string; name: string };
 }
 
 export async function callEnterpriseAI(input: {
@@ -122,12 +124,13 @@ export async function streamEnterpriseAI(
   let latencyMs = 0;
   const usage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
   let streamError: string | null = null;
+  let skill: { id: string; name: string } | undefined;
 
   const handleEvent = (raw: string) => {
     if (!raw.startsWith("data:")) return;
     try {
       const event = JSON.parse(raw.slice(5).trim()) as {
-        delta?: string; done?: boolean; model?: string; latencyMs?: number; error?: string;
+        delta?: string; done?: boolean; model?: string; latencyMs?: number; error?: string; skill?: { id: string; name: string };
       };
       if (typeof event.delta === "string" && event.delta) {
         answer += event.delta;
@@ -136,6 +139,7 @@ export async function streamEnterpriseAI(
       if (event.done) {
         model = event.model ?? model;
         latencyMs = event.latencyMs ?? latencyMs;
+        skill = event.skill ?? skill;
       }
       if (event.error) streamError = event.error;
     } catch {
@@ -155,7 +159,7 @@ export async function streamEnterpriseAI(
 
   if (streamError) throw new Error(friendlyAIError(streamError, "模型返回错误"));
   if (!answer.trim()) throw new Error("模型返回了空回复，请检查模型网关的流式响应兼容性");
-  return { answer, model, provider: "user", latencyMs, usage };
+  return { answer, model, provider: "user", latencyMs, usage, skill };
 }
 
 export type DocumentStage = "parse" | "facts" | "rules" | "narrative";

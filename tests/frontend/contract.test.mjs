@@ -137,6 +137,13 @@ test("企业 AI 页面必须调用服务端模型网关", () => {
   assert.ok(existsSync(join(SRC, "app", "api", "enterprise", "ai", "document", "route.ts")));
 });
 
+test("企业 AI 网关必须接入专属技能层", () => {
+  const route = read(join(SRC, "app", "api", "enterprise", "ai", "route.ts"));
+  assert.match(route, /selectSkill/);
+  assert.ok(existsSync(join(SRC, "ai", "skills", "registry.ts")));
+  assert.ok(existsSync(join(SRC, "ai", "skills", "enterprise-credit.ts")));
+});
+
 test("企业 AI 上下文和产出必须按项目隔离", () => {
   const assistant = read(join(SRC, "app", "(dashboard)", "assistant", "page.tsx"));
   const agents = read(join(SRC, "app", "(dashboard)", "agents", "page.tsx"));

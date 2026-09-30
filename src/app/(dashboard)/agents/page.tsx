@@ -35,6 +35,7 @@ export default function AgentsPage() {
   const [running, setRunning] = useState(false);
   const [notice, setNotice] = useState("");
   const [streamText, setStreamText] = useState("");
+  const [skill, setSkill] = useState<{ id: string; name: string } | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
 
@@ -53,6 +54,7 @@ export default function AgentsPage() {
     });
     setRunning(true);
     setStreamText("");
+    setSkill(null);
     const controller = new AbortController();
     abortRef.current = controller;
     try {
@@ -67,6 +69,7 @@ export default function AgentsPage() {
         controller.signal,
       );
       completeAgentRun(currentRun.id, result.answer, `${((performance.now() - startedAt) / 1000).toFixed(1)}s`);
+      setSkill(result.skill ?? null);
     } catch (error) {
       const aborted = controller.signal.aborted;
       failAgentRun(currentRun.id, aborted ? "已取消本次研判" : error instanceof Error ? error.message : "模型调用失败", `${((performance.now() - startedAt) / 1000).toFixed(1)}s`);
@@ -150,7 +153,8 @@ export default function AgentsPage() {
   return <div className="page-shell">
     <PageIntro eyebrow="AI agent orchestration" title="企业金融 Agent 中心" description="由当前默认大模型执行真实研判调用。系统不会用计时器模拟运行，也不会在没有项目或资料时生成伪造结果。" actions={<><button onClick={() => void run()} disabled={!canRun || running} className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018] disabled:cursor-not-allowed disabled:opacity-40">{running ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}{running ? "模型研判中…" : "运行研判 Agent"}</button>{running && <button onClick={cancelRun} className="rounded-xl border border-white/15 px-4 py-2.5 text-xs text-slate-300 transition hover:border-rose-400/30 hover:text-rose-200">取消</button>}</>} />
 
-    {running && <Panel><PanelHeader eyebrow="Live output" title="模型正在生成（实时）" description="推理模型可能需要数分钟；生成过程实时可见，可随时取消。" /><p className="scrollbar-thin max-h-72 overflow-y-auto whitespace-pre-wrap p-5 text-xs leading-6 text-slate-400">{streamText || "已发送请求，等待模型首个输出…"}</p></Panel>}
+    {running && <Panel><PanelHeader eyebrow="Live output" title="模型正在生成（实时）" description="推理模型可能需要数分钟；生成过程实时可见，可随时取消。" />{skill && <p className="border-b border-white/[0.06] px-5 py-2 text-[10px] text-cyan-300">当前技能：{skill.name}</p>}<p className="scrollbar-thin max-h-72 overflow-y-auto whitespace-pre-wrap p-5 text-xs leading-6 text-slate-400">{streamText || "已发送请求，等待模型首个输出…"}</p></Panel>}
+    {!running && skill && <p className="text-[10px] text-cyan-300/80">上次研判使用技能：{skill.name}</p>}
 
     <CaseContextSelector cases={cases} value={activeCaseId} onChange={setActiveCaseId} detail={`${caseDocuments.length} 份资料 · ${caseRisks.length} 个既有风险，仅当前项目会进入模型`} />
 
