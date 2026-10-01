@@ -44,6 +44,8 @@ class OrganizationMember(Base):
     invited_by: Mapped[str] = mapped_column(String(32), nullable=False, default="")
     invite_case_id: Mapped[str] = mapped_column(String(64), nullable=False, default="")
     invite_permission: Mapped[str] = mapped_column(String(24), nullable=False, default="")
+    # 邀请令牌：接受邀请必须同时匹配邮箱与令牌，避免仅凭注册被邀请邮箱即可继承权限。
+    invite_token: Mapped[str] = mapped_column(String(64), nullable=False, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
     __table_args__ = (UniqueConstraint("organization_id", "email", name="uq_org_member_email"),)

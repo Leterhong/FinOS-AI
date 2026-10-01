@@ -111,6 +111,7 @@ def _ensure_organization_member_columns(engine) -> None:
         "invited_by": "VARCHAR(32) NOT NULL DEFAULT ''",
         "invite_case_id": "VARCHAR(64) NOT NULL DEFAULT ''",
         "invite_permission": "VARCHAR(24) NOT NULL DEFAULT ''",
+        "invite_token": "VARCHAR(64) NOT NULL DEFAULT ''",
     }
     missing = {col: typ for col, typ in needed.items() if col not in existing}
     if not missing:

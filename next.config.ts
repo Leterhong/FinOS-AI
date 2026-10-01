@@ -56,7 +56,6 @@ const nextConfig: NextConfig = {
       { source: "/memory", destination: "/agents", permanent: true },
       { source: "/knowledge", destination: "/rules", permanent: true },
       { source: "/onboarding/:path*", destination: "/cases", permanent: true },
-      { source: "/notifications", destination: "/risk", permanent: true },
       { source: "/privacy-center", destination: "/documents", permanent: true },
       { source: "/usage", destination: "/agents", permanent: true },
       { source: "/settings/profile", destination: "/", permanent: true },

@@ -167,23 +167,35 @@ def export_my_data(
 
 @router.get("/database")
 def dump_database(request: Request):
-    """整库逻辑备份（管理员用）：需在 X-Backup-Key 头携带 BACKUP_API_KEY。"""
+    """整库逻辑备份（管理员用）：需在 X-Backup-Key 头携带 BACKUP_API_KEY。
+
+    默认关闭（BACKUP_ALLOW_DATABASE_DUMP=true 才启用），且每表按上限截断，
+    避免单个密钥泄露即导致全租户数据被一次性导出。
+    """
     provided = request.headers.get("x-backup-key", "")
     expected = settings.backup_api_key or ""
     if not expected or not hmac.compare_digest(provided, expected):
         log_event(logger, "warning", "backup.database.denied", ip=client_ip(request))
         return fail("无权访问整库备份", status_code=403)
+    if not settings.backup_allow_database_dump:
+        log_event(logger, "warning", "backup.database.disabled", ip=client_ip(request))
+        return fail("整库备份未启用（需设置 BACKUP_ALLOW_DATABASE_DUMP=true）", status_code=403)
 
     inspector = inspect(engine)
+    max_rows = max(0, int(settings.backup_max_rows_per_table))
     dump: dict = {
         "exportedAt": datetime.now(timezone.utc).isoformat(),
         "dialect": engine.dialect.name,
+        "maxRowsPerTable": max_rows,
         "tables": {},
     }
     with engine.connect() as conn:
         for table_name in inspector.get_table_names():
             try:
-                result = conn.execute(text(f'SELECT * FROM "{table_name}"'))  # noqa: S608 表名来自元数据
+                statement = f'SELECT * FROM "{table_name}"'
+                if max_rows:
+                    statement += f" LIMIT {max_rows}"
+                result = conn.execute(text(statement))  # noqa: S608 表名来自元数据
                 cols = list(result.keys())
                 rows = [dict(zip(cols, row)) for row in result.fetchall()]
                 dump["tables"][table_name] = rows

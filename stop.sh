@@ -12,17 +12,41 @@ WEB_PORT=3000
 API_PORT=8300
 RUN_DIR="$ROOT/.run"
 
-# 从 ss 输出中提取监听指定端口的进程 PID 列表（去重）。
+# 从监听信息中提取指定端口的进程 PID 列表（去重）。优先 ss，其次 lsof/fuser。
 collect_pids() {
-  ss -ltnp | awk -v p=":$1" '
-    $4 ~ p"$" {
-      line = $0
-      while (match(line, /pid=[0-9]+/)) {
-        print substr(line, RSTART + 4, RLENGTH - 4)
-        line = substr(line, RSTART + RLENGTH)
+  local port="$1" pids=""
+  if command -v ss >/dev/null 2>&1; then
+    pids="$(ss -ltnp 2>/dev/null | awk -v p=":$port" '
+      $4 ~ p"$" {
+        line = $0
+        while (match(line, /pid=[0-9]+/)) {
+          print substr(line, RSTART + 4, RLENGTH - 4)
+          line = substr(line, RSTART + RLENGTH)
+        }
       }
-    }
-  ' | sort -u
+    ' | sort -u)"
+  fi
+  if [ -z "$pids" ] && command -v lsof >/dev/null 2>&1; then
+    pids="$(lsof -t -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null | sort -u)"
+  fi
+  if [ -z "$pids" ] && command -v fuser >/dev/null 2>&1; then
+    pids="$(fuser -n tcp "$port" 2>/dev/null | tr -s ' ' '\n' | tr -d '[:space:]' | grep -E '^[0-9]+$' | sort -u)"
+  fi
+  # 最后回退到 PID 文件。
+  if [ -z "$pids" ]; then
+    for name in web backend; do
+      local pid_file="$RUN_DIR/$name.pid"
+      if [ -f "$pid_file" ]; then
+        local saved
+        saved="$(cat "$pid_file" 2>/dev/null | tr -d '[:space:]')"
+        if [ -n "$saved" ] && kill -0 "$saved" 2>/dev/null; then
+          pids="$pids $saved"
+        fi
+      fi
+    done
+    pids="$(printf '%s\n' $pids | sort -u)"
+  fi
+  printf '%s' "$pids"
 }
 
 stop_port() {
@@ -35,7 +59,7 @@ stop_port() {
   fi
   for pid in $pids; do
     echo "终止端口 $port 上的进程 $pid"
-    kill "$pid"
+    kill "$pid" 2>/dev/null || true
   done
   # 最多等待 10 秒优雅退出，之后强制终止。
   for _ in $(seq 1 10); do
@@ -46,13 +70,19 @@ stop_port() {
   done
   for pid in $(collect_pids "$port"); do
     echo "进程 $pid 未响应，强制终止"
-    kill -9 "$pid"
+    kill -9 "$pid" 2>/dev/null || true
   done
+  sleep 1
+  if [ -n "$(collect_pids "$port")" ]; then
+    echo "端口 $port 仍有进程监听，停止失败。" >&2
+    return 1
+  fi
   return 0
 }
 
-stop_port "$WEB_PORT"
-stop_port "$API_PORT"
+STATUS=0
+stop_port "$WEB_PORT" || STATUS=1
+stop_port "$API_PORT" || STATUS=1
 
 # 清理记录的进程 PID 文件（进程已由端口清理覆盖）。
 for name in web backend; do
@@ -66,4 +96,9 @@ for name in web backend; do
   fi
 done
 
-echo "服务已停止。"
+if [ "$STATUS" -eq 0 ]; then
+  echo "服务已停止。"
+else
+  echo "服务停止不完整，请检查残留进程。" >&2
+fi
+exit "$STATUS"

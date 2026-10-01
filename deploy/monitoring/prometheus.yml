@@ -7,11 +7,11 @@ global:
 
 scrape_configs:
   - job_name: finos-api
-    metrics_path: /api/metrics
-    # 在此填入与 .env 中 BACKUP_API_KEY 一致的值
-    authorization:
-      type: MetricsKey
-      credentials: "CHANGE_ME_BACKUP_API_KEY"
+    metrics_path: /api/metrics/prometheus
+    # 与后端 X-Metrics-Key 鉴权对齐（值为 .env 中 BACKUP_API_KEY）
+    http_headers:
+      x-metrics-key:
+        values: ["CHANGE_ME_BACKUP_API_KEY"]
     static_configs:
       - targets: ["api:8300"]
 

@@ -87,6 +87,11 @@ class Settings(BaseSettings):
 
     # --- 整库备份接口保护（/api/backup/database 需携带此 Key） ---
     backup_api_key: str = ""
+    # 整库逻辑备份默认关闭：需要显式开启 BACKUP_ALLOW_DATABASE_DUMP=true，
+    # 避免单密钥即可一次性导出全租户数据（含 password_hash 与密文）。
+    backup_allow_database_dump: bool = False
+    # 每表单次导出最大行数，防止大表一次性载入内存（0 表示不限制）。
+    backup_max_rows_per_table: int = 100_000
 
     # --- AES-256-GCM 主密钥：URL-safe Base64 编码的 32 字节随机值 ---
     encryption_master_key: str = ""

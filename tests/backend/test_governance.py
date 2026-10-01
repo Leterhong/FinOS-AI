@@ -52,7 +52,7 @@ def _invite_and_accept(client, owner_headers, target: dict, role: str = "reviewe
         json={"email": target["email"], "role": role, "clearance": clearance},
         headers=owner_headers,
     ).json()["data"]
-    accepted = client.post(f"/api/governance/members/{member['id']}/accept", headers=target["headers"])
+    accepted = client.post(f"/api/governance/members/{member['id']}/accept?token={member['inviteToken']}", headers=target["headers"])
     assert accepted.status_code == 200, accepted.text
     return accepted.json()["data"]
 
@@ -102,7 +102,8 @@ def test_member_can_switch_into_an_authorized_organization(client, user_a, user_
     )
     assert invited.status_code == 200
     member_id = invited.json()["data"]["id"]
-    assert client.post(f"/api/governance/members/{member_id}/accept", headers=user_b["headers"]).status_code == 200
+    token = invited.json()["data"]["inviteToken"]
+    assert client.post(f"/api/governance/members/{member_id}/accept?token={token}", headers=user_b["headers"]).status_code == 200
 
     own = client.get("/api/governance/snapshot", headers=user_b["headers"]).json()["data"]
     assert any(item["id"] == organization_id and item["role"] == "reviewer" for item in own["organizations"])
@@ -260,10 +261,18 @@ def test_member_invite_requires_acceptance_before_access(client, user_a, user_b)
     before = client.get(f"/api/governance/snapshot?organizationId={org_id}", headers=user_b["headers"])
     assert before.status_code == 404, before.status_code
 
-    # B 本人确认（邮箱匹配才允许）
-    accepted = client.post(f"/api/governance/members/{invited['id']}/accept", headers=user_b["headers"])
+    # 缺少邀请令牌：即便邮箱匹配也拒绝（防止仅凭注册被邀请邮箱即继承权限）
+    no_token = client.post(f"/api/governance/members/{invited['id']}/accept", headers=user_b["headers"])
+    assert no_token.status_code == 403, no_token.text
+
+    # B 本人凭邀请令牌确认
+    accepted = client.post(f"/api/governance/members/{invited['id']}/accept?token={invited['inviteToken']}", headers=user_b["headers"])
     assert accepted.status_code == 200, accepted.text
     assert accepted.json()["data"]["status"] == "active"
+
+    # 令牌一次性：接受后不可重复使用
+    reused = client.post(f"/api/governance/members/{invited['id']}/accept?token={invited['inviteToken']}", headers=user_b["headers"])
+    assert reused.status_code in (200, 403)
 
     after = client.get(f"/api/governance/snapshot?organizationId={org_id}", headers=user_b["headers"])
     assert after.status_code == 200
@@ -292,7 +301,7 @@ def test_snapshot_hides_audit_from_viewer_but_owner_sees(client, user_a, user_b)
         json={"email": user_b["email"], "role": "viewer", "clearance": "internal"},
         headers=user_a["headers"],
     ).json()["data"]
-    client.post(f"/api/governance/members/{invited['id']}/accept", headers=user_b["headers"])
+    client.post(f"/api/governance/members/{invited['id']}/accept?token={invited['inviteToken']}", headers=user_b["headers"])
 
     owner_view = client.get("/api/governance/snapshot", headers=user_a["headers"]).json()["data"]
     assert len(owner_view["audits"]) > 0
@@ -335,7 +344,7 @@ def test_snapshot_lists_pending_invitations_for_invitee(client, user_a, user_b):
         inv["organizationId"] == snap_a["organization"]["id"] and inv["role"] == "analyst"
         for inv in snap_b["invitations"]
     ), snap_b.get("invitations")
-    accepted = client.post(f"/api/governance/members/{invited.json()['data']['id']}/accept", headers=user_b["headers"])
+    accepted = client.post(f"/api/governance/members/{invited.json()['data']['id']}/accept?token={invited.json()['data']['inviteToken']}", headers=user_b["headers"])
     assert accepted.status_code == 200, accepted.text
 
 
@@ -349,7 +358,7 @@ def test_org_members_read_all_projects_policy(client, user_a, user_b):
         json={"email": user_b["email"], "role": "analyst", "clearance": "internal"},
         headers=user_a["headers"],
     ).json()["data"]
-    assert client.post(f"/api/governance/members/{invite['id']}/accept", headers=user_b["headers"]).status_code == 200
+    assert client.post(f"/api/governance/members/{invite['id']}/accept?token={invite['inviteToken']}", headers=user_b["headers"]).status_code == 200
 
     # 默认关闭：B 看不到 A 的项目
     before = client.get("/api/enterprise/snapshot", headers=user_b["headers"]).json()["data"]
@@ -391,6 +400,7 @@ def test_invite_with_project_grant_on_accept(client, user_a, user_b):
     )
     assert invited.status_code == 200, invited.text
     member_id = invited.json()["data"]["id"]
+    invite_token = invited.json()["data"]["inviteToken"]
 
     snap_b = client.get("/api/governance/snapshot", headers=user_b["headers"]).json()["data"]
     invitation = next(item for item in snap_b["invitations"] if item["memberId"] == member_id)
@@ -401,7 +411,7 @@ def test_invite_with_project_grant_on_accept(client, user_a, user_b):
     before = client.get("/api/enterprise/snapshot", headers=user_b["headers"]).json()["data"]
     assert not any(c["id"] == "CASE-INV-1" for c in before["cases"])
 
-    accepted = client.post(f"/api/governance/members/{member_id}/accept", headers=user_b["headers"])
+    accepted = client.post(f"/api/governance/members/{member_id}/accept?token={invite_token}", headers=user_b["headers"])
     assert accepted.status_code == 200, accepted.text
 
     after = client.get("/api/enterprise/snapshot", headers=user_b["headers"]).json()["data"]
@@ -417,7 +427,7 @@ def test_remove_member_notifies_and_revokes_grant(client, user_a, user_b):
         json={"email": user_b["email"], "role": "analyst", "clearance": "internal", "organizationId": org, "caseId": "CASE-DEL-1", "permission": "viewer"},
         headers=user_a["headers"],
     ).json()["data"]
-    client.post(f"/api/governance/members/{invited['id']}/accept", headers=user_b["headers"])
+    client.post(f"/api/governance/members/{invited['id']}/accept?token={invited['inviteToken']}", headers=user_b["headers"])
     assert any(c["id"] == "CASE-DEL-1" for c in client.get("/api/enterprise/snapshot", headers=user_b["headers"]).json()["data"]["cases"])
 
     removed = client.delete(f"/api/governance/members/{invited['id']}?reason=合作结束", headers=user_a["headers"])

@@ -2,14 +2,16 @@
 from __future__ import annotations
 
 import csv
+import hmac
 import io
 import json
+import re
+import secrets
 import time
 import uuid
 from datetime import datetime, timezone
 
 import httpx
-import re
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -100,13 +102,15 @@ def _org_out(org: Organization) -> dict:
     }
 
 
-def _member_out(row: OrganizationMember) -> dict:
+def _member_out(row: OrganizationMember, include_token: bool = False) -> dict:
     return {
         "id": row.id, "organizationId": row.organization_id, "userId": row.user_id,
         "email": row.email, "role": row.role, "clearance": row.clearance,
         "status": row.status,
         "inviteCaseId": getattr(row, "invite_case_id", "") or "",
         "invitePermission": getattr(row, "invite_permission", "") or "",
+        # 邀请令牌仅在管理员视角回传，用于生成邀请链接；普通成员不可见。
+        "inviteToken": (getattr(row, "invite_token", "") or "") if include_token else "",
         "createdAt": row.created_at.isoformat() if row.created_at else None,
     }
 
@@ -247,6 +251,7 @@ def governance_snapshot(organizationId: str | None = None, auditLimit: int = 200
     db.commit()
     # 审计明细（含 IP）与成员名册仅对 reviewer 及以上开放；viewer 看不到他人审计与邮箱。
     is_reviewer = has_org_role(db, user, org.id, "reviewer")
+    is_admin = has_org_role(db, user, org.id, "admin")
     safe_audit_limit = max(1, min(int(auditLimit), 200))
     members = list(db.scalars(select(OrganizationMember).where(OrganizationMember.organization_id == org.id))) if is_reviewer else []
     # 审计的 Who：把 user_id 解析为组织成员邮箱（owner 视角可见）。
@@ -285,7 +290,7 @@ def governance_snapshot(organizationId: str | None = None, auditLimit: int = 200
             seen_orgs.add(candidate.id)
             organizations.append({**_org_out(candidate), "role": membership.role})
     return ok({
-        "organization": _org_out(org), "members": [_member_out(x) for x in members],
+        "organization": _org_out(org), "members": [_member_out(x, include_token=is_admin) for x in members],
         "organizations": organizations,
         "invitations": invitations,
         "grants": [_grant_out(x) for x in grants],
@@ -345,6 +350,8 @@ def add_member(body: MemberIn, request: Request, user: User = Depends(get_curren
     row.invited_by = user.id
     row.invite_case_id = invite_case_id
     row.invite_permission = invite_permission
+    # 生成一次性邀请令牌：接受邀请必须同时匹配邮箱与令牌。
+    row.invite_token = secrets.token_urlsafe(24)
     try:
         db.flush()
         record_governance_audit(db, user=user, action="member.upsert", resource_type="member", resource_id=row.id, organization_id=org.id, details={"email": email, "role": body.role, "clearance": body.clearance, "status": row.status}, request=request)
@@ -352,18 +359,23 @@ def add_member(body: MemberIn, request: Request, user: User = Depends(get_curren
     except SQLAlchemyError:
         db.rollback()
         return fail("成员写入冲突（邮箱重复或数据库繁忙），请刷新后重试", status_code=409)
-    return ok(_member_out(row), "成员权限已保存" if row.status == "active" else "邀请已保存；待成员本人登录确认后生效")
+    return ok(_member_out(row, include_token=True), "成员权限已保存" if row.status == "active" else "邀请已保存；待成员本人通过邀请链接确认后生效")
 
 
 @router.post("/members/{member_id}/accept")
-def accept_invite(member_id: str, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """受邀成员本人登录确认：仅当邀请邮箱与当前账号一致时激活。"""
+def accept_invite(member_id: str, request: Request, token: str = "", user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """受邀成员本人确认：必须同时匹配邀请邮箱与邀请令牌。"""
     row = db.get(OrganizationMember, member_id)
     if row is None or row.email != user.email.strip().lower():
         return fail("该邀请邮箱与当前登录账号不一致，请使用被邀请邮箱登录后再确认", status_code=404)
+    expected = getattr(row, "invite_token", "") or ""
+    supplied = (token or "").strip()
+    if not expected or not supplied or not hmac.compare_digest(expected, supplied):
+        return fail("邀请令牌无效或已失效，请使用管理员发送的最新邀请链接", status_code=403)
     if row.status == "active":
         return ok(_member_out(row))
     row.status = "active"
+    row.invite_token = ""  # 一次性使用，接受后即失效
     if not row.user_id:
         row.user_id = user.id
     # 邀请即授权：按邀请时约定的项目与权限，自动建立/更新项目授权。
@@ -475,8 +487,18 @@ def create_review(body: ReviewIn, request: Request, user: User = Depends(get_cur
     # 否则会形成永久悬挂的待复核项。
     if body.resourceType in {"risk", "document", "evaluation"}:
         model = {"risk": EnterpriseRisk, "document": EnterpriseDocument, "evaluation": ModelEvalRun}[body.resourceType]
-        if db.get(model, body.resourceId) is None:
+        resource = db.get(model, body.resourceId)
+        if resource is None:
             return fail("引用的资源不存在", status_code=422)
+        # 跨租户防护：引用资源必须属于当前组织（evaluation 自带 organization_id；
+        # risk/document 通过所属项目 organization_id 判定）。
+        if body.resourceType == "evaluation":
+            if getattr(resource, "organization_id", None) != org.id:
+                return fail("引用的资源不存在", status_code=404)
+        else:
+            resource_case = db.get(EnterpriseCase, getattr(resource, "case_id", "") or "")
+            if resource_case is None or resource_case.organization_id != org.id:
+                return fail("引用的资源不存在", status_code=404)
     row = GovernanceReview(organization_id=org.id, user_id=user.id, case_id=body.caseId, resource_type=body.resourceType, resource_id=body.resourceId, title=body.title, assigned_role=body.assignedRole, requested_by=body.requestedBy)
     db.add(row)
     # 站内通知：提醒该组织中承担对应角色的成员有新的待复核事项。

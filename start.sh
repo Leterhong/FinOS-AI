@@ -30,9 +30,25 @@ SECRETS_FILE="$DATA_DIR/start-secrets.env"
 NEXT_BIN="$ROOT/node_modules/next/dist/bin/next"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 
-# 判断端口是否已有进程监听（不使用 2>/dev/null，避免吞掉 ss 缺失的错误）。
+# 判断端口是否已有进程监听。优先 ss，其次 lsof/netstat，最后用 bash /dev/tcp 回退，
+# 兼容 macOS / Alpine 等没有 iproute2 的环境。
 port_listening() {
-  ss -ltn | awk -v p=":$1" '$4 ~ p"$" { found = 1 } END { exit found ? 0 : 1 }'
+  local port="$1"
+  if command -v ss >/dev/null 2>&1; then
+    ss -ltn 2>/dev/null | awk -v p=":$port" '$4 ~ p"$" { found = 1 } END { exit found ? 0 : 1 }' && return 0
+  fi
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1 && return 0
+  fi
+  if command -v netstat >/dev/null 2>&1; then
+    netstat -ltn 2>/dev/null | awk -v p=":$port" '$4 ~ p"$" { found = 1 } END { exit found ? 0 : 1 }' && return 0
+  fi
+  # bash 内建回退：能建立 TCP 连接即视为在监听。
+  if (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null; then
+    exec 3>&- 3<&-
+    return 0
+  fi
+  return 1
 }
 
 mkdir -p "$LOG_DIR" "$DATA_DIR"
@@ -68,8 +84,8 @@ chmod 600 "$SECRETS_FILE"
 source "$SECRETS_FILE"
 export FINOS_AUTH_SECRET FINOS_DATA_KEY JWT_SECRET ENCRYPTION_MASTER_KEY
 export NODE_ENV=production
-export FINOS_ALLOW_PRIVATE_AI_ENDPOINTS="${FINOS_ALLOW_PRIVATE_AI_ENDPOINTS:-true}"
-export AI_ALLOW_PRIVATE_ENDPOINTS="${AI_ALLOW_PRIVATE_ENDPOINTS:-true}"
+export FINOS_ALLOW_PRIVATE_AI_ENDPOINTS="${FINOS_ALLOW_PRIVATE_AI_ENDPOINTS:-false}"
+export AI_ALLOW_PRIVATE_ENDPOINTS="${AI_ALLOW_PRIVATE_ENDPOINTS:-false}"
 export MODE=online
 
 # 3) 启动 Next.js 前端（未运行时）：清缓存 → 生产构建 → 启动。
@@ -87,6 +103,15 @@ fi
 
 # 4) 启动 FastAPI 后端（未运行时）。先 export 再 nohup，避免环境变量被当命令。
 if [ "$API_UP" -eq 0 ]; then
+  # 非 SQLite（PostgreSQL 等）时先执行迁移，避免生产库缺表；失败即中止。
+  DB_URL_FOR_MIGRATE="${DATABASE_URL:-sqlite://default}"
+  if ! printf '%s' "$DB_URL_FOR_MIGRATE" | grep -qi '^sqlite'; then
+    echo "检测到非 SQLite 数据库，执行 alembic upgrade head …"
+    if ! "$PYTHON_BIN" -m alembic -c backend/alembic.ini upgrade head; then
+      echo "启动失败：数据库迁移未通过，请检查 alembic 版本与迁移脚本。" >&2
+      exit 2
+    fi
+  fi
   nohup "$PYTHON_BIN" -m uvicorn backend.main:app --host "$API_HOST" --port "$API_PORT" > "$LOG_DIR/backend.log" 2>&1 &
   API_PID=$!
   echo "$API_PID" > "$RUN_DIR/backend.pid"

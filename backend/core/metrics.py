@@ -14,6 +14,7 @@ from threading import Lock
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from fastapi import APIRouter, Request
+from fastapi.responses import PlainTextResponse
 
 from backend.core.logging_config import get_logger
 from backend.core.response import fail, ok
@@ -127,3 +128,39 @@ def metrics(request: Request):
     if not _authorized(request):
         return fail("无权访问运行指标", status_code=403)
     return ok(snapshot())
+
+
+@router.get("/metrics/prometheus")
+def metrics_prometheus(request: Request):
+    """Prometheus 文本格式（text/plain; version=0.0.4）。仅限运维 Key。"""
+    if not _authorized(request):
+        return fail("无权访问运行指标", status_code=403)
+    data = snapshot()
+    lines = [
+        "# HELP finos_http_requests_total 累计请求数（按接口）",
+        "# TYPE finos_http_requests_total counter",
+    ]
+    for endpoint, stat in data.items():
+        if endpoint == "_dropped_endpoints":
+            continue
+        label = endpoint.replace("\\", "\\\\").replace('"', '\\"')
+        lines.append(f'finos_http_requests_total{{endpoint="{label}"}} {stat["count"]}')
+    lines += [
+        "# HELP finos_http_errors_total 累计 5xx 数（按接口）",
+        "# TYPE finos_http_errors_total counter",
+    ]
+    for endpoint, stat in data.items():
+        if endpoint == "_dropped_endpoints":
+            continue
+        label = endpoint.replace("\\", "\\\\").replace('"', '\\"')
+        lines.append(f'finos_http_errors_total{{endpoint="{label}"}} {stat["errors"]}')
+    lines += [
+        "# HELP finos_http_latency_avg_ms 平均响应耗时(ms)",
+        "# TYPE finos_http_latency_avg_ms gauge",
+    ]
+    for endpoint, stat in data.items():
+        if endpoint == "_dropped_endpoints":
+            continue
+        label = endpoint.replace("\\", "\\\\").replace('"', '\\"')
+        lines.append(f'finos_http_latency_avg_ms{{endpoint="{label}"}} {stat["avg_ms"]}')
+    return PlainTextResponse("\n".join(lines) + "\n", media_type="text/plain; version=0.0.4")
