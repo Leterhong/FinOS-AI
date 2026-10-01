@@ -130,6 +130,17 @@ export async function recordUsage(
   }
 }
 
+/** 读取某用户的原始用量记录（用于按用户配置单价重算费用）。 */
+export async function listUsage(userId: string): Promise<UsageRecord[]> {
+  try {
+    const raw = await fs.readFile(fileFor(userId), "utf8");
+    const parsed = JSON.parse(raw) as UsageRecord[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 /** 读取某用户的用量聚合（无记录返回全零结构）。 */
 export async function getUsage(userId: string): Promise<UsageSummary> {
   const empty: UsageSummary = {

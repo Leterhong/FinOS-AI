@@ -46,6 +46,8 @@ export default function AssistantPage() {
   // 流式进行中的临时气泡：完成后才落入持久化 store（避免每个 token 触发持久化）。
   const [streamText, setStreamText] = useState("");
   const streamTextRef = useRef("");
+  const mountedRef = useRef(true);
+  useEffect(() => () => { mountedRef.current = false; }, []);
   const [skills, setSkills] = useState<Array<{ id: string; name: string }>>([]);
   const [skillId, setSkillId] = useState("");
 
@@ -81,7 +83,9 @@ export default function AssistantPage() {
   const submit = async () => {
     const question = query.trim();
     if (!question || sending || !active?.configured || !activeCase) return;
-    appendAssistantMessage({ role: "user", content: question, caseId: activeCase.id });
+    // 固定本轮所属项目：等待期间用户切换项目时，回复仍应归到发起时的项目。
+    const caseId = activeCase.id;
+    appendAssistantMessage({ role: "user", content: question, caseId });
     setQuery("");
     setSending(true);
     setStreamText("");
@@ -97,18 +101,20 @@ export default function AssistantPage() {
         },
         (delta) => {
           streamTextRef.current += delta;
-          setStreamText(streamTextRef.current);
+          if (mountedRef.current) setStreamText(streamTextRef.current);
         }
       );
+      if (!mountedRef.current) return;
       appendAssistantMessage({
         role: "assistant",
         content: result.answer,
         model: result.model,
-        caseId: activeCase.id,
+        caseId,
         skill: result.skill,
         references: buildAnswerReferences(result.answer, { documents: caseDocuments, rules, external: external ?? undefined }),
       });
     } catch (error) {
+      if (!mountedRef.current) return;
       // 流式中途失败：把已生成的部分保留为错误消息，并按错误类型给出建议。
       const rawMessage = error instanceof Error ? error.message : "AI 调用失败，请检查模型连接。";
       const classified = classifyError(rawMessage);
@@ -125,11 +131,13 @@ ${streamTextRef.current}`
 
 建议：${classified.hint}`,
         error: !partial,
-        caseId: activeCase.id,
+        caseId,
       });
     } finally {
-      setSending(false);
-      setStreamText("");
+      if (mountedRef.current) {
+        setSending(false);
+        setStreamText("");
+      }
       streamTextRef.current = "";
     }
   };

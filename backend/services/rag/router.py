@@ -8,6 +8,7 @@ DELETE /api/rag/chunks/{id}
 from __future__ import annotations
 
 import json
+import time
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
@@ -16,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from backend.ai.gateway import GatewayError, PUBLIC_GATEWAY_ERROR, generate_sync as gw_generate_sync
 from backend.ai.models import AIModelConfig
+from backend.ai.usage import log_usage
 from backend.core import get_current_user, ok
 from backend.core.response import fail
 from backend.core.security import decrypt_secret
@@ -69,7 +71,12 @@ def rag_query(body: QueryIn, user: User = Depends(get_current_user), db: Session
             payload["note"] = "尚未配置 AI 模型，仅返回检索上下文"
         else:
             api_key = decrypt_secret(cfg.api_key_encrypted)
+            if not api_key:
+                payload["answer"] = None
+                payload["note"] = "模型密钥不可用，请重新配置 AI 模型"
+                return ok(payload)
             try:
+                started = time.monotonic()
                 gen = gw_generate_sync(
                     cfg.base_url,
                     api_key,
@@ -86,6 +93,14 @@ def rag_query(body: QueryIn, user: User = Depends(get_current_user), db: Session
                     ],
                 )
                 payload["answer"] = gen["content"]
+                log_usage(
+                    user.id,
+                    cfg.model_id,
+                    "rag",
+                    prompt_text=f"{result.context_text}\n{body.question}",
+                    completion_text=gen.get("content", ""),
+                    latency_ms=int((time.monotonic() - started) * 1000),
+                )
             except GatewayError:
                 payload["answer"] = None
                 payload["note"] = PUBLIC_GATEWAY_ERROR

@@ -446,6 +446,8 @@ def delete_case(case_id: str, request: Request, user: User = Depends(get_current
     record_governance_audit(db, user=user, action="case.delete", resource_type="case", resource_id=row.id, organization_id=row.organization_id, case_id=row.id, request=request)
     for model in (EnterpriseDocument, EnterpriseRisk, EnterpriseTask, EnterpriseBrief):
         db.execute(delete(model).where(model.case_id == case_id))
+    # 级联清理项目授权，避免 case id 复用时残留授权重新生效。
+    db.execute(delete(ProjectGrant).where(ProjectGrant.case_id == case_id))
     db.delete(row)
     db.commit()
     return ok({"deleted": True})

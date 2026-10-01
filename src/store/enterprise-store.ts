@@ -453,17 +453,15 @@ export const useEnterpriseStore = create<EnterpriseState>()(
         return { hits: outcomes.filter((o) => o.hit).length, total: outcomes.length };
       },
       addTask: (input) => {
-        withProgress(set, (state) => ({
-          tasks: [{
-            ...input,
-            id: uid("TASK"),
-            stage: "待处理",
-            updatedAt: new Date().toISOString(),
-            history: [{ id: uid("EVT"), action: "创建任务", actor: input.assignee || "待指派", at: new Date().toISOString() }],
-          }, ...state.tasks],
-        }));
-        const task = get().tasks.find((t) => t.title === input.title && t.assignee === input.assignee);
-        if (task) pushEntity("tasks", syncMap.tasks.payload(task));
+        const task: WorkflowTask = {
+          ...input,
+          id: uid("TASK"),
+          stage: "待处理",
+          updatedAt: new Date().toISOString(),
+          history: [{ id: uid("EVT"), action: "创建任务", actor: input.assignee || "待指派", at: new Date().toISOString() }],
+        };
+        withProgress(set, (state) => ({ tasks: [task, ...state.tasks] }));
+        pushEntity("tasks", syncMap.tasks.payload(task));
       },
       updateTask: (id, patch, actor, note) => {
         set((state) => ({

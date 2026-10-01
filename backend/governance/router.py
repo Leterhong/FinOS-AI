@@ -293,10 +293,12 @@ def governance_snapshot(organizationId: str | None = None, auditLimit: int = 200
         "organization": _org_out(org), "members": [_member_out(x, include_token=is_admin) for x in members],
         "organizations": organizations,
         "invitations": invitations,
-        "grants": [_grant_out(x) for x in grants],
+        "grants": [_grant_out(x) for x in grants] if is_admin else [],
         "audits": [{"id": x.id, "action": x.action, "resourceType": x.resource_type, "resourceId": x.resource_id, "caseId": x.case_id, "outcome": x.outcome, "details": _json(x.details_json, {}), "ip": x.ip, "userId": x.user_id, "operator": email_by_user.get(x.user_id, "系统/未知"), "createdAt": x.created_at.isoformat()} for x in audits],
-        "reviews": [_review_out(x) for x in reviews], "evalCases": [_eval_case_out(x) for x in eval_cases],
-        "evalRuns": [_eval_run_out(x) for x in eval_runs], "connectors": [_connector_out(x) for x in connectors],
+        "reviews": [_review_out(x) for x in reviews] if is_reviewer else [],
+        "evalCases": [_eval_case_out(x) for x in eval_cases] if is_reviewer else [],
+        "evalRuns": [_eval_run_out(x) for x in eval_runs] if is_reviewer else [],
+        "connectors": [_connector_out(x) for x in connectors] if is_reviewer else [],
     })
 
 
@@ -373,6 +375,10 @@ def accept_invite(member_id: str, request: Request, token: str = "", user: User 
     if not expected or not supplied or not hmac.compare_digest(expected, supplied):
         return fail("邀请令牌无效或已失效，请使用管理员发送的最新邀请链接", status_code=403)
     if row.status == "active":
+        # 已激活的行不再需要邀请令牌，先作废。
+        if getattr(row, "invite_token", ""):
+            row.invite_token = ""
+            db.commit()
         return ok(_member_out(row))
     row.status = "active"
     row.invite_token = ""  # 一次性使用，接受后即失效

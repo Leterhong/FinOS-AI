@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "@/components/feedback/toast";
 import { formatWhen } from "@/lib/relative-time";
 import Link from "next/link";
@@ -28,6 +28,8 @@ export default function ResearchPage() {
   const [open, setOpen] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState("");
+  const mountedRef = useRef(true);
+  useEffect(() => () => { mountedRef.current = false; }, []);
   const caseDocuments = useMemo(() => documents.filter((item) => item.caseId === activeCaseId && item.status === "已解析" && !item.error), [activeCaseId, documents]);
   const caseRisks = useMemo(() => risks.filter((item) => item.caseId === activeCaseId), [activeCaseId, risks]);
   const caseBriefs = useMemo(() => briefs.filter((item) =>
@@ -41,6 +43,7 @@ export default function ResearchPage() {
     const topic = String(data.get("topic") || "").trim();
     const scope = String(data.get("scope") || "").trim();
     if (!topic) return;
+    const caseId = activeCase.id;
     setGenerating(true);
     setError("");
     try {
@@ -54,13 +57,14 @@ export default function ResearchPage() {
         },
         () => {},
       );
-      addBrief({ caseId: activeCase.id, topic, title: `${topic} · AI 研究底稿`, summary: result.answer, model: result.model });
+      if (!mountedRef.current) return;
+      addBrief({ caseId, topic, title: `${topic} · AI 研究底稿`, summary: result.answer, model: result.model });
       toast.success("研究底稿已生成");
       setOpen(false);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "研究生成失败");
+      if (mountedRef.current) setError(reason instanceof Error ? reason.message : "研究生成失败");
     } finally {
-      setGenerating(false);
+      if (mountedRef.current) setGenerating(false);
     }
   };
 

@@ -15,7 +15,7 @@ export async function getModelHealth(userId: string): Promise<ModelHealth[]> {
   const list = await modelConfigStore.list(userId);
 
   // 近似错误率：统计最近 user 调用的成败。
-  const logs = aiService.getLogs().filter((l) => l.provider === "user");
+  const logs = aiService.getLogs().filter((l) => l.provider === "user" && l.userId === userId);
   const fails = logs.filter((l) => !l.success).length;
   const errorRate = logs.length > 0 ? fails / logs.length : 0;
 

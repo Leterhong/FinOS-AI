@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.ai.gateway import GatewayError, generate_sync as gw_generate_sync
+from backend.ai.usage import log_usage
 from backend.ai.models import AIModelConfig
 from backend.memory.models import Memory
 from backend.services.rag.service import retrieve_knowledge
@@ -102,6 +103,7 @@ def analyze(db: Session, user: User, question: str = "") -> dict:
                 )
                 ai_content = gen["content"]
                 tier = "ai"
+                log_usage(user.id, cfg.model_id, "cfo", prompt_text=prompt, completion_text=ai_content)
             except GatewayError:
                 ai_content = None
 

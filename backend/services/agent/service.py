@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.ai.gateway import GatewayError, generate_sync as gw_generate_sync
+from backend.ai.usage import log_usage
 from backend.ai.models import AIModelConfig
 from backend.services.agent.executor import execute
 from backend.services.agent.memory import clear, for_task
@@ -64,6 +65,7 @@ def run_orchestration(db: Session, user: User, task_type: str, question: str) ->
                         max_tokens=300,
                     )
                     summary = gen["content"]
+                    log_usage(user.id, cfg.model_id, "agent", prompt_text=f"{task_type}\n{question}", completion_text=summary)
                 except GatewayError:
                     summary = None
 
