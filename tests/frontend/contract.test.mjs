@@ -146,6 +146,10 @@ test("企业 AI 网关必须接入专属技能层", () => {
   assert.ok(existsSync(join(SRC, "ai", "skills", "enterprise-document-audit.ts")));
   assert.ok(existsSync(join(SRC, "app", "api", "skills", "route.ts")));
   assert.ok(existsSync(join(SRC, "app", "(dashboard)", "skills", "page.tsx")));
+  assert.ok(existsSync(join(SRC, "app", "api", "skills", "import", "route.ts")));
+  assert.ok(existsSync(join(SRC, "ai", "skills", "import.ts")));
+  assert.ok(existsSync(join(SRC, "ai", "skills", "scan.ts")));
+  assert.match(read(join(SRC, "app", "(dashboard)", "skills", "page.tsx")), /上传技能/);
 });
 
 test("助手回答必须用 Markdown 渲染而非编号章节兜底", () => {
