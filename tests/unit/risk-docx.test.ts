@@ -39,9 +39,13 @@ test("风险清单 Word 文档可生成（含分组与证据高亮）", async ()
   assert.ok(buffer.length > 1000, "docx 产物应有合理大小");
 });
 
-test("Markdown 导出包含项目分组、等级、规则依据与高亮标记", () => {
+test("Markdown 导出包含项目分组、基础信息、财务指标、规则依据与高亮标记", () => {
   const md = buildRiskMarkdown([risk], context, "2026-10-01 12:00");
   assert.match(md, /## 项目：测试企业 · 尽调/);
+  assert.match(md, /### 企业基础信息/);
+  assert.match(md, /所属行业：制造业/);
+  assert.match(md, /### 风险汇总/);
+  assert.match(md, /### 财务指标/);
   assert.match(md, /高风险/);
   assert.match(md, /R-CFO-001@v1\.0/);
   assert.match(md, /==经营活动现金流量净额 -420 万元==/);

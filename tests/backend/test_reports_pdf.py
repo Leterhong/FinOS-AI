@@ -6,6 +6,10 @@ PAYLOAD = {
     "groups": [
         {
             "project": "测试企业 · 尽调",
+            "meta": {"company": "测试企业", "title": "尽调", "industry": "制造业", "amount": "1000万", "owner": "张三", "status": "研判中", "risk": "medium", "progress": 40, "classification": "internal"},
+            "stats": {"total": 1, "byLevel": {"critical": 0, "high": 1, "medium": 0, "low": 0}, "pending": 1, "confirmed": 0, "mitigated": 0, "documents": 1, "facts": 1},
+            "financialMetrics": [{"name": "资产负债率", "displayValue": "60.0%", "category": "结构", "interpretation": "负债占比未触发通用高位提示"}],
+            "financialTrends": [{"topic": "营业收入", "fromPeriod": "2024", "toPeriod": "2025", "changeRate": 20}],
             "risks": [
                 {
                     "title": "经营现金流为负",

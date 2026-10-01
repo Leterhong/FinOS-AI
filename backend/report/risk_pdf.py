@@ -11,7 +11,7 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 _FONT = "STSong-Light"
 
@@ -42,6 +42,21 @@ def _highlight(evidence: str, quotes: list[str]) -> str:
     return text
 
 
+def _table(header: list[str], rows: list[list[str]]) -> Table:
+    data = [[Paragraph(escape(str(cell)), _STYLE_BODY) for cell in header]]
+    for row in rows:
+        data.append([Paragraph(escape(str(cell)), _STYLE_BODY) for cell in row])
+    table = Table(data, hAlign="LEFT")
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#EFF4FA")),
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#C9D6E4")),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+    ]))
+    return table
+
+
 def render_risk_checklist(payload: dict[str, Any]) -> bytes:
     _ensure_font()
     buffer = io.BytesIO()
@@ -56,6 +71,39 @@ def render_risk_checklist(payload: dict[str, Any]) -> bytes:
 
     for group in groups:
         story.append(Paragraph(f"项目：{escape(str(group.get('project') or '未关联项目'))}", _STYLE_GROUP))
+
+        meta = group.get("meta")
+        if meta:
+            story.append(Paragraph("<b>企业基础信息</b>", _STYLE_BODY))
+            story.append(Paragraph(
+                "企业名称：{c}　研判任务：{t}<br/>所属行业：{i}　金额规模：{a}<br/>负责人：{o}　状态：{s}　风险等级：{r}　进度：{p}%<br/>数据密级：{cl}".format(
+                    c=escape(str(meta.get("company") or "")), t=escape(str(meta.get("title") or "")),
+                    i=escape(str(meta.get("industry") or "")), a=escape(str(meta.get("amount") or "")),
+                    o=escape(str(meta.get("owner") or "")), s=escape(str(meta.get("status") or "")),
+                    r=escape(str(meta.get("risk") or "")), p=round(float(meta.get("progress") or 0)),
+                    cl=escape(str(meta.get("classification") or "internal")),
+                ), _STYLE_BODY))
+
+        stats = group.get("stats")
+        if stats:
+            levels = stats.get("byLevel") or {}
+            story.append(Paragraph(f"<b>风险汇总</b>：共 {stats.get('total', 0)} 项（重大 {levels.get('critical', 0)} · 高 {levels.get('high', 0)} · 中 {levels.get('medium', 0)} · 低 {levels.get('low', 0)}）；待核验 {stats.get('pending', 0)} · 已确认 {stats.get('confirmed', 0)} · 已缓释 {stats.get('mitigated', 0)}；{stats.get('documents', 0)} 份资料 · {stats.get('facts', 0)} 条事实", _STYLE_BODY))
+
+        metrics = group.get("financialMetrics") or []
+        story.append(Paragraph("<b>财务指标</b>", _STYLE_BODY))
+        if metrics:
+            story.append(_table(["指标", "数值", "类别", "口径说明"], [[m.get("name", ""), m.get("displayValue", ""), m.get("category", ""), m.get("interpretation", "")] for m in metrics]))
+        else:
+            story.append(Paragraph("当前项目缺少可计算的财务事实（需上传含资产负债/利润/现金流科目的资料）。", _STYLE_META))
+
+        trends = group.get("financialTrends") or []
+        if trends:
+            story.append(Spacer(1, 4))
+            story.append(Paragraph("<b>跨期趋势</b>", _STYLE_BODY))
+            story.append(_table(["指标", "期初", "期末", "变化率"], [[t.get("topic", ""), t.get("fromPeriod", ""), t.get("toPeriod", ""), f"{float(t.get('changeRate') or 0):.1f}%"] for t in trends]))
+
+        story.append(Spacer(1, 4))
+        story.append(Paragraph("<b>风险明细</b>", _STYLE_BODY))
         for index, risk in enumerate(group.get("risks") or []):
             level = str(risk.get("level") or "medium")
             color = LEVEL_COLOR.get(level, "#7B241C")
