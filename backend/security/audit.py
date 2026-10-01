@@ -36,6 +36,21 @@ def write_audit(db: Session, *, user_id: str | None, action: str, resource: str,
     db.add(AuditLog(user_id=user_id, action=action, resource=resource, ip=client_ip(request)))
 
 
+def purge_expired_audit_logs(db: Session, retention_days: int) -> dict:
+    """按留存天数清理审计与安全事件（retention_days<=0 时不做任何事）。"""
+    if retention_days <= 0:
+        return {"audit": 0, "events": 0}
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import delete
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+    audit = db.execute(delete(AuditLog).where(AuditLog.created_at < cutoff)).rowcount
+    events = db.execute(delete(SecurityEvent).where(SecurityEvent.created_at < cutoff)).rowcount
+    db.commit()
+    return {"audit": audit or 0, "events": events or 0}
+
+
 def write_security_event(
     db: Session,
     *,

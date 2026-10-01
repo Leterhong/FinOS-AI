@@ -47,9 +47,19 @@ async def lifespan(_: FastAPI):
         except Exception as exc:  # noqa: BLE001
             # 主密钥错误 / 迁移失败绝不能静默——否则历史密文将不可解。
             logger.error("sensitive_data_migration_failed", extra={"error": str(exc)})
+    # 审计/安全事件留存清理（默认 retention=0 即永久保留，避免误删合规证据）。
+    if settings.audit_retention_days > 0:
+        try:
+            from backend.security.audit import purge_expired_audit_logs
+
+            with SessionLocal() as db:
+                purged = purge_expired_audit_logs(db, settings.audit_retention_days)
+            logger.info("audit_retention_purged", extra=purged)
+        except Exception as exc:  # noqa: BLE001
+            logger.error("audit_retention_failed", extra={"error": str(exc)})
     # 启动期自动迁移前端 .data 历史数据（任务 #290）；失败仅记录不阻断启动。
     if settings.migrate_legacy_data:
-        legacy_data = Path(__file__).resolve().parents[2] / ".data"
+        legacy_data = Path(__file__).resolve().parents[1] / ".data"
         if legacy_data.is_dir():
             try:
                 with SessionLocal() as db:

@@ -385,7 +385,9 @@ export async function POST(req: NextRequest) {
           try {
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
           } catch {
+            // 下游断开：中止上游模型调用，停止继续计费。
             closed = true;
+            abort.abort();
           }
         };
         try {
@@ -427,6 +429,7 @@ export async function POST(req: NextRequest) {
         "Content-Type": "text/event-stream; charset=utf-8",
         "Cache-Control": "no-store",
         Connection: "keep-alive",
+        "X-Accel-Buffering": "no",
       },
     });
   }

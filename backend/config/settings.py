@@ -87,6 +87,8 @@ class Settings(BaseSettings):
 
     # --- 整库备份接口保护（/api/backup/database 需携带此 Key） ---
     backup_api_key: str = ""
+    # 审计/安全事件留存天数：0 表示永久保留（默认，避免误删合规证据）。
+    audit_retention_days: int = 0
     # 整库逻辑备份默认关闭：需要显式开启 BACKUP_ALLOW_DATABASE_DUMP=true，
     # 避免单密钥即可一次性导出全租户数据（含 password_hash 与密文）。
     backup_allow_database_dump: bool = False

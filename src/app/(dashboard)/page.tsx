@@ -22,8 +22,10 @@ export default function EnterpriseCommandCenter() {
   const activeModel = useModelStore((state) => state.active);
 
   const highRisks = risks.filter((item) => item.level === "critical" || item.level === "high");
+  // 归档项目不计入活跃工作（仍保留在项目中心可供恢复）。
+  const activeCases = cases.filter((item) => !item.archivedAt);
   const completedSetup = [cases.length > 0, documents.length > 0, Boolean(activeModel?.configured)].filter(Boolean).length;
-  const averageProgress = cases.length ? Math.round(cases.reduce((sum, item) => sum + item.progress, 0) / cases.length) : 0;
+  const averageProgress = activeCases.length ? Math.round(activeCases.reduce((sum, item) => sum + item.progress, 0) / activeCases.length) : 0;
   const setupReady = completedSetup === 3;
 
   // Priority Work：需要人工处理的真实事项（待核验风险 / 分析失败资料 / 超期任务）。
@@ -93,7 +95,7 @@ export default function EnterpriseCommandCenter() {
     />
 
     <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-      <MetricCard label="企业项目" value={String(cases.length)} detail={`${cases.filter((item) => item.status !== "已完成").length} 个进行中`} />
+      <MetricCard label="企业项目" value={String(activeCases.length)} detail={`${activeCases.filter((item) => item.status !== "已完成").length} 个进行中`} />
       <MetricCard label="研判资料" value={String(documents.length)} detail={`${documents.reduce((sum, item) => sum + (item.facts || 0), 0)} 条已抽取事实`} accent="amber" />
       <MetricCard label="风险信号" value={String(risks.length)} detail={`${highRisks.length} 项高风险`} accent="rose" />
       <MetricCard label="平均完整度" value={`${averageProgress}%`} detail={`${rules.length} 条业务规则`} accent="emerald" />
@@ -151,9 +153,9 @@ export default function EnterpriseCommandCenter() {
     <div className="grid gap-4 xl:grid-cols-[1.45fr_1fr]">
       <Panel>
         <PanelHeader eyebrow="Case queue" title="项目队列" description="仅展示你创建的企业项目" action={<Link href="/cases" className="flex items-center gap-1 text-xs text-cyan-300">项目中心<ArrowRight className="h-3 w-3" /></Link>} />
-        {cases.length === 0
+        {activeCases.length === 0
           ? <EmptyStateCard icon={FolderPlus} title="还没有企业项目" description="创建第一个融资、尽调或经营分析项目，之后才能关联资料、规则和 AI 研判。" action={<Link href="/cases" className="rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]">新建项目</Link>} />
-          : <div className="divide-y divide-white/[0.06]">{cases.slice(0, 4).map((item) => <Link href={`/cases/${encodeURIComponent(item.id)}`} key={item.id} className="grid gap-3 px-5 py-4 transition hover:bg-white/[0.025] sm:grid-cols-[1.4fr_.65fr_.6fr] sm:items-center">
+          : <div className="divide-y divide-white/[0.06]">{activeCases.slice(0, 4).map((item) => <Link href={`/cases/${encodeURIComponent(item.id)}`} key={item.id} className="grid gap-3 px-5 py-4 transition hover:bg-white/[0.025] sm:grid-cols-[1.4fr_.65fr_.6fr] sm:items-center">
             <div className="min-w-0"><div className="flex items-center gap-2"><p className="truncate text-sm font-medium text-slate-100">{item.company}</p><RiskBadge level={item.risk} /></div><p className="mt-1.5 truncate text-xs text-slate-500">{item.title} · {item.id}</p></div>
             <div><p className="numeric text-sm text-slate-200">{item.amount}</p><p className="mt-1 text-[11px] text-slate-600">负责人 {item.owner}</p></div>
             <div><div className="flex justify-between text-[10px] text-slate-500"><span>{item.status}</span><span>{item.progress}%</span></div><div className="mt-2 h-1 overflow-hidden rounded-full bg-white/[0.07]"><div className="h-full rounded-full bg-cyan-300" style={{ width: `${item.progress}%` }} /></div></div>

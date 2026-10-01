@@ -42,8 +42,8 @@ def _now() -> datetime:
 
 
 def _invalidate(user_id: str) -> None:
-    """财富数据变化 → 清掉相关缓存（Twin / Intelligence / 报告）。"""
-    for prefix in (f"twin:{user_id}", f"wi:", f"report:{user_id}", f"agent:{user_id}"):
+    """财富数据变化 → 清掉相关缓存（Twin / Intelligence / 报告 / 视觉 OCR）。"""
+    for prefix in (f"twin:{user_id}", f"wi:", f"report:{user_id}", f"agent:{user_id}", f"mm:vision:{user_id}"):
         try:
             cache_invalidate_prefix(prefix)
         except Exception:  # noqa: BLE001
@@ -419,4 +419,6 @@ def delete_input(db: Session, user: User, input_id: str) -> bool:
         db.delete(x)
     db.delete(rec)
     db.commit()
+    # 清除该用户视觉 OCR 缓存，避免删掉的图片原文仍被缓存命中复用。
+    _invalidate(user.id)
     return True

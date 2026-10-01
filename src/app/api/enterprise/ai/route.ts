@@ -131,6 +131,9 @@ export async function POST(req: NextRequest) {
     const started = Date.now();
     const abort = new AbortController();
     const timeout = setTimeout(() => abort.abort(), 600_000);
+    // 客户端断开时立刻中止上游请求，避免用户已离开仍持续计费。
+    const onClientAbort = () => abort.abort();
+    req.signal.addEventListener("abort", onClientAbort);
     let closed = false;
     let streamedChars = 0;
     let streamError = false;
@@ -150,7 +153,9 @@ export async function POST(req: NextRequest) {
           try {
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
           } catch {
+            // 下游已断开：立即中止上游，避免继续拉取与计费。
             closed = true;
+            abort.abort();
           }
         };
         try {
@@ -171,6 +176,7 @@ ${safeQuestion}` },
             maxTokens: Math.min(model.maxTokens ?? 2048, 8192),
             signal: abort.signal,
           })) {
+            if (closed) break;
             if (chunk.content) { streamedChars += chunk.content.length; send({ delta: chunk.content }); }
           }
           send({ done: true, model: model.modelId, latencyMs: Date.now() - started, skill: skillInfo });
@@ -180,6 +186,7 @@ ${safeQuestion}` },
         } finally {
           clearInterval(heartbeat);
           clearTimeout(timeout);
+          req.signal.removeEventListener("abort", onClientAbort);
           closed = true;
           // 记录用量（流式按字符估算 token），失败不影响主流程。
           const promptTokens = Math.ceil((safeQuestion.length + context.length) / 2);
@@ -212,6 +219,7 @@ ${safeQuestion}` },
         "Content-Type": "text/event-stream; charset=utf-8",
         "Cache-Control": "no-store",
         Connection: "keep-alive",
+        "X-Accel-Buffering": "no",
       },
     });
   }
