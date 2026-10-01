@@ -26,9 +26,8 @@ services:
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "5" }
-    deploy:
-      resources:
-        limits: { cpus: "2.0", memory: 2G }
+    cpus: "2.0"
+    mem_limit: 2g
 
   redis:
     command:
@@ -44,9 +43,8 @@ services:
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
-    deploy:
-      resources:
-        limits: { cpus: "1.0", memory: 768M }
+    cpus: "1.0"
+    mem_limit: 768m
 
   api:
     environment:
@@ -60,17 +58,15 @@ services:
     logging:
       driver: json-file
       options: { max-size: "20m", max-file: "5" }
-    deploy:
-      resources:
-        limits: { cpus: "2.0", memory: 2G }
+    cpus: "2.0"
+    mem_limit: 2g
 
   web:
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
-    deploy:
-      resources:
-        limits: { cpus: "1.0", memory: 1G }
+    cpus: "1.0"
+    mem_limit: 1g
 
   nginx:
     # 基础编排已发布 80，此处追加 443

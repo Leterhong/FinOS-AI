@@ -56,14 +56,17 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         auth = request.headers.get("authorization", "")
         if auth.lower().startswith("bearer "):
             return True
-        # 非 Cookie 认证（既无 Bearer 也无认证 Cookie）交由后续鉴权处理，不在此拦截。
-        # 认证 Cookie 名与签发方一致（曾误用从未签发的 finos_token，导致校验形同虚设）。
-        if not request.cookies.get("finos_refresh"):
-            return True
-        # Cookie 认证的变更请求：双提交校验（常量时间比较，避免时序侧信道）
+        # 非 Bearer 的变更请求：以 Origin 允许列表为主要防线（refresh cookie 作用域为
+        # /api/auth，其它端点收不到，双提交无法作为唯一判据）。
+        origin = request.headers.get("origin") or ""
+        if origin and origin not in set(get_settings().cors_origin_list):
+            return False
+        # 若确实携带了双提交 token，则必须一致；未携带时由 Origin + SameSite 兜底。
         cookie_token = request.cookies.get(_CSRF_COOKIE) or ""
         header_token = request.headers.get(_CSRF_HEADER) or ""
-        return bool(cookie_token) and bool(header_token) and hmac.compare_digest(cookie_token, header_token)
+        if cookie_token or header_token:
+            return bool(cookie_token) and bool(header_token) and hmac.compare_digest(cookie_token, header_token)
+        return True
 
     async def dispatch(self, request: Request, call_next):
         path = request.url.path

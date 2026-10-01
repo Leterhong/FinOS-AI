@@ -74,6 +74,7 @@ class Cache:
         self._mode = "memory"
         self._redis = None
         self._connected = False
+        self._next_retry = 0.0
         self._mem = _InMemoryCache()
         self._rate: dict[str, deque] = defaultdict(deque)
         self._lock = threading.Lock()
@@ -82,8 +83,14 @@ class Cache:
     def _ensure(self) -> None:
         if self._connected:
             return
+        # 上次连接失败后按退避重试，允许 Redis 恢复后自动重连，而不是永久内存降级。
+        if time.time() < self._next_retry:
+            return
         with self._lock:
             if self._connected:
+                return
+            now = time.time()
+            if now < self._next_retry:
                 return
             try:
                 import redis  # noqa: F401
@@ -96,11 +103,11 @@ class Cache:
                 client.ping()
                 self._redis = client
                 self._mode = "redis"
+                self._connected = True
             except Exception:
                 self._redis = None
                 self._mode = "memory"
-            finally:
-                self._connected = True
+                self._next_retry = now + 30.0
 
     @property
     def mode(self) -> str:

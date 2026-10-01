@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { useMemo } from "react";
 import { ArrowRight, Bot, CheckCircle2, Cpu, FileSearch, FolderPlus, Scale, Sparkles, ShieldAlert, AlertTriangle, CalendarClock, Sparkle } from "lucide-react";
-import { EmptyStateCard, MetricCard, PageIntro, Panel, PanelHeader, RiskBadge, riskMeta } from "@/components/enterprise/EnterpriseUI";
+import { EmptyStateCard, MetricCard, PageIntro, Panel, PanelHeader, RiskBadge, riskMetaOf } from "@/components/enterprise/EnterpriseUI";
 import { Button } from "@/components/ui/Button";
 import { useEnterpriseStore } from "@/store/enterprise-store";
 import { useModelStore } from "@/store/model-store";
 import { formatWhen } from "@/lib/relative-time";
+import { todayLocalISO } from "@/lib/utils";
 
 const LEVEL_ORDER: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
 
@@ -26,7 +27,7 @@ export default function EnterpriseCommandCenter() {
   const setupReady = completedSetup === 3;
 
   // Priority Work：需要人工处理的真实事项（待核验风险 / 分析失败资料 / 超期任务）。
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = todayLocalISO();
   const priorityItems = useMemo(() => {
     const items: Array<{ key: string; href: string; level: string; title: string; detail: string; when: string; cta: string }> = [];
     for (const risk of risks.filter((item) => item.status === "待核验")) {
@@ -102,7 +103,7 @@ export default function EnterpriseCommandCenter() {
       <PanelHeader eyebrow="Priority work" title="需要你处理" description="按风险等级排序的待办事项；全部来自当前工作区的真实状态。" action={<span className="text-[10px] text-slate-600">{priorityItems.length} 项</span>} />
       <div className="divide-y divide-white/[0.06]">
         {priorityItems.map((item) => {
-          const meta = riskMeta[item.level as keyof typeof riskMeta];
+          const meta = riskMetaOf(item.level);
           const Icon = item.level === "medium" ? CalendarClock : item.href === "/documents" ? AlertTriangle : ShieldAlert;
           return <Link key={item.key} href={item.href} className="flex items-center gap-3 px-5 py-3.5 transition hover:bg-white/[0.025]">
             <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg border ${meta.className}`}><Icon className="h-4 w-4" /></span>

@@ -32,6 +32,9 @@ CATEGORY_LABELS = {
 
 MIN_SCORE = 0.05
 DEFAULT_TOP_K = 5
+MAX_TOP_K = 20
+# 单次检索最多评估的候选切片数，防止知识库增长后全表载入内存。
+MAX_CANDIDATES = 2000
 MAX_CONTEXT_CHARS = 2400
 
 SYNONYMS: list[tuple[re.Pattern, str]] = [
@@ -95,35 +98,45 @@ def retrieve_knowledge(question: str, user_id: str, top_k: int = DEFAULT_TOP_K, 
     started = time.time()
     rewritten = rewrite_query(question)
     query_vec = local_embed(rewritten)
+    top_k = max(1, min(int(top_k), MAX_TOP_K))
 
     with SessionLocal() as db:
         personal = (
-            db.scalars(select(KnowledgeChunk).where(KnowledgeChunk.user_id == user_id)).all()
+            db.scalars(select(KnowledgeChunk).where(KnowledgeChunk.user_id == user_id).limit(MAX_CANDIDATES)).all()
             if user_id and user_id != SYSTEM_KNOWLEDGE_USER_ID
             else []
         )
         system = (
-            db.scalars(select(KnowledgeChunk).where(KnowledgeChunk.user_id == SYSTEM_KNOWLEDGE_USER_ID)).all()
+            db.scalars(select(KnowledgeChunk).where(KnowledgeChunk.user_id == SYSTEM_KNOWLEDGE_USER_ID).limit(MAX_CANDIDATES)).all()
             if include_system
             else []
         )
 
     hits: list[Hit] = []
+    seen_hit: set[str] = set()
     for row in personal + system:
         h = _chunk_to_hit(row, query_vec)
-        if h:
-            hits.append(h)
+        if not h:
+            continue
+        key = f"{h.title}|{h.text[:64]}"
+        if key in seen_hit:
+            continue
+        seen_hit.add(key)
+        hits.append(h)
     hits.sort(key=lambda h: h.score, reverse=True)
     hits = hits[:top_k]
 
-    # 上下文拼接（按字符上限截断）
+    # 上下文拼接（按字符上限截断；单条超限时也要裁剪，避免首条直接越界）
     lines: list[str] = []
     used = 0
     for i, h in enumerate(hits):
         label = CATEGORY_LABELS.get(h.category, h.category)
         entry = f"【知识 {i + 1}｜{h.title}｜{label}】\n{h.text}"
-        if used + len(entry) > MAX_CONTEXT_CHARS and lines:
+        remaining = MAX_CONTEXT_CHARS - used
+        if remaining <= 0:
             break
+        if len(entry) > remaining:
+            entry = entry[:remaining]
         lines.append(entry)
         used += len(entry)
 

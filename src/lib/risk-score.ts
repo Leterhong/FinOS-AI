@@ -2,6 +2,10 @@ import type { RiskLevel, RiskSignal } from "@/types/enterprise";
 
 const LEVEL_BASE: Record<RiskLevel, number> = { critical: 90, high: 70, medium: 45, low: 20 };
 
+function baseOf(level: RiskLevel): number {
+  return LEVEL_BASE[level] ?? LEVEL_BASE.medium;
+}
+
 const STATUS_FACTOR: Record<RiskSignal["status"], number> = {
   待核验: 1,
   已确认: 1.1,
@@ -19,7 +23,7 @@ export function riskBand(score: number): RiskBand {
 
 /** 确定性的单条风险评分 0–100：等级为基准，核验状态、证据与关联事实/规则微调。 */
 export function scoreRisk(risk: RiskSignal): number {
-  const base = LEVEL_BASE[risk.level];
+  const base = baseOf(risk.level);
   const evidenceBonus = Math.min(5, (risk.evidence?.length ?? 0) / 40);
   const ruleBonus = risk.ruleCodes?.length ? 5 : 0;
   const factBonus = risk.factIds?.length ? 3 : 0;

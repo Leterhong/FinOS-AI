@@ -236,16 +236,21 @@ async def stream(body: GenerateIn, request: Request, user: User = Depends(get_cu
         started = time.monotonic()
         try:
             async for delta in gw_stream(base_url, api_key, model_id, body.messages, body.temperature, body.max_tokens):
-                count += len(delta)
-                # SSE 数据行不能包含裸换行：delta 内含 \n 时按行拆分，
-                # 否则规范客户端会把换行后的内容当作非 data 行丢弃。
-                for part in str(delta).split("\n"):
-                    yield f"data: {part}\n\n" if part else ": keepalive\n\n"
-            yield "data: [DONE]\n\n"
+                text = str(delta)
+                count += len(text)
+                # JSON 编码 delta：换行转为 \n 转义，单行事件即可完整保留多行内容，
+                # 无需按 \n 拆分事件（拆分会让规范客户端丢失换行）。
+                yield f"data: {json.dumps({'delta': text}, ensure_ascii=False)}\n\n"
+            yield 'data: {"done": true}\n\n'
         except GatewayError:
             _record_gateway_failure(user_id=user_id, operation="stream")
-            error_payload = json.dumps({"error": PUBLIC_GATEWAY_ERROR}, ensure_ascii=False)
-            yield f"event: error\ndata: {error_payload}\n\n"
+            payload = json.dumps({"error": PUBLIC_GATEWAY_ERROR}, ensure_ascii=False)
+            yield f"event: error\ndata: {payload}\n\n"
+        except Exception:  # noqa: BLE001 网络/解析等异常统一转错误事件，避免流中断
+            logger.exception("ai_stream_failed")
+            _record_gateway_failure(user_id=user_id, operation="stream")
+            payload = json.dumps({"error": PUBLIC_GATEWAY_ERROR}, ensure_ascii=False)
+            yield f"event: error\ndata: {payload}\n\n"
         finally:
             # 流式无 usage 回传：按字符估算 token（约 4 字符/token）
             out_tokens = count // 4
@@ -261,7 +266,11 @@ async def stream(body: GenerateIn, request: Request, user: User = Depends(get_cu
                 latency_ms=int((time.monotonic() - started) * 1000),
             )
 
-    return StreamingResponse(event_source(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_source(),
+        media_type="text/event-stream; charset=utf-8",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"},
+    )
 
 
 @router.post("/embed")

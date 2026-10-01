@@ -29,18 +29,26 @@ export async function ensureBackendSession(force = false): Promise<string | null
   if (force) cachedToken = null;
   const operation = (async () => {
     try {
-      const resp = await fetch(`${BASE}/api/auth/bootstrap`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: "{}",
-      });
-      if (!resp.ok) return null;
-      const payload = (await resp.json()) as { data?: { token?: string } };
-      const token = payload?.data?.token;
-      if (!token) return null;
-      cachedToken = token;
-      return token;
+      // 会话轮换并发时后端返回 409；短暂等待后用新 cookie 重试一次。
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const resp = await fetch(`${BASE}/api/auth/bootstrap`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: "{}",
+        });
+        if (resp.status === 409) {
+          await new Promise((resolve) => setTimeout(resolve, 400));
+          continue;
+        }
+        if (!resp.ok) return null;
+        const payload = (await resp.json()) as { data?: { token?: string } };
+        const token = payload?.data?.token;
+        if (!token) return null;
+        cachedToken = token;
+        return token;
+      }
+      return null;
     } catch {
       return null;
     } finally {
@@ -206,7 +214,11 @@ export async function logoutAccount(): Promise<void> {
     await fetch(`${BASE}/api/auth/logout`, {
       method: "POST",
       credentials: "include",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        // 携带当前 Access Token，登出时一并吊销，避免残留最长 15 分钟可用。
+        ...(cachedToken ? { Authorization: `Bearer ${cachedToken}` } : {}),
+      },
       body: "{}",
     });
   } catch {

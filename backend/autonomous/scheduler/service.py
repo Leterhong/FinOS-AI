@@ -291,13 +291,17 @@ def tick(db: Session, limit: int = 20) -> list[dict]:
             task.enabled = False
             db.commit()
             continue
+        # 短租约认领：仅把下一次运行时间临时推后 5 分钟，防止并发重复执行；
+        # 真正的 next_run_at 由 run_scheduled_task 执行后按频率刷新。
+        # 旧实现推后 365 天，执行尾部一旦失败会让日/周任务长期停摆。
+        lease_until = datetime.now(timezone.utc) + timedelta(minutes=5)
         claimed = db.execute(
             update(AutomationScheduled)
             .where(
                 AutomationScheduled.id == task.id,
                 AutomationScheduled.next_run_at == task.next_run_at,
             )
-            .values(next_run_at=task.next_run_at + timedelta(days=365))
+            .values(next_run_at=lease_until)
         ).rowcount
         db.commit()
         if not claimed:

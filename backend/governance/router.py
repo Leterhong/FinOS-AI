@@ -26,7 +26,7 @@ from backend.core.metrics import snapshot as metrics_snapshot
 from backend.core.response import fail
 from backend.core.security import decrypt_secret, encrypt_secret
 from backend.database import get_db
-from backend.enterprise.models import EnterpriseCase, EnterpriseDocument, EnterpriseRisk, EnterpriseRule
+from backend.enterprise.models import EnterpriseBrief, EnterpriseCase, EnterpriseDocument, EnterpriseRisk, EnterpriseRule, EnterpriseTask
 from backend.governance.models import (
     EnterpriseConnector,
     GovernanceAudit,
@@ -409,6 +409,15 @@ def remove_member(member_id: str, request: Request, reason: str | None = None, u
     if target is not None:
         for grant in db.scalars(select(ProjectGrant).where(ProjectGrant.organization_id == row.organization_id, ProjectGrant.user_id == target.id)):
             db.delete(grant)
+        # 回收该成员在本组织内创建的资源所有权（交回操作管理员），
+        # 否则 can_access_case 的 case.user_id 旁路会让被移除者继续读改删。
+        from sqlalchemy import update as _update
+
+        org_case_ids = list(db.scalars(select(EnterpriseCase.id).where(EnterpriseCase.organization_id == row.organization_id, EnterpriseCase.user_id == target.id)))
+        db.execute(_update(EnterpriseCase).where(EnterpriseCase.organization_id == row.organization_id, EnterpriseCase.user_id == target.id).values(user_id=user.id))
+        if org_case_ids:
+            for model in (EnterpriseDocument, EnterpriseRisk, EnterpriseTask, EnterpriseBrief):
+                db.execute(_update(model).where(model.case_id.in_(org_case_ids), model.user_id == target.id).values(user_id=user.id))
 
     db.delete(row)
     record_governance_audit(db, user=user, action="member.delete", resource_type="member", resource_id=member_id, organization_id=row.organization_id, details={"email": email, "reason": clean_reason}, request=request)

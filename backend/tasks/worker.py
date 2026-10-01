@@ -37,6 +37,12 @@ def _process_once() -> None:
                     repo.mark_completed(db, task, result)
             except Exception as exc:  # noqa: BLE001
                 logger.exception("task_exec_failed")
+                # 异常可能来自数据库，会话已进入失败事务；先回滚再写失败状态，
+                # 否则 mark_failed 的 commit 会抛 PendingRollbackError，任务卡在 running。
+                try:
+                    db.rollback()
+                except Exception:  # noqa: BLE001
+                    pass
                 repo.mark_failed(db, task, str(exc))
     finally:
         db.close()

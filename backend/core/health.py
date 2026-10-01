@@ -11,6 +11,7 @@ from __future__ import annotations
 import time
 
 from fastapi import APIRouter
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
 from backend.config import get_settings
@@ -56,8 +57,8 @@ def health():
     ai = _check_ai()
     degraded = redis_mode != "redis"
     overall = "degraded" if (db["status"] != "ok" or degraded) else "ok"
-    return {
-        "success": True,
+    payload = {
+        "success": db["status"] == "ok",
         "data": {
             "status": overall,
             "service": settings.app_name,
@@ -66,5 +67,10 @@ def health():
             "ai_service": ai,
             "uptime_seconds": int(time.time() - _start_time),
         },
-        "message": "",
+        "message": "" if db["status"] == "ok" else "数据库不可用",
     }
+    # 数据库不可用属于致命故障：返回 503，让 Docker healthcheck / 反向代理
+    # 依据 HTTP 状态识别，而非只解析响应体。
+    if db["status"] != "ok":
+        return JSONResponse(status_code=503, content=payload)
+    return payload

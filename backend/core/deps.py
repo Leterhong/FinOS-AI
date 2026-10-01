@@ -20,6 +20,10 @@ def get_current_user(request: Request, db: Session = Depends(get_db)):
     payload = decode_access_token(token) if token else None
     if not payload or not payload.get("sub"):
         raise HTTPException(status_code=401, detail="未登录或凭证已过期")
+    from backend.core.security import is_access_token_revoked
+
+    if is_access_token_revoked(payload):
+        raise HTTPException(status_code=401, detail="登录状态已失效，请重新登录")
 
     from backend.user.models import User
 

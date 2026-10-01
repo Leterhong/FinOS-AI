@@ -80,10 +80,32 @@ def create_access_token(user_id: str, email: str) -> str:
     payload = {
         "sub": user_id,
         "email": email,
+        "jti": uuid.uuid4().hex,
         "iat": now,
         "exp": now + timedelta(minutes=settings.jwt_expire_minutes),
     }
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+
+
+def revoke_access_token(payload: dict | None) -> None:
+    """把 Access Token 的 jti 加入短时撤销集（TTL 到其自然过期）。"""
+    if not payload or not payload.get("jti"):
+        return
+    ttl = max(1, int(settings.jwt_expire_minutes * 60))
+    exp = payload.get("exp")
+    if isinstance(exp, (int, float)):
+        ttl = max(1, int(exp - datetime.now(timezone.utc).timestamp()))
+    from backend.core.cache import cache_set
+
+    cache_set(f"access_revoked:{payload['jti']}", 1, ttl_seconds=ttl)
+
+
+def is_access_token_revoked(payload: dict | None) -> bool:
+    if not payload or not payload.get("jti"):
+        return False
+    from backend.core.cache import cache_get
+
+    return cache_get(f"access_revoked:{payload['jti']}") is not None
 
 
 def decode_access_token(token: str) -> dict | None:

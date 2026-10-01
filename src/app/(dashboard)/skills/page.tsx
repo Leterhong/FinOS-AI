@@ -56,6 +56,7 @@ export default function SkillsPage() {
   const [form, setForm] = useState({ name: "", category: "", summary: "", triggers: "" });
   const [modes, setModes] = useState<string[]>(["chat", "agent", "research"]);
   const fileRef = useRef<HTMLInputElement>(null);
+  const pickSeq = useRef(0);
 
   const load = async () => {
     setLoading(true);
@@ -88,7 +89,13 @@ export default function SkillsPage() {
   const onPick = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) { toast.error("文件过大（上限 5MB）"); return; }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("文件过大（上限 5MB）");
+      // 重置 input，否则再次选择同一文件不会触发 onChange。
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
+    const seq = ++pickSeq.current;
     setUploading(true);
     resetUpload();
     try {
@@ -96,6 +103,7 @@ export default function SkillsPage() {
       body.set("file", file);
       const resp = await fetch("/api/skills/import", { method: "POST", body });
       const payload = await resp.json() as { candidate?: Candidate; risks?: Risk[]; files?: string[]; sourceFile?: string; error?: string };
+      if (seq !== pickSeq.current) return; // 已有更新的选择，丢弃本次结果
       if (!resp.ok || !payload.candidate) throw new Error(payload?.error || "技能文件解析失败");
       const c = payload.candidate;
       setCandidate(c);
@@ -106,9 +114,9 @@ export default function SkillsPage() {
       setModes(c.modes.length ? c.modes : ["chat", "agent", "research"]);
       if ((payload.risks ?? []).length) toast.warning(`检测到 ${payload.risks!.length} 项潜在风险，请确认后再导入`);
     } catch (reason) {
-      toast.error(reason instanceof Error ? reason.message : "技能文件解析失败");
+      if (seq === pickSeq.current) toast.error(reason instanceof Error ? reason.message : "技能文件解析失败");
     } finally {
-      setUploading(false);
+      if (seq === pickSeq.current) setUploading(false);
     }
   };
 
@@ -144,14 +152,16 @@ export default function SkillsPage() {
   };
 
   const toggle = async (skill: SkillItem) => {
+    // 串行化：任一切换进行中时忽略后续点击，避免并发用旧闭包覆盖彼此。
+    if (busy) return;
     const nextEnabled = !skill.enabled;
+    const disabled = skills
+      .map((item) => ({ id: item.id, enabled: item.id === skill.id ? nextEnabled : item.enabled }))
+      .filter((item) => !item.enabled)
+      .map((item) => item.id);
     setBusy(skill.id);
     setSkills((current) => current.map((item) => item.id === skill.id ? { ...item, enabled: nextEnabled } : item));
     try {
-      const disabled = skills
-        .map((item) => ({ id: item.id, enabled: item.id === skill.id ? nextEnabled : item.enabled }))
-        .filter((item) => !item.enabled)
-        .map((item) => item.id);
       const resp = await fetch("/api/skills", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ disabled }) });
       const payload = await resp.json().catch(() => null) as { error?: string } | null;
       if (!resp.ok) throw new Error(payload?.error || "保存失败");
@@ -201,7 +211,7 @@ export default function SkillsPage() {
             description={skill.summary}
             action={<div className="flex shrink-0 items-center gap-2">
               {skill.custom && <button type="button" onClick={() => void remove(skill)} disabled={busy === `del-${skill.id}`} title="删除自定义技能" className="grid h-8 w-8 place-items-center rounded-lg border border-white/10 text-slate-500 hover:border-rose-400/30 hover:text-rose-300 disabled:opacity-40"><Trash2 className="h-3.5 w-3.5" /></button>}
-              <button type="button" onClick={() => void toggle(skill)} disabled={busy === skill.id} className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-[11px] disabled:opacity-40 ${skill.enabled ? "border-emerald-400/25 text-emerald-200" : "border-white/10 text-slate-400"}`}><Power className="h-3.5 w-3.5" />{busy === skill.id ? "保存中…" : skill.enabled ? "已启用" : "已停用"}</button>
+              <button type="button" onClick={() => void toggle(skill)} disabled={Boolean(busy)} className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-[11px] disabled:opacity-40 ${skill.enabled ? "border-emerald-400/25 text-emerald-200" : "border-white/10 text-slate-400"}`}><Power className="h-3.5 w-3.5" />{busy === skill.id ? "保存中…" : skill.enabled ? "已启用" : "已停用"}</button>
             </div>}
           />
           <div className="space-y-4 p-5">

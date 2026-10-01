@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Archive, Bell, CheckCheck, Trash2 } from "lucide-react";
 import { EmptyStateCard, PageIntro, Panel } from "@/components/enterprise/EnterpriseUI";
 import { Select } from "@/components/ui/Select";
@@ -37,8 +37,10 @@ export default function NotificationsPage() {
   const [archived, setArchived] = useState("active");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const loadSeq = useRef(0);
 
   const load = useCallback(async () => {
+    const seq = ++loadSeq.current;
     setLoading(true);
     setError("");
     try {
@@ -49,12 +51,13 @@ export default function NotificationsPage() {
       if (archived === "archived") query.set("archived", "true");
       const resp = await backendAuthedFetch(`/api/notifications${query.toString() ? `?${query}` : ""}`);
       const payload = await resp.json() as { data?: { notifications?: Notice[] }; error?: string };
+      if (seq !== loadSeq.current) return; // 筛选已切换，丢弃过期响应
       if (!resp.ok) throw new Error(payload?.error || "加载通知失败");
       setItems(payload.data?.notifications ?? []);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "加载通知失败");
+      if (seq === loadSeq.current) setError(reason instanceof Error ? reason.message : "加载通知失败");
     } finally {
-      setLoading(false);
+      if (seq === loadSeq.current) setLoading(false);
     }
   }, [category, archived]);
 

@@ -52,8 +52,11 @@ export default function AccountDialog({
     setBusy(true);
     setError("");
     try {
-      if (mode === "login") await loginAccount(value, password);
-      else await registerAccount(value, password);
+      const account = mode === "login" ? await loginAccount(value, password) : await registerAccount(value, password);
+      // 跨账号保护：本地工作区若归属其它账号，先清空再绑定，避免数据串号。
+      if (account && !account.guest) {
+        useEnterpriseStore.getState().guardWorkspaceOwnership(account.id);
+      }
       // 绑定 Next 工作区并迁移本地访客数据到该账号，然后重载以刷新全部会话。
       await bindWorkspaceToAccount();
       await useEnterpriseStore.getState().pushAllToBackend();

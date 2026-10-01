@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { DatabaseZap, Loader2, Search } from "lucide-react";
 import { Panel, PanelHeader } from "@/components/enterprise/EnterpriseUI";
 import { Select } from "@/components/ui/Select";
@@ -21,6 +21,7 @@ export default function ExternalDataPanel() {
   const [rows, setRows] = useState<Array<Record<string, unknown>>>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const loadSeq = useRef(0);
   // provider-specific params
   const [datasets, setDatasets] = useState<Array<{ id: string; label: string; category: string }>>([]);
   const [dataset, setDataset] = useState("");
@@ -53,6 +54,7 @@ export default function ExternalDataPanel() {
   }, []);
 
   const load = useCallback(async () => {
+    const seq = ++loadSeq.current;
     setLoading(true);
     setError("");
     try {
@@ -64,13 +66,16 @@ export default function ExternalDataPanel() {
       else url = `/api/data-sources/sec?cik=${encodeURIComponent(cik)}&tag=${encodeURIComponent(tag)}&limit=10`;
       const resp = await backendAuthedFetch(url);
       const payload = await resp.json() as { data?: { rows?: Array<Record<string, unknown>> }; error?: string };
+      if (seq !== loadSeq.current) return; // 数据源已切换，丢弃过期响应
       if (!resp.ok) throw new Error(payload?.error || "加载外部数据失败");
       setRows(payload.data?.rows ?? []);
     } catch (reason) {
-      setRows([]);
-      setError(reason instanceof Error ? reason.message : "加载外部数据失败");
+      if (seq === loadSeq.current) {
+        setRows([]);
+        setError(reason instanceof Error ? reason.message : "加载外部数据失败");
+      }
     } finally {
-      setLoading(false);
+      if (seq === loadSeq.current) setLoading(false);
     }
   }, [provider, dataset, base, symbols, country, indicator, name, cik, tag]);
 

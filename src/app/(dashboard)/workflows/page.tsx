@@ -6,6 +6,7 @@ import { EmptyStateCard, RiskBadge, PageIntro, Panel, PanelHeader } from "@/comp
 import EnterpriseDialog from "@/components/enterprise/EnterpriseDialog";
 import { Select } from "@/components/ui/Select";
 import { useEnterpriseStore } from "@/store/enterprise-store";
+import { todayLocalISO } from "@/lib/utils";
 import type { RiskLevel, WorkflowTask } from "@/types/enterprise";
 
 const stages = ["待处理","处理中","待复核","已完成"] as const;
@@ -13,7 +14,7 @@ const stages = ["待处理","处理中","待复核","已完成"] as const;
 /** 真实超期判定：due 为日期输入值（YYYY-MM-DD），小于今天且未完成即超期。 */
 function isOverdue(due: string, stage: string): boolean {
   if (stage === "已完成" || !/^\d{4}-\d{2}-\d{2}$/.test(due)) return false;
-  return due < new Date().toISOString().slice(0, 10);
+  return due < todayLocalISO();
 }
 
 export default function WorkflowsPage() {

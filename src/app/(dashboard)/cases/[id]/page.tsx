@@ -105,8 +105,11 @@ export default function CaseWorkspacePage() {
     const anchor = document.createElement("a");
     anchor.href = url;
     anchor.download = `${project.company}-${project.title}-研判报告.md`.replace(/[\\/:*?"<>|]/g, "-");
+    document.body.appendChild(anchor);
     anchor.click();
-    URL.revokeObjectURL(url);
+    document.body.removeChild(anchor);
+    // 延迟释放：立即 revoke 会让部分浏览器（Firefox/Safari）下载空文件。
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   const loadExternal = async () => {

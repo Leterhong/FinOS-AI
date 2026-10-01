@@ -81,6 +81,11 @@ def run_orchestration(db: Session, user: User, task_type: str, question: str) ->
         db.commit()
         return result
     except Exception as e:  # noqa: BLE001
+        # 异常可能来自数据库，先回滚失败事务再写失败状态，避免 PendingRollbackError。
+        try:
+            db.rollback()
+        except Exception:  # noqa: BLE001
+            pass
         task.status = "failed"
         task.result = json.dumps({"error": str(e)}, ensure_ascii=False)
         task.finished_at = datetime.now(timezone.utc)

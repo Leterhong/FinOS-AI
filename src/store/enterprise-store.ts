@@ -81,6 +81,10 @@ interface EnterpriseState {
   /** 用当前工作区规则对已解析资料重跑确定性规则评估（后建规则也能生效）。 */
   rerunRulesForDocument: (id: string) => { hits: number; total: number } | null;
   clearWorkspace: () => void;
+  /** 本地清空工作区（同时清服务端备份由调用方决定前先清本地缓存用）。 */
+  purgeLocalWorkspace: () => void;
+  /** 账号切换保护：本地工作区若归属其它账号则先清空；返回是否允许迁移本地数据。 */
+  guardWorkspaceOwnership: (accountId: string) => boolean;
 }
 
 /** 各实体的服务端推送通道与载荷映射（字段对齐 backend/enterprise/router.py）。 */
@@ -173,6 +177,13 @@ const uid = (prefix: string) =>
     : `${prefix}-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 
 const RISK_DONE = new Set<RiskSignal["status"]>(["已确认", "已缓释"]);
+
+const RISK_LEVELS = new Set(["critical", "high", "medium", "low"]);
+const RISK_STATUSES = new Set(["待核验", "已确认", "已缓释"]);
+const normLevel = (value: unknown): RiskSignal["level"] =>
+  (RISK_LEVELS.has(String(value)) ? String(value) : "medium") as RiskSignal["level"];
+const normStatus = (value: unknown): RiskSignal["status"] =>
+  (RISK_STATUSES.has(String(value)) ? String(value) : "待核验") as RiskSignal["status"];
 
 /**
  * 项目进度联动：由关联资料解析、风险核验、流程任务推进三类事实推导，
@@ -679,9 +690,9 @@ export const useEnterpriseStore = create<EnterpriseState>()(
             }), (item) => item.updatedAt ?? item.uploadedAt).filter((item) => !prunedCaseIds.has(item.caseId)),
             risks: mergeById(state.risks, snapshot.risks, (row) => ({
               id: String(row.id), caseId: String(row.caseId ?? ""), company: String(row.company ?? ""),
-              title: String(row.title ?? ""), level: (row.level as RiskSignal["level"]) ?? "medium",
+              title: String(row.title ?? ""), level: normLevel(row.level),
               evidence: String(row.evidence ?? ""), rule: String(row.rule ?? ""),
-              impact: String(row.impact ?? ""), status: (row.status as RiskSignal["status"]) ?? "待核验",
+              impact: String(row.impact ?? ""), status: normStatus(row.status),
               origin: row.origin as RiskSignal["origin"], factIds: row.factIds as string[] | undefined,
               ruleCodes: row.ruleCodes as string[] | undefined, sourceRunId: row.sourceRunId as string | undefined,
               verificationNote: row.verificationNote as string | undefined, verifiedBy: row.verifiedBy as string | undefined,
@@ -699,7 +710,7 @@ export const useEnterpriseStore = create<EnterpriseState>()(
               id: String(row.id), caseId: String(row.caseId ?? "") || undefined,
               title: String(row.title ?? ""), caseName: String(row.caseName ?? ""),
               assignee: String(row.assignee ?? ""), due: String(row.due ?? ""),
-              priority: (row.priority as WorkflowTask["priority"]) ?? "medium",
+              priority: normLevel(row.priority ?? "medium"),
               stage: (row.stage as WorkflowTask["stage"]) ?? "待处理", note: row.note as string | undefined,
               history: row.history as WorkflowTask["history"],
               updatedAt: String(row.updatedAt ?? ""),
@@ -722,6 +733,22 @@ export const useEnterpriseStore = create<EnterpriseState>()(
           for (const item of current[key]) pushDelete(syncMap[key].api, item.id);
         }
         set(emptyWorkspace());
+      },
+      purgeLocalWorkspace: () => {
+        // 仅清本地缓存，不触碰任何账号的服务端数据（登出/切换账号用）。
+        set(emptyWorkspace());
+      },
+      guardWorkspaceOwnership: (accountId: string) => {
+        if (typeof window === "undefined") return true;
+        const key = "finos-workspace-owner";
+        const previous = window.localStorage.getItem(key);
+        window.localStorage.setItem(key, accountId);
+        if (previous && previous !== accountId) {
+          // 本地残留的是上一位账号的缓存：清空后再绑定，避免跨账号数据串号。
+          set(emptyWorkspace());
+          return false;
+        }
+        return true;
       },
     }),
     {

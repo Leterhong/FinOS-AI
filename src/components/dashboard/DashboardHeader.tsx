@@ -81,7 +81,7 @@ export default function DashboardHeader({ onMenuToggle }: { onMenuToggle?: () =>
       initialEmail={inviteEmail}
       onClose={() => setAccountOpen(false)}
       onSuccess={() => window.location.reload()}
-      onLogout={() => { void logoutAccount().then(resetWorkspaceSession).then(() => window.location.reload()); }}
+      onLogout={() => { useEnterpriseStore.getState().purgeLocalWorkspace(); try { window.localStorage.removeItem("finos-workspace-owner"); } catch { /* 忽略 */ } void logoutAccount().then(resetWorkspaceSession).then(() => window.location.reload()); }}
     />
   </header>;
 }

@@ -23,6 +23,9 @@ services:
     container_name: finos-db
     restart: unless-stopped
     mem_limit: 512m
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-finos}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-finos_dev_password}
@@ -46,6 +49,9 @@ services:
     container_name: finos-redis
     restart: unless-stopped
     mem_limit: 256m
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
     command:
       ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-finos_dev_redis}"]
     volumes:
@@ -68,6 +74,9 @@ services:
     container_name: finos-api
     restart: unless-stopped
     mem_limit: 1g
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
     environment:
       APP_NAME: ${APP_NAME:-FinOS AI Backend}
       DEBUG: ${DEBUG:-false}
@@ -85,8 +94,9 @@ services:
       AI_RATE_LIMIT_PER_MINUTE: ${AI_RATE_LIMIT_PER_MINUTE:-30}
       AI_MAX_TOKENS: ${AI_MAX_TOKENS:-8192}
       AI_MAX_INPUT_CHARS: ${AI_MAX_INPUT_CHARS:-100000}
-      # 默认不信任任何代理；经 nginx 时可设为 nginx 容器 IP
-      TRUSTED_PROXY_IPS: ${TRUSTED_PROXY_IPS:-}
+      # 经 nginx 反向代理时信任 nginx 容器（固定 IP，见下方 nginx.networks）；
+      # 覆写后的 X-Forwarded-For 最右段即真实客户端，登录限流才能按真实 IP 生效。
+      TRUSTED_PROXY_IPS: ${TRUSTED_PROXY_IPS:-172.28.0.10}
       # 自托管 Ollama 等内网模型地址：默认禁止，需要时显式置 true
       AI_ALLOW_PRIVATE_ENDPOINTS: ${AI_ALLOW_PRIVATE_ENDPOINTS:-}
       BACKUP_API_KEY: ${BACKUP_API_KEY:-}
@@ -120,6 +130,12 @@ services:
     container_name: finos-web
     restart: unless-stopped
     mem_limit: 1g
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+    volumes:
+      # 前端运行时数据（模型配置 / 技能 / 用量）持久化，避免重建后丢失
+      - finos-web-data:/app/.data
     environment:
       NODE_ENV: production
       NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:-}
@@ -149,6 +165,9 @@ services:
     container_name: finos-nginx
     restart: unless-stopped
     mem_limit: 128m
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
     ports:
       - "${HTTP_PORT:-80}:80"
     depends_on:
@@ -162,13 +181,20 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
-    networks: [finos-net]
+    networks:
+      finos-net:
+        # 固定 IP，供后端 TRUSTED_PROXY_IPS 精确信任
+        ipv4_address: 172.28.0.10
 
 volumes:
   finos-db-data:
   finos-redis-data:
   finos-api-uploads:
+  finos-web-data:
 
 networks:
   finos-net:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16

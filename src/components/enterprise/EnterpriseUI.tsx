@@ -22,8 +22,16 @@ export const riskMeta: Record<RiskLevel, { label: string; className: string; dot
   low: { label: "低", className: "border-[#4C8DFF]/25 bg-[#4C8DFF]/10 text-[#8AB2FF]", dot: "bg-[#4C8DFF]" },
 };
 
+export function normalizeRiskLevel(level: unknown): RiskLevel {
+  return level === "critical" || level === "high" || level === "medium" || level === "low" ? level : "medium";
+}
+
+export function riskMetaOf(level: unknown) {
+  return riskMeta[normalizeRiskLevel(level)];
+}
+
 export function RiskBadge({ level, className }: { level: RiskLevel; className?: string }) {
-  const meta = riskMeta[level];
+  const meta = riskMetaOf(level);
   return <span className={cn("inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-semibold", meta.className, className)}><span className={cn("h-1.5 w-1.5 rounded-full", meta.dot)} />{meta.label}风险</span>;
 }
 

@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.auth.models import RefreshToken
@@ -26,9 +27,11 @@ from backend.core.response import fail
 from backend.core.security import (
     create_access_token,
     create_refresh_token,
+    decode_access_token,
     decode_refresh_token,
     hash_password,
     is_legacy_password_hash,
+    revoke_access_token,
     verify_password,
 )
 from backend.database import get_db
@@ -132,45 +135,40 @@ def _set_refresh_cookie(response: Response, token: str, request: Request) -> Non
     )
 
 
-def _active_refresh_user(raw: str, db: Session) -> tuple[User, RefreshToken] | None:
-    """返回仍有效的刷新会话；bootstrap 使用它避免把无 cookie 当作 401。"""
-    if not raw:
-        return None
-    payload = decode_refresh_token(raw)
-    if not payload or not payload.get("jti"):
-        return None
-    record = db.scalar(select(RefreshToken).where(RefreshToken.jti == payload["jti"]))
-    if record is None or record.revoked:
-        return None
-    expires_at = record.expires_at
-    if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
-    if expires_at < datetime.now(timezone.utc):
-        record.revoked = True
-        db.add(record)
-        db.commit()
-        return None
-    user = db.get(User, record.user_id)
-    return (user, record) if user is not None else None
-
-
 @router.post("/bootstrap")
 def bootstrap(request: Request, response: Response, db: Session = Depends(get_db)):
     """免登录入口：恢复现有刷新会话，或为当前浏览器创建隔离访客空间。
 
-    与直接调用 ``/refresh`` 不同，本端点在首次访问时始终返回 200，避免浏览器
-    控制台出现预期内的 401；现有真实账户的 refresh cookie 仍会被正常恢复。
+    并发安全：刷新会话轮换采用原子条件更新，避免并发 bootstrap 破坏 refresh
+    单次使用；若会话仍在轮换中返回 409 让调用方重试，而不是静默降级为新访客。
     """
     raw = (request.cookies.get(REFRESH_COOKIE) or "").strip()
-    active = _active_refresh_user(raw, db)
-    if active:
-        user, record = active
-        record.revoked = True
-        db.add(record)
-        tokens = _issue_tokens(db, user)
-        _set_refresh_cookie(response, tokens["refreshToken"], request)
-        db.commit()
-        return ok({"token": tokens["token"], "user": _user_public(user, db), "guest": user.email.endswith("@guest.finos.local")})
+    payload = decode_refresh_token(raw) if raw else None
+    jti = payload.get("jti") if payload else None
+    if jti:
+        record = db.scalar(select(RefreshToken).where(RefreshToken.jti == jti))
+        if record is not None and record.user_id:
+            # 原子认领：仅当尚未吊销时轮换。
+            claimed = db.execute(
+                update(RefreshToken)
+                .where(RefreshToken.id == record.id, RefreshToken.revoked.is_(False))
+                .values(revoked=True)
+            ).rowcount
+            db.commit()
+            if not claimed:
+                # 另一并发请求已轮换该会话：不新建访客，交调用方用新 cookie 重试。
+                return fail("会话正在刷新，请重试", status_code=409)
+            expires_at = record.expires_at
+            if expires_at is not None and expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            user = db.get(User, record.user_id)
+            if user is not None and (expires_at is None or expires_at >= datetime.now(timezone.utc)):
+                tokens = _issue_tokens(db, user)
+                _set_refresh_cookie(response, tokens["refreshToken"], request)
+                db.commit()
+                return ok({"token": tokens["token"], "user": _user_public(user, db), "guest": user.email.endswith("@guest.finos.local")})
+            # 会话确实已过期：清理失效 cookie 后走访客恢复。
+            response.delete_cookie(REFRESH_COOKIE, path="/api/auth", secure=_secure_request(request), samesite="lax")
 
     guest_id = secrets.token_hex(12)
     user = User(
@@ -200,7 +198,12 @@ def register(body: RegisterIn, request: Request, response: Response, db: Session
 
     user = User(email=email, password_hash=hash_password(body.password))
     db.add(user)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # 并发同邮箱注册：唯一约束冲突，返回 409 而非 500。
+        db.rollback()
+        return fail("该邮箱已注册", status_code=409)
     db.refresh(user)
     write_audit(db, user_id=user.id, action="auth.register", resource="account", request=request)
     tokens = _issue_tokens(db, user)
@@ -323,6 +326,10 @@ def logout(body: RefreshIn, request: Request, response: Response, db: Session = 
                 write_audit(db, user_id=record.user_id, action="auth.logout", resource="account", request=request)
                 db.commit()
                 log_event(logger, "info", "auth.logout.ok", user_id=record.user_id, ip=client_ip(request))
+    # 同时吊销当前 Access Token（加入短时撤销集），避免登出后仍有最长 15 分钟可用窗口。
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        revoke_access_token(decode_access_token(auth_header.removeprefix("Bearer ").strip()))
     response.delete_cookie(REFRESH_COOKIE, path="/api/auth", secure=_secure_request(request), samesite="lax")
     return ok({"loggedOut": True}, "已退出登录")
 

@@ -44,9 +44,11 @@ function ratioMetric(input: {
 }): FinancialMetric | null {
   if (!input.numerator || !input.denominator) return null;
   const denominator = normalized(input.denominator);
-  if (!Number.isFinite(denominator) || denominator === 0) return null;
-  const raw = normalized(input.numerator) / denominator;
+  const numerator = normalized(input.numerator);
+  if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator === 0) return null;
+  const raw = numerator / denominator;
   const value = input.percent ? raw * 100 : raw;
+  if (!Number.isFinite(value)) return null;
   return {
     id: input.id,
     name: input.name,

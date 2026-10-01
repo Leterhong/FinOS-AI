@@ -429,6 +429,9 @@ def upsert_case(body: CaseIn, request: Request, user: User = Depends(get_current
         return fail("项目不存在", status_code=404)
     else:
         action = "case.update"
+        # 密级降级会扩大可见面，必须 admin；上调维持 editor。
+        if CLASSIFICATION_ORDER.get(body.classification, 1) < CLASSIFICATION_ORDER.get(row.classification, 1) and not can_access_case(db, user, row, "admin"):
+            return fail("降级数据密级需要 admin 权限", status_code=403)
     _apply_case(row, body)
     record_governance_audit(db, user=user, action=action, resource_type="case", resource_id=row.id, organization_id=row.organization_id, case_id=row.id, details={"classification": row.classification}, request=request)
     db.commit()
@@ -464,6 +467,9 @@ def upsert_document(body: DocumentIn, request: Request, user: User = Depends(get
         return fail("资料不存在", status_code=404)
     else:
         action = "document.update"
+        parent_case = case or (db.get(EnterpriseCase, row.case_id) if row.case_id else None)
+        if CLASSIFICATION_ORDER.get(body.classification, 1) < CLASSIFICATION_ORDER.get(row.classification, 1) and (parent_case is None or not can_access_case(db, user, parent_case, "admin")):
+            return fail("降级数据密级需要 admin 权限", status_code=403)
     _apply_document(row, body)
     record_governance_audit(db, user=user, action=action, resource_type="document", resource_id=row.id, organization_id=case.organization_id if case else "", case_id=row.case_id, details={"classification": row.classification, "status": row.status}, request=request)
     db.commit()

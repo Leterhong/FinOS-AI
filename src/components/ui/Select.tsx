@@ -11,7 +11,7 @@
  */
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Check, ChevronDown } from "lucide-react";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
 export interface SelectOption {
@@ -48,10 +48,21 @@ export function Select({
   const controlled = value !== undefined;
   const [current, setCurrent] = useState(controlled ? value! : defaultValue);
   const nativeId = useId();
+  const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (controlled) setCurrent(value!);
   }, [controlled, value]);
+
+  // 原生 form.reset() 只重置 sr-only 的原生 select，不会回写组件内部 state；
+  // 监听所属 form 的 reset 事件，保持显示值与重置后的值一致。
+  useEffect(() => {
+    const form = rootRef.current?.closest("form");
+    if (!form) return;
+    const onReset = () => setCurrent(controlled ? value! : defaultValue);
+    form.addEventListener("reset", onReset);
+    return () => form.removeEventListener("reset", onReset);
+  }, [controlled, value, defaultValue]);
 
   const selected = options.find((option) => option.value === current);
   const choose = (next: string) => {
@@ -60,7 +71,7 @@ export function Select({
   };
 
   return (
-    <div className={cn("relative", className)}>
+    <div ref={rootRef} className={cn("relative", className)}>
       <select
         id={nativeId}
         name={name}

@@ -222,9 +222,13 @@ def _db_transactions(ctx, limit: int = 30) -> dict:
 @tool("rag.search", "检索本人知识库", {"query": "str", "topK": "int"})
 def _rag_search(ctx, query: str = "", topK: int = 3) -> dict:
     try:
-        from backend.services.rag.service import search as rag_search
+        from backend.services.rag.service import retrieve_knowledge
 
-        hits = rag_search(ctx.db, ctx.user, query, top_k=int(topK))
+        result = retrieve_knowledge(query, ctx.user.id, top_k=max(1, min(int(topK), 20)))
+        hits = [
+            {"title": hit.title, "category": hit.category, "text": hit.text, "score": round(hit.score, 4), "scope": hit.scope}
+            for hit in result.hits
+        ]
         return {"hits": hits, "count": len(hits)}
     except Exception:  # noqa: BLE001
         return {"ok": False, "hits": [], "error": "知识库暂不可用"}
