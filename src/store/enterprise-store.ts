@@ -624,6 +624,9 @@ export const useEnterpriseStore = create<EnterpriseState>()(
             merged += additions + updated;
             return result;
           };
+          // 权限回收后服务端不再返回该项目：清理本地缓存的服务端归属项目及其子数据。
+          const remoteCaseIds = new Set(snapshot.cases.map((row) => String(row.id)));
+          const prunedCaseIds = new Set(state.cases.filter((item) => item.organizationId && !remoteCaseIds.has(item.id)).map((item) => item.id));
           return {
             cases: deriveCaseProgress({
               cases: mergeById(state.cases, snapshot.cases, (row) => ({
@@ -640,7 +643,7 @@ export const useEnterpriseStore = create<EnterpriseState>()(
               documents: state.documents,
               risks: state.risks,
               tasks: state.tasks,
-            }).cases,
+            }).cases.filter((item) => !prunedCaseIds.has(item.id)),
             documents: mergeById(state.documents, snapshot.documents, (row) => ({
               id: String(row.id), caseId: String(row.caseId ?? ""), name: String(row.name ?? ""),
               classification: (row.classification as AnalysisDocument["classification"]) ?? "internal",
@@ -654,7 +657,7 @@ export const useEnterpriseStore = create<EnterpriseState>()(
               uncertainties: row.uncertainties as string[] | undefined,
               extractionMethod: row.extractionMethod as AnalysisDocument["extractionMethod"],
               ocrUsed: Boolean(row.ocrUsed), tables: row.tables as AnalysisDocument["tables"],
-            }), (item) => item.uploadedAt),
+            }), (item) => item.uploadedAt).filter((item) => !prunedCaseIds.has(item.caseId)),
             risks: mergeById(state.risks, snapshot.risks, (row) => ({
               id: String(row.id), caseId: String(row.caseId ?? ""), company: String(row.company ?? ""),
               title: String(row.title ?? ""), level: (row.level as RiskSignal["level"]) ?? "medium",
@@ -664,7 +667,7 @@ export const useEnterpriseStore = create<EnterpriseState>()(
               ruleCodes: row.ruleCodes as string[] | undefined, sourceRunId: row.sourceRunId as string | undefined,
               verificationNote: row.verificationNote as string | undefined, verifiedBy: row.verifiedBy as string | undefined,
               verifiedAt: row.verifiedAt as string | undefined, mitigationNote: row.mitigationNote as string | undefined,
-            }), (item) => item.updatedAt ?? ""),
+            }), (item) => item.updatedAt ?? "").filter((item) => !prunedCaseIds.has(item.caseId)),
             rules: mergeById(state.rules, snapshot.rules, (row) => ({
               id: String(row.id), code: String(row.code ?? ""), name: String(row.name ?? ""),
               organizationId: row.organizationId as string | undefined,
@@ -679,13 +682,13 @@ export const useEnterpriseStore = create<EnterpriseState>()(
               priority: (row.priority as WorkflowTask["priority"]) ?? "medium",
               stage: (row.stage as WorkflowTask["stage"]) ?? "待处理", note: row.note as string | undefined,
               history: row.history as WorkflowTask["history"],
-            }), (item) => item.updatedAt ?? ""),
+            }), (item) => item.updatedAt ?? "").filter((item) => !item.caseId || !prunedCaseIds.has(item.caseId)),
             briefs: mergeById(state.briefs, snapshot.briefs, (row) => ({
               id: String(row.id), caseId: String(row.caseId ?? "") || undefined,
               title: String(row.title ?? ""), summary: String(row.summary ?? ""),
               topic: String(row.topic ?? ""), model: (row.model as string | undefined),
               createdAt: String(row.createdAt ?? ""),
-            }), (item) => item.createdAt),
+            }), (item) => item.createdAt).filter((item) => !item.caseId || !prunedCaseIds.has(item.caseId)),
           };
         });
         set({ serverSync: "synced" });

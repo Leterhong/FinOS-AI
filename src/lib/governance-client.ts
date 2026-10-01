@@ -16,3 +16,7 @@ export function governancePost<T>(path: string, body: unknown): Promise<T> {
 export function governancePatch<T>(path: string, body: unknown): Promise<T> {
   return governanceApi<T>(path, { method: "PATCH", body: JSON.stringify(body) });
 }
+
+export function governanceDelete<T>(path: string): Promise<T> {
+  return governanceApi<T>(path, { method: "DELETE" });
+}

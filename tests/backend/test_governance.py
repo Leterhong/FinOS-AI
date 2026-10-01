@@ -406,3 +406,26 @@ def test_invite_with_project_grant_on_accept(client, user_a, user_b):
 
     after = client.get("/api/enterprise/snapshot", headers=user_b["headers"]).json()["data"]
     assert any(c["id"] == "CASE-INV-1" for c in after["cases"]), "接受邀请后应可访问被授权项目"
+
+
+def test_remove_member_notifies_and_revokes_grant(client, user_a, user_b):
+    """移除成员：撤销项目授权，并站内通知被移除的人。"""
+    org = client.get("/api/governance/snapshot", headers=user_a["headers"]).json()["data"]["organization"]["id"]
+    assert client.post("/api/enterprise/cases", json={"id": "CASE-DEL-1", "company": "移除企业", "title": "t"}, headers=user_a["headers"]).status_code == 200
+    invited = client.post(
+        "/api/governance/members",
+        json={"email": user_b["email"], "role": "analyst", "clearance": "internal", "organizationId": org, "caseId": "CASE-DEL-1", "permission": "viewer"},
+        headers=user_a["headers"],
+    ).json()["data"]
+    client.post(f"/api/governance/members/{invited['id']}/accept", headers=user_b["headers"])
+    assert any(c["id"] == "CASE-DEL-1" for c in client.get("/api/enterprise/snapshot", headers=user_b["headers"]).json()["data"]["cases"])
+
+    removed = client.delete(f"/api/governance/members/{invited['id']}?reason=合作结束", headers=user_a["headers"])
+    assert removed.status_code == 200, removed.text
+    assert removed.json()["data"]["notified"] is True
+
+    after = client.get("/api/enterprise/snapshot", headers=user_b["headers"]).json()["data"]
+    assert not any(c["id"] == "CASE-DEL-1" for c in after["cases"]), "移除后应撤销项目授权"
+
+    notifications = client.get("/api/notifications?unread=true", headers=user_b["headers"]).json()["data"]["notifications"]
+    assert any("移出组织" in n["title"] and "合作结束" in n["body"] for n in notifications), "应站内通知被移除成员"

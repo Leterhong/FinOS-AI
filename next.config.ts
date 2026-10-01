@@ -6,6 +6,8 @@ const BACKEND_URL = process.env.BACKEND_PROXY_URL || "http://127.0.0.1:8300";
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // 构建期限制 worker 数量，降低容器内构建内存峰值（避免被 OOM Killer 终止）。
+  experimental: { cpus: 1 },
   async headers() {
     return [
       {

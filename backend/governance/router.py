@@ -46,6 +46,7 @@ from backend.governance.service import (
     record_rule_revision,
     rule_accessible,
 )
+from backend.notification.models import Notification
 from backend.security.network import UnsafeOutboundUrl, validate_public_http_url
 from backend.user.models import User
 
@@ -378,17 +379,40 @@ def accept_invite(member_id: str, request: Request, user: User = Depends(get_cur
 
 
 @router.delete("/members/{member_id}")
-def remove_member(member_id: str, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def remove_member(member_id: str, request: Request, reason: str | None = None, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     row = db.get(OrganizationMember, member_id)
     if row is None or member_for_organization(db, user, row.organization_id) is None:
         return fail("成员不存在", status_code=404)
     _require_admin(db, user, row.organization_id)
     if row.role == "owner":
         return fail("不能移除组织所有者", status_code=409)
+
+    # 解析被移除成员对应的账号（已接受则 user_id 已知，未接受则按邮箱回查）。
+    target = db.get(User, row.user_id) if row.user_id else db.scalar(select(User).where(User.email == row.email))
+    org = db.get(Organization, row.organization_id)
+    clean_reason = (reason or "").strip()[:500]
+    email = row.email
+
+    # 撤销该成员在本组织的全部项目授权。
+    if target is not None:
+        for grant in db.scalars(select(ProjectGrant).where(ProjectGrant.organization_id == row.organization_id, ProjectGrant.user_id == target.id)):
+            db.delete(grant)
+
     db.delete(row)
-    record_governance_audit(db, user=user, action="member.delete", resource_type="member", resource_id=member_id, organization_id=row.organization_id, request=request)
+    record_governance_audit(db, user=user, action="member.delete", resource_type="member", resource_id=member_id, organization_id=row.organization_id, details={"email": email, "reason": clean_reason}, request=request)
+
+    # 站内通知被移除成员（若其账号存在）。
+    if target is not None:
+        db.add(Notification(
+            user_id=target.id,
+            source="organization",
+            category="system",
+            severity="medium",
+            title=f"你已被移出组织「{org.name if org else row.organization_id}」",
+            body=clean_reason or "管理员已将你移出该组织，相关项目授权已撤销。",
+        ))
     db.commit()
-    return ok({"deleted": True})
+    return ok({"deleted": True, "notified": target is not None})
 
 
 @router.post("/grants")
