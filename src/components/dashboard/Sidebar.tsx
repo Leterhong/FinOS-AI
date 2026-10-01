@@ -71,7 +71,7 @@ export default function Sidebar({ open = false, onClose }: { open?: boolean; onC
           {collapsed ? <PanelLeftOpen className="h-3.5 w-3.5" /> : <PanelLeftClose className="h-3.5 w-3.5" />}
         </button>
       </div>
-      <nav className={cn("min-h-0 flex-1 py-4", collapsed ? "scrollbar-none lg:px-2" : "scrollbar-thin px-3")}>
+      <nav className={cn("min-h-0 flex-1 overflow-y-auto py-4", collapsed ? "scrollbar-none lg:px-2" : "scrollbar-thin px-3")}>
         {groups.map(group => <div key={group.label} className="mb-5">
           <p className={cn("mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-[.18em] text-slate-600", collapsed && "lg:hidden")}>{group.label}</p>
           <div className="space-y-0.5">{group.items.map(item => {
@@ -103,7 +103,7 @@ export default function Sidebar({ open = false, onClose }: { open?: boolean; onC
           })}</div>
         </div>)}
       </nav>
-      <div className={cn("border-t border-white/[0.06]", collapsed ? "lg:px-2" : "p-3")}>
+      <div className={cn("shrink-0 border-t border-white/[0.06]", collapsed ? "lg:px-2" : "p-3")}>
         {collapsed ? (
           <Tooltip label={modelReady ? `AI 已连接 · ${active?.displayName ?? ""}` : "模型未配置"} side="right" showOn="lg-hover" className="w-full">
             <Link

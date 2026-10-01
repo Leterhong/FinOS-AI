@@ -91,6 +91,8 @@ export interface AnalysisDocument {
   facts: number;
   ruleHits: number;
   uploadedAt: string;
+  /** 最近一次本地修改时间，用于跨设备 LWW 合并（复核事实等）。 */
+  updatedAt?: string;
   analysis?: string;
   model?: string;
   error?: string;

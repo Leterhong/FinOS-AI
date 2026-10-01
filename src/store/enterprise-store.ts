@@ -172,8 +172,6 @@ const uid = (prefix: string) =>
     ? `${prefix}-${crypto.randomUUID().slice(0, 12).toUpperCase()}`
     : `${prefix}-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 
-const today = () => new Date().toISOString().slice(0, 10);
-
 const RISK_DONE = new Set<RiskSignal["status"]>(["已确认", "已缓释"]);
 
 /**
@@ -277,6 +275,7 @@ export const useEnterpriseStore = create<EnterpriseState>()(
           facts: 0,
           ruleHits: 0,
           uploadedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
         };
         set((state) => ({ documents: [item, ...state.documents] }));
         pushEntity("documents", syncMap.documents.payload(item));
@@ -311,6 +310,7 @@ export const useEnterpriseStore = create<EnterpriseState>()(
               extractionMethod: detail?.extractionMethod ?? "text",
               ocrUsed: detail?.ocrUsed ?? false,
               tables: detail?.tables ?? [],
+              updatedAt: new Date().toISOString(),
             };
           }),
         }));
@@ -322,6 +322,7 @@ export const useEnterpriseStore = create<EnterpriseState>()(
           documents: state.documents.map((document) => document.id === documentId
             ? {
                 ...document,
+                updatedAt: new Date().toISOString(),
                 factItems: (document.factItems ?? []).map((fact) => fact.id === factId
                   ? { ...fact, reviewStatus: input.status, reviewedBy: input.reviewer, reviewedAt: new Date().toISOString(), reviewNote: input.note }
                   : fact),
@@ -334,14 +335,14 @@ export const useEnterpriseStore = create<EnterpriseState>()(
       failDocumentAnalysis: (id, error) => {
         withProgress(set, (state) => ({
           documents: state.documents.map((document) => document.id === id
-            ? { ...document, status: "分析失败" as const, error }
+            ? { ...document, status: "分析失败" as const, error, updatedAt: new Date().toISOString() }
             : document),
         }));
         const doc = get().documents.find((d) => d.id === id);
         if (doc) pushEntity("documents", syncMap.documents.payload(doc));
       },
       addRisk: (input) => {
-        const risk: RiskSignal = { ...input, id: uid("RISK"), status: "待核验", origin: input.origin ?? "人工登记" };
+        const risk: RiskSignal = { ...input, id: uid("RISK"), status: "待核验", origin: input.origin ?? "人工登记", updatedAt: new Date().toISOString() };
         withProgress(set, (state) => ({ risks: [risk, ...state.risks] }));
         pushEntity("risks", syncMap.risks.payload(risk));
         return risk;
@@ -354,6 +355,7 @@ export const useEnterpriseStore = create<EnterpriseState>()(
             verificationNote: input.note,
             verifiedBy: input.reviewer,
             verifiedAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
           } : risk),
         }));
         const risk = get().risks.find((r) => r.id === id);
@@ -365,6 +367,7 @@ export const useEnterpriseStore = create<EnterpriseState>()(
             ...risk,
             status: "已缓释",
             mitigationNote: `${input.reviewer}：${input.note}`,
+            updatedAt: new Date().toISOString(),
           } : risk),
         }));
         const risk = get().risks.find((r) => r.id === id);
@@ -431,7 +434,7 @@ export const useEnterpriseStore = create<EnterpriseState>()(
         const outcomes = evaluateRules(facts, structured);
         withProgress(set, (s) => ({
           documents: s.documents.map((d) => d.id === id
-            ? { ...d, ruleOutcomes: outcomes, ruleHits: outcomes.filter((o) => o.hit).length }
+            ? { ...d, ruleOutcomes: outcomes, ruleHits: outcomes.filter((o) => o.hit).length, updatedAt: new Date().toISOString() }
             : d),
         }));
         const updated = get().documents.find((d) => d.id === id);
@@ -444,6 +447,7 @@ export const useEnterpriseStore = create<EnterpriseState>()(
             ...input,
             id: uid("TASK"),
             stage: "待处理",
+            updatedAt: new Date().toISOString(),
             history: [{ id: uid("EVT"), action: "创建任务", actor: input.assignee || "待指派", at: new Date().toISOString() }],
           }, ...state.tasks],
         }));
@@ -458,6 +462,7 @@ export const useEnterpriseStore = create<EnterpriseState>()(
             return {
               ...task,
               ...patch,
+              updatedAt: new Date().toISOString(),
               history: [{
                 id: uid("EVT"),
                 action: stageChanged ? "调整任务阶段" : "更新任务",
@@ -482,6 +487,7 @@ export const useEnterpriseStore = create<EnterpriseState>()(
               return {
                 ...task,
                 stage: nextStage,
+                updatedAt: new Date().toISOString(),
                 history: [{ id: uid("EVT"), action: "推进任务", actor, note, at: new Date().toISOString(), fromStage: task.stage, toStage: nextStage }, ...(task.history ?? [])],
               };
             }),
@@ -662,14 +668,15 @@ export const useEnterpriseStore = create<EnterpriseState>()(
               kind: String(row.kind ?? "企业资料"), pages: 0,
               status: (row.status as AnalysisDocument["status"]) ?? "已解析",
               confidence: 0, facts: Number(row.facts ?? 0), ruleHits: Number(row.ruleHits ?? 0),
-              uploadedAt: String(row.updatedAt ?? ""), analysis: (row.analysis as string | undefined),
+              uploadedAt: String(row.uploadedAt ?? row.updatedAt ?? ""), analysis: (row.analysis as string | undefined),
               model: (row.model as string | undefined), error: (row.error as string | undefined),
               factItems: row.factItems as AnalysisDocument["factItems"],
               ruleOutcomes: row.ruleOutcomes as AnalysisDocument["ruleOutcomes"],
               uncertainties: row.uncertainties as string[] | undefined,
               extractionMethod: row.extractionMethod as AnalysisDocument["extractionMethod"],
               ocrUsed: Boolean(row.ocrUsed), tables: row.tables as AnalysisDocument["tables"],
-            }), (item) => item.uploadedAt).filter((item) => !prunedCaseIds.has(item.caseId)),
+              updatedAt: String(row.updatedAt ?? ""),
+            }), (item) => item.updatedAt ?? item.uploadedAt).filter((item) => !prunedCaseIds.has(item.caseId)),
             risks: mergeById(state.risks, snapshot.risks, (row) => ({
               id: String(row.id), caseId: String(row.caseId ?? ""), company: String(row.company ?? ""),
               title: String(row.title ?? ""), level: (row.level as RiskSignal["level"]) ?? "medium",
@@ -679,6 +686,7 @@ export const useEnterpriseStore = create<EnterpriseState>()(
               ruleCodes: row.ruleCodes as string[] | undefined, sourceRunId: row.sourceRunId as string | undefined,
               verificationNote: row.verificationNote as string | undefined, verifiedBy: row.verifiedBy as string | undefined,
               verifiedAt: row.verifiedAt as string | undefined, mitigationNote: row.mitigationNote as string | undefined,
+              updatedAt: String(row.updatedAt ?? ""),
             }), (item) => item.updatedAt ?? "").filter((item) => !prunedCaseIds.has(item.caseId)),
             rules: mergeById(state.rules, snapshot.rules, (row) => ({
               id: String(row.id), code: String(row.code ?? ""), name: String(row.name ?? ""),
@@ -694,6 +702,7 @@ export const useEnterpriseStore = create<EnterpriseState>()(
               priority: (row.priority as WorkflowTask["priority"]) ?? "medium",
               stage: (row.stage as WorkflowTask["stage"]) ?? "待处理", note: row.note as string | undefined,
               history: row.history as WorkflowTask["history"],
+              updatedAt: String(row.updatedAt ?? ""),
             }), (item) => item.updatedAt ?? "").filter((item) => !item.caseId || !prunedCaseIds.has(item.caseId)),
             briefs: mergeById(state.briefs, snapshot.briefs, (row) => ({
               id: String(row.id), caseId: String(row.caseId ?? "") || undefined,

@@ -1,5 +1,5 @@
 import type { EvidenceFact } from "@/types/enterprise";
-import { metricTopicMatches } from "@/lib/metric-aliases";
+import { canonicalMetricName, metricTopicMatches } from "@/lib/metric-aliases";
 
 export interface FinancialMetric {
   id: string;
@@ -63,19 +63,24 @@ function ratioMetric(input: {
  * 这些阈值仅用于解释，不替代行业规则或授信政策。
  */
 export function calculateFinancialMetrics(facts: EvidenceFact[]): FinancialMetric[] {
-  const currentAssets = findFact(facts, ["流动资产"]);
-  const currentLiabilities = findFact(facts, ["流动负债"]);
-  const totalAssets = findFact(facts, ["资产总计", "总资产"]);
-  const totalLiabilities = findFact(facts, ["负债合计", "总负债"]);
-  const revenue = findFact(facts, ["营业收入", "主营业务收入"]);
-  const averageReceivables = findFact(facts, ["平均应收账款"]);
-  const netProfit = findFact(facts, ["净利润"]);
-  const operatingCashFlow = findFact(facts, ["经营活动产生的现金流量净额", "经营现金流"]);
-  const cash = findFact(facts, ["货币资金", "现金及现金等价物"]);
-  const averageInventory = findFact(facts, ["平均存货", "存货"]);
-  const operatingCost = findFact(facts, ["营业成本", "主营业务成本"]);
-  const interestBearingDebt = findFact(facts, ["有息负债", "计息负债"]);
-  const interestExpense = findFact(facts, ["利息费用", "财务费用"]);
+  // 同期口径：存在期间信息时，只使用最新一期的事实计算比率，避免把不同期间的
+  // 分子/分母拼在一起（如流动资产的 2023 年数与流动负债的 2024 年数）。
+  const periods = [...new Set(facts.filter((fact) => fact.reviewStatus !== "已驳回" && fact.period).map((fact) => String(fact.period)))].sort();
+  const referencePeriod = periods.length ? periods[periods.length - 1] : "";
+  const scoped = referencePeriod ? facts.filter((fact) => !fact.period || String(fact.period) === referencePeriod) : facts;
+  const currentAssets = findFact(scoped, ["流动资产"]);
+  const currentLiabilities = findFact(scoped, ["流动负债"]);
+  const totalAssets = findFact(scoped, ["资产总计", "总资产"]);
+  const totalLiabilities = findFact(scoped, ["负债合计", "总负债"]);
+  const revenue = findFact(scoped, ["营业收入", "主营业务收入"]);
+  const averageReceivables = findFact(scoped, ["平均应收账款"]);
+  const netProfit = findFact(scoped, ["净利润"]);
+  const operatingCashFlow = findFact(scoped, ["经营活动产生的现金流量净额", "经营现金流"]);
+  const cash = findFact(scoped, ["货币资金", "现金及现金等价物"]);
+  const averageInventory = findFact(scoped, ["平均存货", "存货"]);
+  const operatingCost = findFact(scoped, ["营业成本", "主营业务成本"]);
+  const interestBearingDebt = findFact(scoped, ["有息负债", "计息负债"]);
+  const interestExpense = findFact(scoped, ["利息费用", "财务费用"]);
 
   return [
     ratioMetric({ id: "current-ratio", name: "流动比率", category: "偿债", numerator: currentAssets, denominator: currentLiabilities, explain: (value) => value < 1 ? "流动资产低于流动负债，需结合回款和短债结构复核" : "短期偿债覆盖为正，仍需结合行业与资产质量判断" }),
@@ -91,12 +96,14 @@ export function calculateFinancialMetrics(facts: EvidenceFact[]): FinancialMetri
 }
 
 export function calculateFinancialTrends(facts: EvidenceFact[]): FinancialTrend[] {
+  // 同义科目归一到统一口径后再分组，避免「营业收入 / 主营业务收入」各自成组而趋势缺失。
   const groups = new Map<string, EvidenceFact[]>();
   for (const fact of facts) {
     if (!fact.period || fact.reviewStatus === "已驳回") continue;
-    const group = groups.get(fact.topic) ?? [];
+    const key = canonicalMetricName(fact.topic) || fact.topic;
+    const group = groups.get(key) ?? [];
     group.push(fact);
-    groups.set(fact.topic, group);
+    groups.set(key, group);
   }
   const trends: FinancialTrend[] = [];
   for (const [topic, items] of groups) {

@@ -8,9 +8,26 @@ import "server-only";
 
 import { inflateRawSync } from "node:zlib";
 
-/** 从 ZIP buffer 中解出所有条目 */
-export function unzip(buf: Buffer): Map<string, Buffer> {
+export interface UnzipLimits {
+  /** 单条目解压后最大字节数。 */
+  maxEntryBytes?: number;
+  /** 全部条目解压后累计最大字节数（防解压炸弹）。 */
+  maxTotalBytes?: number;
+  /** 最多解压的条目数。 */
+  maxEntries?: number;
+}
+
+const DEFAULT_MAX_ENTRY_BYTES = 20 * 1024 * 1024;
+const DEFAULT_MAX_TOTAL_BYTES = 40 * 1024 * 1024;
+const DEFAULT_MAX_ENTRIES = 200;
+
+/** 从 ZIP buffer 中解出所有条目；超出体积/条目上限时抛错，避免解压炸弹打爆内存。 */
+export function unzip(buf: Buffer, limits: UnzipLimits = {}): Map<string, Buffer> {
+  const maxEntryBytes = limits.maxEntryBytes ?? DEFAULT_MAX_ENTRY_BYTES;
+  const maxTotalBytes = limits.maxTotalBytes ?? DEFAULT_MAX_TOTAL_BYTES;
+  const maxEntries = limits.maxEntries ?? DEFAULT_MAX_ENTRIES;
   const entries = new Map<string, Buffer>();
+  let totalBytes = 0;
   const SIG = 0x04034b50; // local file header signature
 
   let offset = 0;
@@ -39,23 +56,42 @@ export function unzip(buf: Buffer): Map<string, Buffer> {
       entrySize = (next === -1 ? buf.length : next) - dataStart;
     }
 
+    // 先按头部声明的大小拦截：声明的解压体积过大直接拒绝整包。
+    if (uncompSize > maxEntryBytes) {
+      throw new Error("压缩包内单个文件解压后体积过大，已拒绝");
+    }
+    if (method === 0 && entrySize > maxEntryBytes) {
+      throw new Error("压缩包内单个文件体积过大，已拒绝");
+    }
+
     const raw = buf.subarray(dataStart, dataStart + entrySize);
     try {
       let data: Buffer;
       if (method === 0) {
         data = Buffer.from(raw);
       } else if (method === 8) {
-        data = inflateRawSync(raw);
+        // maxOutputLength 在解压过程中强制上限，超限即抛错，避免先分配再校验。
+        data = inflateRawSync(raw, { maxOutputLength: maxEntryBytes });
       } else {
         offset = dataStart + entrySize;
         continue;
       }
+      if (data.length > maxEntryBytes) {
+        throw new Error("压缩包内单个文件解压后体积过大，已拒绝");
+      }
+      totalBytes += data.length;
+      if (totalBytes > maxTotalBytes) {
+        throw new Error("压缩包解压后总体积过大，已拒绝");
+      }
+      if (entries.size >= maxEntries) {
+        throw new Error("压缩包内文件过多，已拒绝");
+      }
       entries.set(name, data);
-    } catch {
-      // 单条目解压失败不影响其他条目
+    } catch (error) {
+      // 体积类错误必须向上抛出；其它损坏条目跳过，不影响其他条目。
+      if (error instanceof Error && error.message.includes("已拒绝")) throw error;
     }
 
-    void uncompSize;
     offset = dataStart + entrySize;
   }
 

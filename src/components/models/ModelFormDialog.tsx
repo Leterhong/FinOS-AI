@@ -113,6 +113,21 @@ export default function ModelFormDialog({ open, onClose, editing }: Props) {
 
   async function handleTest() {
     setTestState(null);
+    // 编辑态未重新输入密钥时，直接测试已保存的配置（服务端使用已存密钥），
+    // 避免因草稿缺少 API Key 而误报「缺少 API Key」。
+    if (editing && !apiKey.trim()) {
+      const saved = await testModel(editing.id);
+      if (saved) {
+        setTestState({
+          ok: saved.ok,
+          msg: saved.ok
+            ? `连接成功${saved.sampleReply ? ` · 回复「${saved.sampleReply}」` : ""}`
+            : saved.error ?? "连接失败",
+          latency: saved.latencyMs,
+        });
+      }
+      return;
+    }
     const r = await testDraft(draft());
     if (r) {
       setTestState({
