@@ -1,5 +1,6 @@
 import type { AgentRun, AnalysisDocument, EnterpriseCase, EnterpriseRule, ResearchBrief, RiskSignal, WorkflowTask } from "@/types/enterprise";
 import { calculateFinancialMetrics } from "@/lib/financial-analysis";
+import { scoreProject } from "@/lib/risk-score";
 
 export interface ReportExternalData {
   fetchedAt: string;
@@ -20,6 +21,7 @@ export function buildEnterpriseReport(input: {
 }): string {
   const facts = input.documents.flatMap((document) => document.factItems ?? []);
   const metrics = calculateFinancialMetrics(facts);
+  const projectRisk = scoreProject(input.risks);
   const pendingItems = [
     ...input.documents.flatMap((document) => document.uncertainties ?? []).map((item) => `- ${item}`),
     ...(facts.some((fact) => fact.reviewStatus === "待复核") ? ["- 仍有结构化事实等待人工复核"] : []),
@@ -49,6 +51,7 @@ export function buildEnterpriseReport(input: {
     "",
     "## 规则与风险",
     "",
+    `- 项目风险评分：${projectRisk.score}/100（${projectRisk.band}风险，未缓释 ${projectRisk.openCount} 条；由等级、核验状态与证据/事实/规则关联确定性计算）`,
     ...(input.risks.length ? input.risks.map((risk) => `- ${risk.status === "待核验" ? "候选风险" : "已确认风险"} ${risk.title}（${risk.level}）\n  - 证据：${risk.evidence}\n  - 事实引用：${risk.factIds?.length ? risk.factIds.join("、") : "未关联结构化事实"}\n  - 规则版本：${risk.ruleCodes?.length ? risk.ruleCodes.join("、") : risk.rule || "未关联规则"}\n  - Agent 运行：${risk.sourceRunId || "人工登记或未记录"}\n  - 复核：${risk.verifiedBy ? `${risk.verifiedBy} · ${risk.verifiedAt ?? ""} · ${risk.verificationNote ?? ""}` : "待人工复核"}`) : ["- 尚无风险线索"]),
     "",
     "## 人工流程",

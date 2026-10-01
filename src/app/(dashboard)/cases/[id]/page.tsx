@@ -9,6 +9,7 @@ import { Select } from "@/components/ui/Select";
 import { EmptyStateCard, PageIntro, Panel, PanelHeader, RiskBadge } from "@/components/enterprise/EnterpriseUI";
 import { buildEnterpriseReport, type ReportExternalData } from "@/lib/enterprise-report";
 import { calculateFinancialMetrics, calculateFinancialTrends } from "@/lib/financial-analysis";
+import { scoreProject } from "@/lib/risk-score";
 import { governancePost } from "@/lib/governance-client";
 import { backendAuthedFetch } from "@/lib/enterprise-sync";
 import { toast } from "@/components/feedback/toast";
@@ -50,6 +51,7 @@ export default function CaseWorkspacePage() {
   const executedRuleCodes = [...new Set(projectDocuments.flatMap((item) => item.ruleOutcomes ?? []).map((outcome) => outcome.code))];
   const metrics = useMemo(() => calculateFinancialMetrics(facts), [facts]);
   const trends = useMemo(() => calculateFinancialTrends(facts), [facts]);
+  const riskScore = scoreProject(projectRisks);
 
   if (!project) return <div className="page-shell"><Panel><EmptyStateCard title="项目不存在或已被移除" description="请返回项目中心选择一个仍然存在的企业项目。" action={<Link href="/cases" className="rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]">返回项目中心</Link>} /></Panel></div>;
 
@@ -162,7 +164,7 @@ export default function CaseWorkspacePage() {
     </div>
 
     <div className="grid gap-4 lg:grid-cols-3">
-      <Panel><PanelHeader eyebrow="Risk" title="候选与已确认风险" /><div className="space-y-2 p-4">{projectRisks.length ? projectRisks.map((risk) => <div key={risk.id} className="rounded-xl border border-white/[0.07] p-3"><div className="flex items-center gap-2"><RiskBadge level={risk.level} /><span className="text-[9px] text-slate-600">{risk.status === "待核验" ? "候选风险" : risk.status}</span></div><p className="mt-2 text-xs text-slate-300">{risk.title}</p></div>) : <p className="text-xs text-slate-600">尚无风险线索</p>}</div></Panel>
+      <Panel><PanelHeader eyebrow="Risk" title="候选与已确认风险" action={<span className="rounded-lg border border-white/[0.07] px-2.5 py-1.5 text-[10px] text-slate-400">评分 {riskScore.score}/100 · {riskScore.band} · 未缓释 {riskScore.openCount}</span>} /><div className="space-y-2 p-4">{projectRisks.length ? projectRisks.map((risk) => <div key={risk.id} className="rounded-xl border border-white/[0.07] p-3"><div className="flex items-center gap-2"><RiskBadge level={risk.level} /><span className="text-[9px] text-slate-600">{risk.status === "待核验" ? "候选风险" : risk.status}</span></div><p className="mt-2 text-xs text-slate-300">{risk.title}</p></div>) : <p className="text-xs text-slate-600">尚无风险线索</p>}</div></Panel>
       <Panel><PanelHeader eyebrow="Workflow" title="人工任务" /><div className="space-y-2 p-4">{projectTasks.length ? projectTasks.map((task) => <div key={task.id} className="rounded-xl border border-white/[0.07] p-3"><p className="text-xs text-slate-300">{task.title}</p><p className="mt-1 text-[9px] text-slate-600">{task.stage} · {task.assignee} · {task.due}</p></div>) : <p className="text-xs text-slate-600">尚无人工任务</p>}</div></Panel>
       <Panel><PanelHeader eyebrow="Audit trail" title="项目活动摘要" /><div className="space-y-3 p-4 text-[10px] text-slate-500"><p>创建项目：{project.createdAt ? new Date(project.createdAt).toLocaleString("zh-CN") : "历史记录未提供时间"}</p><p>资料分析：{projectDocuments.length} 份</p><p>Agent 运行：{projectRuns.length} 次</p><p>研究底稿：{projectBriefs.length} 份</p><p>流程事件：{projectTasks.reduce((sum, item) => sum + (item.history?.length ?? 0), 0)} 条</p>{projectTasks.flatMap((item) => item.history ?? []).sort((a, b) => b.at.localeCompare(a.at)).slice(0, 3).map((event) => <div key={event.id} className="border-t border-white/[0.06] pt-2"><p className="text-slate-400">{event.action} · {event.actor}</p><p className="mt-1 text-slate-700">{new Date(event.at).toLocaleString("zh-CN")}{event.note ? ` · ${event.note}` : ""}</p></div>)}</div></Panel>
     </div>
