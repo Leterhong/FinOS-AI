@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { EmptyStateCard, PageIntro, Panel, RiskBadge, riskMeta } from "@/components/enterprise/EnterpriseUI";
 import { downloadRiskChecklist } from "@/lib/risk-report-docx";
+import { downloadRiskMarkdown } from "@/lib/risk-report-md";
+import { downloadRiskPdf } from "@/lib/risk-report-pdf";
 import { toast } from "@/components/feedback/toast";
 import { useEnterpriseStore } from "@/store/enterprise-store";
 import type { RiskLevel, RiskSignal } from "@/types/enterprise";
@@ -17,11 +19,14 @@ import type { RiskLevel, RiskSignal } from "@/types/enterprise";
 export default function RiskPage() {
   const cases = useEnterpriseStore((state) => state.cases);
   const risks = useEnterpriseStore((state) => state.risks);
+  const rules = useEnterpriseStore((state) => state.rules);
+  const documents = useEnterpriseStore((state) => state.documents);
   const addRisk = useEnterpriseStore((state) => state.addRisk);
   const verifyRisk = useEnterpriseStore((state) => state.verifyRisk);
   const mitigateRisk = useEnterpriseStore((state) => state.mitigateRisk);
   const [exported, setExported] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportFormat, setExportFormat] = useState("docx");
   const [drawerRiskId, setDrawerRiskId] = useState<string | null>(null);
   const drawerRisk = drawerRiskId ? risks.find((item) => item.id === drawerRiskId) ?? null : null;
   const [level, setLevel] = useState("all");
@@ -70,8 +75,10 @@ export default function RiskPage() {
     }
     setExporting(true);
     try {
-      const project = cases.length === 1 ? `${cases[0].company} · ${cases[0].title}` : undefined;
-      await downloadRiskChecklist(filtered, { project });
+      const context = { cases, rules, documents };
+      if (exportFormat === "pdf") await downloadRiskPdf(filtered, context);
+      else if (exportFormat === "md") downloadRiskMarkdown(filtered, context);
+      else await downloadRiskChecklist(filtered, context);
       setExported(true);
       window.setTimeout(() => setExported(false), 2000);
     } catch {
@@ -81,7 +88,7 @@ export default function RiskPage() {
     }
   };
   return <div className="page-shell">
-    <PageIntro eyebrow="Risk intelligence" title="企业风险中心" description="风险提示必须同时呈现事实证据、命中规则、潜在影响与核验状态，避免黑箱评分和无依据结论。" actions={<><button type="button" onClick={() => void downloadRisks()} disabled={exporting} className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-300 hover:border-cyan-400/25 hover:text-cyan-200 disabled:opacity-40"><Download className="h-3.5 w-3.5" />{exporting ? "生成中…" : exported ? "已下载" : "下载风险清单（Word）"}</button><Button variant="primary" disabled={cases.length === 0} onClick={() => setOpen(true)}><Plus className="h-3.5 w-3.5" />登记风险</Button></>} />
+    <PageIntro eyebrow="Risk intelligence" title="企业风险中心" description="风险提示必须同时呈现事实证据、命中规则、潜在影响与核验状态，避免黑箱评分和无依据结论。" actions={<><Select value={exportFormat} onChange={setExportFormat} className="min-w-44" options={[{ value: "docx", label: "导出格式：Word" }, { value: "pdf", label: "导出格式：PDF" }, { value: "md", label: "导出格式：Markdown" }]} /><button type="button" onClick={() => void downloadRisks()} disabled={exporting} className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-300 hover:border-cyan-400/25 hover:text-cyan-200 disabled:opacity-40"><Download className="h-3.5 w-3.5" />{exporting ? "生成中…" : exported ? "已下载" : "下载风险清单"}</button><Button variant="primary" disabled={cases.length === 0} onClick={() => setOpen(true)}><Plus className="h-3.5 w-3.5" />登记风险</Button></>} />
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{filters.map(([label, count, value]) => <button key={value} onClick={() => setLevel(value)} className={`rounded-xl border p-4 text-left transition ${level === value ? "border-cyan-300/25 bg-cyan-300/[0.07]" : "border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.04]"}`}><p className="text-xs text-slate-500">{label}</p><p className="numeric mt-2 text-2xl font-semibold text-white">{count}</p></button>)}</div>
     <Panel>
       <div className="divide-y divide-white/[0.07]">

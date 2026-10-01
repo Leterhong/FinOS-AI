@@ -168,6 +168,17 @@ test("规则模板库与外部数据必须接入", () => {
   assert.match(read(join(SRC, "app", "api", "enterprise", "ai", "route.ts")), /externalBlock/);
 });
 
+test("风险清单必须支持多格式导出（Word/PDF/Markdown）", () => {
+  assert.ok(existsSync(join(SRC, "lib", "risk-export.ts")));
+  assert.ok(existsSync(join(SRC, "lib", "risk-report-docx.ts")));
+  assert.ok(existsSync(join(SRC, "lib", "risk-report-md.ts")));
+  assert.ok(existsSync(join(SRC, "lib", "risk-report-pdf.ts")));
+  const riskPage = read(join(SRC, "app", "(dashboard)", "risk", "page.tsx"));
+  assert.match(riskPage, /downloadRiskPdf/);
+  assert.match(riskPage, /downloadRiskMarkdown/);
+  assert.match(riskPage, /downloadRiskChecklist/);
+});
+
 test("企业 AI 上下文和产出必须按项目隔离", () => {
   const assistant = read(join(SRC, "app", "(dashboard)", "assistant", "page.tsx"));
   const agents = read(join(SRC, "app", "(dashboard)", "agents", "page.tsx"));

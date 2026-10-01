@@ -13,11 +13,21 @@ from backend.core.response import fail
 from backend.database import get_db
 from backend.report import generator
 from backend.report.exporters import pdf_available, to_html, to_pdf
-from backend.report.schemas import GenerateReportRequest
+from backend.report.risk_pdf import render_risk_checklist
+from backend.report.schemas import GenerateReportRequest, RiskChecklistRequest
 from backend.report.templates import REPORT_TEMPLATES
 from backend.user.models import User
 
 router = APIRouter(prefix="/reports", tags=["reports"])
+
+
+@router.post("/risk-checklist.pdf")
+def risk_checklist_pdf(body: RiskChecklistRequest, user: User = Depends(get_current_user)):
+    """按项目分组渲染风险清单 PDF（中文内置字体，证据原文高亮）。"""
+    payload = body.model_dump()
+    pdf = render_risk_checklist(payload)
+    headers = {"Content-Disposition": 'attachment; filename="risk-checklist.pdf"'}
+    return Response(content=pdf, media_type="application/pdf", headers=headers)
 
 
 @router.get("/kinds")
