@@ -4,13 +4,15 @@ import { ChangeEvent, type FormEvent, useEffect, useMemo, useRef, useState } fro
 import { formatWhen } from "@/lib/relative-time";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { AlertTriangle, CheckCircle2, ClipboardCopy, Cpu, FileSpreadsheet, FileText, Loader2, RefreshCcw, ScanSearch, ShieldAlert, Trash2, Upload } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ClipboardCopy, Cpu, Download, FileSpreadsheet, FileText, Loader2, RefreshCcw, ScanSearch, ShieldAlert, Trash2, Upload } from "lucide-react";
 import { EmptyStateCard, PageIntro, Panel } from "@/components/enterprise/EnterpriseUI";
 import CaseContextSelector from "@/components/enterprise/CaseContextSelector";
 import EnterpriseDialog from "@/components/enterprise/EnterpriseDialog";
 import { Select } from "@/components/ui/Select";
 import { useActiveEnterpriseCase } from "@/hooks/use-active-enterprise-case";
 import { analyzeEnterpriseDocument } from "@/lib/enterprise-ai";
+import { canonicalMetricName } from "@/lib/metric-aliases";
+import { triggerDownload } from "@/lib/risk-report-docx";
 import { AIProcessingState } from "@/components/intelligence/AIProcessingState";
 import { toast } from "@/components/feedback/toast";
 import { ErrorState } from "@/components/feedback/ErrorState";
@@ -62,6 +64,8 @@ export default function DocumentsPage() {
   const [failedUploads, setFailedUploads] = useState<Array<{ documentId: string; caseId: string; file: File }>>([]);
   const [reviewingFact, setReviewingFact] = useState<EvidenceFact | null>(null);
   const [reviewError, setReviewError] = useState("");
+  const [bulkReviewOpen, setBulkReviewOpen] = useState(false);
+  const [bulkReviewer, setBulkReviewer] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const queryCaseApplied = useRef(false);
 
@@ -93,6 +97,55 @@ export default function DocumentsPage() {
   );
 
   const canUpload = Boolean(caseId && active?.configured && !uploading);
+
+  const pendingFactsCount = useMemo(
+    () => projectDocuments.reduce((sum, document) => sum + (document.factItems ?? []).filter((fact) => fact.reviewStatus === "待复核").length, 0),
+    [projectDocuments],
+  );
+
+  // 跨期合并：同一指标（按口径归一化）在不同期间的值并列展示。
+  const periodMatrix = useMemo(() => {
+    const groups = new Map<string, Map<string, string>>();
+    for (const document of projectDocuments) {
+      for (const fact of document.factItems ?? []) {
+        if (!fact.period) continue;
+        const key = canonicalMetricName(fact.topic);
+        const bucket = groups.get(key) ?? new Map<string, string>();
+        bucket.set(String(fact.period), `${fact.value}${fact.unit}`);
+        groups.set(key, bucket);
+      }
+    }
+    return [...groups.entries()]
+      .filter(([, bucket]) => bucket.size >= 2)
+      .map(([topic, bucket]) => ({ topic, periods: [...bucket.entries()].sort((a, b) => a[0].localeCompare(b[0])) }));
+  }, [projectDocuments]);
+
+  const exportFactsCsv = () => {
+    const rows = projectDocuments.flatMap((document) => (document.factItems ?? []).map((fact) => ({ ...fact, documentName: document.name })));
+    if (!rows.length) { toast.info("当前项目还没有结构化事实"); return; }
+    const cell = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+    const header = ["主题", "数值", "单位", "期间", "复核状态", "复核人", "原文引用", "位置", "来源资料"];
+    const lines = [header.map(cell).join(",")].concat(rows.map((fact) => [fact.topic, fact.value, fact.unit, fact.period ?? "", fact.reviewStatus, fact.reviewedBy ?? "", fact.quote, fact.location ?? "", fact.documentName].map(cell).join(",")));
+    triggerDownload(new Blob([`\ufeff${lines.join("\n")}`], { type: "text/csv;charset=utf-8" }), `${activeCase?.company ?? "资料"}-事实台账.csv`);
+    toast.success(`已导出 ${rows.length} 条事实`);
+  };
+
+  const bulkConfirm = () => {
+    const reviewer = bulkReviewer.trim();
+    if (!reviewer) { toast.error("请填写复核人"); return; }
+    let count = 0;
+    for (const document of projectDocuments) {
+      for (const fact of document.factItems ?? []) {
+        if (fact.reviewStatus === "待复核") {
+          reviewFact(document.id, fact.id, { status: "已确认", reviewer, note: "批量确认" });
+          count += 1;
+        }
+      }
+    }
+    toast.success(`已批量确认 ${count} 条事实`);
+    setBulkReviewOpen(false);
+    setBulkReviewer("");
+  };
 
   // 研判等待计时：两段式（抽取+叙述）通常 30-120 秒，给用户明确的预期。
   useEffect(() => {
@@ -265,7 +318,7 @@ export default function DocumentsPage() {
   };
 
   return <div className="page-shell">
-    <PageIntro eyebrow="AI document intelligence" title="企业资料研判" description="支持文本解析、图片 OCR、表格结构识别和真实行号/图像坐标，所有事实进入人工复核。单文件上限 10MB。" actions={<><input id="enterprise-document-upload" ref={fileRef} type="file" multiple accept=".pdf,.docx,.xlsx,.xls,.csv,.txt,.md,.json,.png,.jpg,.jpeg,.webp" onChange={(event) => void upload(event)} className="sr-only" aria-label="选择一份或多份企业资料文件" /><button type="button" onClick={() => fileRef.current?.click()} disabled={!canUpload} className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018] disabled:cursor-not-allowed disabled:opacity-40">{uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}{uploading ? "批量分析中" : "批量上传并分析"}</button></>} />
+    <PageIntro eyebrow="AI document intelligence" title="企业资料研判" description="支持文本解析、图片 OCR、表格结构识别和真实行号/图像坐标，所有事实进入人工复核。单文件上限 10MB。" actions={<><input id="enterprise-document-upload" ref={fileRef} type="file" multiple accept=".pdf,.docx,.xlsx,.xls,.csv,.txt,.md,.json,.png,.jpg,.jpeg,.webp" onChange={(event) => void upload(event)} className="sr-only" aria-label="选择一份或多份企业资料文件" /><button type="button" onClick={exportFactsCsv} className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-300 hover:border-cyan-400/25 hover:text-cyan-200"><Download className="h-3.5 w-3.5" />导出事实 CSV</button><button type="button" onClick={() => setBulkReviewOpen(true)} disabled={pendingFactsCount === 0} className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-300 hover:border-cyan-400/25 hover:text-cyan-200 disabled:opacity-40"><CheckCircle2 className="h-3.5 w-3.5" />批量复核（{pendingFactsCount}）</button><button type="button" onClick={() => fileRef.current?.click()} disabled={!canUpload} className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018] disabled:cursor-not-allowed disabled:opacity-40">{uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}{uploading ? "批量分析中" : "批量上传并分析"}</button></>} />
     {failedUploads.some((item) => item.caseId === caseId) && <div className="flex flex-col gap-2 rounded-xl border border-amber-400/20 bg-amber-400/[0.05] px-4 py-3 text-xs text-amber-100 sm:flex-row sm:items-center"><p className="min-w-0 flex-1">有 {failedUploads.filter((item) => item.caseId === caseId).length} 份资料分析失败。</p><button type="button" onClick={() => void retryFailed()} disabled={uploading || !active?.configured} className="rounded-lg border border-amber-300/25 px-3 py-1.5 text-[10px] disabled:opacity-40">重试当前项目失败项</button></div>}
     <div className="grid gap-3 lg:grid-cols-[1fr_1fr]">
       <CaseContextSelector cases={cases} value={caseId} onChange={setCaseId} detail={`${projectDocuments.length} 份关联资料，仅本项目内容会进入分析`} />
@@ -291,6 +344,17 @@ export default function DocumentsPage() {
         />
       </div>}</div></>}</Panel>
     </div>{(selected ?? projectDocuments[0]) && <TableLedger document={(selected ?? projectDocuments[0])!} focusedFact={focusedFact} />}</>}
-    <EnterpriseDialog open={Boolean(reviewingFact)} onClose={() => { setReviewingFact(null); setReviewError(""); }} title="复核结构化事实" description={reviewingFact ? `${reviewingFact.topic} · ${reviewingFact.value}${reviewingFact.unit}` : undefined}><form onSubmit={submitReview} className="space-y-4"><div className="rounded-xl border border-white/[0.07] p-3 text-[11px] leading-6 text-slate-400">原文：{reviewingFact?.quote}<br />位置：{reviewingFact?.location || "模型未提供，请对照原文件查找"}</div><label className="block"><span className="mb-1.5 block text-[11px] text-slate-400">复核结论</span><Select name="status" defaultValue="已确认" options={[{ value: "已确认", label: "已确认" }, { value: "已驳回", label: "已驳回" }, { value: "待复核", label: "待复核" }]} /></label><label className="block"><span className="mb-1.5 block text-[11px] text-slate-400">复核人</span><input name="reviewer" placeholder="填写真实复核人（必填）" aria-invalid={Boolean(reviewError)} className="field-control" />{reviewError && <p className="mt-1 text-[9px] text-rose-300">{reviewError}</p>}</label><label className="block"><span className="mb-1.5 block text-[11px] text-slate-400">复核意见</span><textarea name="note" rows={3} placeholder="说明核对结果、修正依据或驳回原因" className="field-control resize-none" /></label><div className="flex justify-end gap-2"><button type="button" onClick={() => setReviewingFact(null)} className="rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-400">取消</button><button type="submit" className="rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]">保存复核</button></div></form></EnterpriseDialog>
+    <EnterpriseDialog open={Boolean(reviewingFact)} onClose={() => { setReviewingFact(null); setReviewError(""); }} title="复核结构化事实" description={reviewingFact ? `${reviewingFact.topic} · ${reviewingFact.value}${reviewingFact.unit}` : undefined}><form onSubmit={submitReview} className="space-y-4"><div className="rounded-xl border border-white/[0.07] p-3 text-[11px] leading-6 text-slate-400">原文：{reviewingFact?.quote}<br />位置：{reviewingFact?.location || "模型未提供，请对照原文件查找"}</div><label className="block"><span className="mb-1.5 block text-[11px] text-slate-400">复核结论</span><Select name="status" defaultValue="已确认" options={[{ value: "已确认", label: "已确认" }, { value: "已驳回", label: "已驳回" }, { value: "待复核", label: "待复核" }]} /></label><label className="block"><span className="mb-1.5 block text-[11px] text-slate-400">复核人</span><input name="reviewer" placeholder="填写真实复核人（必填）" aria-invalid={Boolean(reviewError)} className="field-control" />{reviewError && <p className="mt-1 text-[9px] text-rose-300">{reviewError}</p>}</label><label className="block"><span className="mb-1.5 block text-[11px] text-slate-400">复核意见</span><textarea name="note" rows={3} placeholder="说明核对结果、修正依据或驳回原因" className="field-control resize-none" /></label><div className="flex justify-end gap-2"><button type="button" onClick={() => setReviewingFact(null)} className="rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-400">取消</button><button type="submit" className="rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]">保存复核</button></div></form>    </EnterpriseDialog>
+    {periodMatrix.length > 0 && <Panel>
+      <div className="border-b border-white/[0.07] p-5"><p className="text-sm font-semibold text-slate-100">跨期指标对照</p><p className="mt-1 text-[10px] text-slate-600">同一指标按口径归一化后的跨期值（含单位），用于趋势与异常复核。</p></div>
+      <div className="divide-y divide-white/[0.06]">{periodMatrix.map((row) => <div key={row.topic} className="flex flex-wrap items-center gap-3 px-5 py-3 text-xs"><span className="min-w-40 text-slate-300">{row.topic}</span>{row.periods.map(([period, value]) => <span key={period} className="rounded-md border border-white/[0.08] px-2 py-1 text-[10px] text-slate-400">{period}：<span className="text-slate-200">{value}</span></span>)}</div>)}</div>
+    </Panel>}
+    <EnterpriseDialog open={bulkReviewOpen} onClose={() => setBulkReviewOpen(false)} title="批量复核待复核事实" description={`将当前项目 ${pendingFactsCount} 条「待复核」事实标记为已确认。`}>
+      <div className="space-y-4">
+        <label className="block"><span className="mb-1.5 block text-[11px] text-slate-400">复核人（必填）</span><input value={bulkReviewer} onChange={(event) => setBulkReviewer(event.target.value)} placeholder="填写真实复核人" className="field-control" /></label>
+        <p className="text-[10px] leading-5 text-slate-600">批量确认仅改变复核状态，逐条原文与引用保持不变；重大结论仍建议逐条核对原文。</p>
+        <div className="flex justify-end gap-2"><button type="button" onClick={() => setBulkReviewOpen(false)} className="rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-400">取消</button><button type="button" onClick={bulkConfirm} className="rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]">确认批量复核</button></div>
+      </div>
+    </EnterpriseDialog>
   </div>;
 }
