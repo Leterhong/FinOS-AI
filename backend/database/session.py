@@ -179,6 +179,8 @@ def _ensure_enterprise_scope_columns(engine) -> None:
         "enterprise_rules": {
             "tests_json": "TEXT",
             "organization_id": "VARCHAR(32) NOT NULL DEFAULT ''",
+            "enabled": "BOOLEAN NOT NULL DEFAULT TRUE",
+            "industries_json": "TEXT NOT NULL DEFAULT '[]'",
         },
         "enterprise_tasks": {
             "case_id": "VARCHAR(64) NOT NULL DEFAULT ''",

@@ -195,6 +195,8 @@ class RuleIn(BaseModel):
     coverageRate: float = Field(default=0.0, ge=0, le=100)
     conditions: list | None = Field(default=None, max_length=100)
     testRecords: list | None = Field(default=None, max_length=1000)
+    enabled: bool = True
+    industries: list[str] | None = Field(default=None, max_length=20)
 
 
 class TaskIn(BaseModel):
@@ -256,6 +258,8 @@ def _rule_out(r: EnterpriseRule) -> dict:
         "version": r.version, "conditions": _conditions_from_json(r.conditions),
         "testRecords": _json_list(r.tests_json),
         "coverage": r.coverage, "coverageRate": r.coverage_rate,
+        "enabled": bool(getattr(r, "enabled", True)),
+        "industries": _json_list(getattr(r, "industries_json", "[]")),
         "updatedAt": r.updated_at.isoformat(),
     }
 
@@ -341,6 +345,8 @@ def _apply_rule(row: EnterpriseRule, body: RuleIn) -> None:
     row.coverage = _clip(body.coverage, 40)
     row.coverage_rate = float(body.coverageRate)
     row.tests_json = _dump_json(body.testRecords or [], 100_000)
+    row.enabled = bool(body.enabled)
+    row.industries_json = _dump_json([str(item)[:40] for item in (body.industries or [])], 2_000)
 
 
 def _apply_task(row: EnterpriseTask, body: TaskIn) -> None:

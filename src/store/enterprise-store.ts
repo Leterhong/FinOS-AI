@@ -58,7 +58,8 @@ interface EnterpriseState {
   addRisk: (input: NewRisk) => RiskSignal;
   verifyRisk: (id: string, input: { reviewer: string; note: string }) => void;
   mitigateRisk: (id: string, input: { reviewer: string; note: string }) => void;
-  addRule: (input: Pick<EnterpriseRule, "code" | "name" | "domain"> & { version?: string; conditions?: EnterpriseRule["conditions"] }) => void;
+  addRule: (input: Pick<EnterpriseRule, "code" | "name" | "domain"> & { version?: string; conditions?: EnterpriseRule["conditions"]; enabled?: boolean; industries?: string[] }) => void;
+  updateRule: (id: string, patch: Partial<Pick<EnterpriseRule, "name" | "domain" | "version" | "conditions" | "enabled" | "industries">>) => void;
   testRule: (id: string, record: Omit<RuleTestRecord, "id" | "testedAt">) => void;
   deleteRule: (id: string) => void;
   addTask: (input: NewTask) => void;
@@ -121,6 +122,7 @@ const syncMap = {
       organizationId: item.organizationId,
       version: item.version, coverage: item.coverage, coverageRate: item.coverageRate,
       conditions: item.conditions, testRecords: item.testRecords,
+      enabled: item.enabled ?? true, industries: item.industries ?? [],
     }),
   },
   tasks: {
@@ -375,10 +377,19 @@ export const useEnterpriseStore = create<EnterpriseState>()(
           version: input.version?.trim() || "v1.0",
           coverage: "待测试",
           coverageRate: 0,
+          enabled: input.enabled ?? true,
+          industries: input.industries ?? [],
           updated: new Date().toISOString(),
         };
         set((state) => ({ rules: [item, ...state.rules] }));
         pushEntity("rules", syncMap.rules.payload(item));
+      },
+      updateRule: (id, patch) => {
+        set((state) => ({
+          rules: state.rules.map((rule) => rule.id === id ? { ...rule, ...patch, updated: new Date().toISOString() } : rule),
+        }));
+        const updated = get().rules.find((rule) => rule.id === id);
+        if (updated) pushEntity("rules", syncMap.rules.payload(updated));
       },
       testRule: (id, record) => {
         set((state) => ({
@@ -415,7 +426,7 @@ export const useEnterpriseStore = create<EnterpriseState>()(
         const facts: FactCandidate[] = (doc.factItems ?? []).map((fact) => ({
           topic: fact.topic, value: fact.value, unit: fact.unit as FactCandidate["unit"], quote: fact.quote,
         }));
-        const structured = state.rules.filter((rule) => (rule.conditions ?? []).length > 0)
+        const structured = state.rules.filter((rule) => (rule.conditions ?? []).length > 0 && rule.enabled !== false)
           .map((rule) => ({ code: rule.code, name: rule.name, conditions: rule.conditions ?? [] }));
         const outcomes = evaluateRules(facts, structured);
         withProgress(set, (s) => ({

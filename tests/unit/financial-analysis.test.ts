@@ -68,3 +68,18 @@ test("项目报告标识候选风险、事实引用和人工复核要求", () =>
   assert.match(report, /仍有候选风险等待人工确认/);
   assert.match(report, /不替代/);
 });
+
+test("新增财务指标：现金比率/存货周转/有息负债率/现金流利息保障", () => {
+  const facts = [
+    fact("F-1", "货币资金", 100), fact("F-2", "流动负债", 500),
+    fact("F-3", "营业成本", 400), fact("F-4", "平均存货", 200),
+    fact("F-5", "有息负债", 300), fact("F-6", "资产总计", 1000),
+    fact("F-7", "经营活动产生的现金流量净额", 50), fact("F-8", "利息费用", 10),
+  ];
+  const metrics = calculateFinancialMetrics(facts);
+  const value = (id: string) => metrics.find((item) => item.id === id)?.displayValue;
+  assert.equal(value("cash-ratio"), "0.20");
+  assert.equal(value("inventory-turnover"), "2.00");
+  assert.equal(value("interest-debt-ratio"), "30.0%");
+  assert.equal(value("cashflow-interest-cover"), "5.00");
+});

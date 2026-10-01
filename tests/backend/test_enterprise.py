@@ -255,3 +255,18 @@ def test_account_deletion_covers_enterprise_tables(client, user_a, db_session):
     db_session.expire_all()
     leftover = db_session.scalar(select(EnterpriseCase).where(EnterpriseCase.id == case_id))
     assert leftover is None
+
+
+def test_rule_flags_roundtrip(client, auth):
+    """规则启用状态与适用行业标签需持久化并随快照返回。"""
+    resp = client.post(
+        "/api/enterprise/rules",
+        json={"id": "RULE-FLAG-1", "code": "RF-1", "name": "行业规则", "domain": "授信", "enabled": False, "industries": ["制造业"]},
+        headers=auth,
+    )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()["data"]
+    assert data["enabled"] is False and data["industries"] == ["制造业"]
+    snap = client.get("/api/enterprise/snapshot", headers=auth).json()["data"]
+    rule = next(item for item in snap["rules"] if item["id"] == "RULE-FLAG-1")
+    assert rule["enabled"] is False and rule["industries"] == ["制造业"]

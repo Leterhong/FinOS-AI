@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import Float, Index, String, Text
+from sqlalchemy import Boolean, Float, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.database.base import Base
@@ -100,6 +100,9 @@ class EnterpriseRule(Base):
     coverage: Mapped[str] = mapped_column(String(40), nullable=False, default="待测试")
     coverage_rate: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     tests_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # 规则启用状态与适用行业标签（用于按项目行业筛选与自动推荐）。
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    industries_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     created_at: Mapped[datetime] = mapped_column(default=_now)
     updated_at: Mapped[datetime] = mapped_column(default=_now, onupdate=_now)
 

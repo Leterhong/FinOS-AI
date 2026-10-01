@@ -71,6 +71,11 @@ export function calculateFinancialMetrics(facts: EvidenceFact[]): FinancialMetri
   const averageReceivables = findFact(facts, ["平均应收账款"]);
   const netProfit = findFact(facts, ["净利润"]);
   const operatingCashFlow = findFact(facts, ["经营活动产生的现金流量净额", "经营现金流"]);
+  const cash = findFact(facts, ["货币资金", "现金及现金等价物"]);
+  const averageInventory = findFact(facts, ["平均存货", "存货"]);
+  const operatingCost = findFact(facts, ["营业成本", "主营业务成本"]);
+  const interestBearingDebt = findFact(facts, ["有息负债", "计息负债"]);
+  const interestExpense = findFact(facts, ["利息费用", "财务费用"]);
 
   return [
     ratioMetric({ id: "current-ratio", name: "流动比率", category: "偿债", numerator: currentAssets, denominator: currentLiabilities, explain: (value) => value < 1 ? "流动资产低于流动负债，需结合回款和短债结构复核" : "短期偿债覆盖为正，仍需结合行业与资产质量判断" }),
@@ -78,6 +83,10 @@ export function calculateFinancialMetrics(facts: EvidenceFact[]): FinancialMetri
     ratioMetric({ id: "net-margin", name: "净利率", category: "盈利", numerator: netProfit, denominator: revenue, percent: true, explain: (value) => value < 0 ? "净利润为负，需核验亏损原因和持续性" : "反映收入转化为净利润的水平，需结合多期趋势" }),
     ratioMetric({ id: "receivables-turnover", name: "应收账款周转率", category: "营运", numerator: revenue, denominator: averageReceivables, explain: (value) => value < 2 ? "应收账款周转偏慢，需结合账龄、客户集中度和信用政策复核" : "反映营业收入对平均应收账款的周转水平，仍需结合行业周期" }),
     ratioMetric({ id: "cash-debt-cover", name: "经营现金流/流动负债", category: "现金流", numerator: operatingCashFlow, denominator: currentLiabilities, percent: true, explain: (value) => value < 20 ? "经营现金流对短期负债覆盖偏弱，需核验资金缺口" : "经营现金流形成一定短债覆盖，仍需结合到期分布" }),
+    ratioMetric({ id: "cash-ratio", name: "现金比率", category: "偿债", numerator: cash, denominator: currentLiabilities, explain: (value) => value < 0.2 ? "现金类资产对流动负债覆盖偏低，需关注即期偿付能力" : "现金类资产可覆盖部分流动负债，仍需结合受限资金比例" }),
+    ratioMetric({ id: "inventory-turnover", name: "存货周转率", category: "营运", numerator: operatingCost, denominator: averageInventory, explain: (value) => value < 2 ? "存货周转偏慢，需结合库龄、跌价准备与销售节奏复核" : "反映营业成本对平均存货的周转水平，仍需结合行业特性" }),
+    ratioMetric({ id: "interest-debt-ratio", name: "有息负债率", category: "结构", numerator: interestBearingDebt, denominator: totalAssets, percent: true, explain: (value) => value > 40 ? "有息负债占比较高，需复核融资成本与到期结构" : "有息负债占比未触发通用高位提示，仍以适用规则为准" }),
+    ratioMetric({ id: "cashflow-interest-cover", name: "经营现金流利息保障", category: "现金流", numerator: operatingCashFlow, denominator: interestExpense, explain: (value) => value < 2 ? "经营现金流对利息支出覆盖偏弱，需关注偿付压力" : "经营现金流可覆盖利息支出，仍需结合债务到期结构" }),
   ].filter((item): item is FinancialMetric => Boolean(item));
 }
 

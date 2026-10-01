@@ -162,6 +162,10 @@ export interface EnterpriseRule {
   coverageRate: number;
   /** 结构化触发条件（可选）：填写后资料研判会由确定性规则引擎评估命中。 */
   conditions?: RuleCondition[];
+  /** 启用状态（停用后不参与规则评估）。 */
+  enabled?: boolean;
+  /** 适用行业标签（用于按项目行业筛选与推荐）。 */
+  industries?: string[];
   updated: string;
   testRecords?: RuleTestRecord[];
 }
