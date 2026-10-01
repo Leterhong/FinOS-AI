@@ -12,6 +12,7 @@ import asyncio
 from sqlalchemy.orm import Session
 
 from backend.ai.gateway import generate as gw_generate
+from backend.ai.usage import log_usage
 from backend.intelligence.reasoning.explain import llm_available, resolve_model
 from backend.user.models import User
 
@@ -54,7 +55,17 @@ def run_llm(
         content = _sync_generate(cfg, api_key, messages, max_tokens, temperature)
     except Exception:  # noqa: BLE001 — 任何异常都降级
         return None
-    return (content or "").strip() or None
+    text = (content or "").strip() or None
+    if text:
+        # 只统计文本部分，避免把图片 base64 计入 token 估算。
+        prompt_text = " ".join(
+            str(part.get("text", "")) if isinstance(part, dict) else ""
+            for message in messages
+            if isinstance(message, dict)
+            for part in ([message.get("content")] if isinstance(message.get("content"), str) else (message.get("content") or []))
+        )
+        log_usage(user.id, cfg.model_id, "multimodal", prompt_text=prompt_text[:8000], completion_text=text)
+    return text
 
 
 def vision_message(prompt: str, image_b64: str, mime: str = "image/png") -> list[dict]:

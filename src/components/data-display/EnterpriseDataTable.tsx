@@ -167,10 +167,14 @@ export function EnterpriseDataTable<Row extends { id: string }>({
               {pageRows.map((row) => {
                 const rowId = rowKey(row);
                 const isExpanded = expandedRowRender != null && expandedId === rowId;
+                const activate = onRowClick ? () => onRowClick(row) : expandedRowRender ? () => setExpandedId(isExpanded ? null : rowId) : undefined;
                 return (
                   <Fragment key={rowId}>
                     <tr
-                      onClick={onRowClick ? () => onRowClick(row) : expandedRowRender ? () => setExpandedId(isExpanded ? null : rowId) : undefined}
+                      onClick={activate}
+                      role={activate ? "button" : undefined}
+                      tabIndex={activate ? 0 : undefined}
+                      onKeyDown={activate ? (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); activate(); } } : undefined}
                       className={cn(
                         "border-t border-white/[0.04] transition hover:bg-white/[0.03]",
                         (onRowClick || expandedRowRender) && "cursor-pointer",

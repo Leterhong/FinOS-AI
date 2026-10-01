@@ -6,6 +6,7 @@ import { OpenAICompatibleProvider } from "@/ai/model-center/providers/OpenAIComp
 import { inspectPrompt, promptGuardInstruction, redactPromptSecrets, shouldBlockPrompt } from "@/security/prompt-guard";
 import { getSkill, selectSkill } from "@/ai/skills/registry";
 import { getCustomSkills, getEnabledSkillIds } from "@/ai/skills/store";
+import { recordUsage } from "@/ai/usage/usage-tracker";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -131,6 +132,8 @@ export async function POST(req: NextRequest) {
     const abort = new AbortController();
     const timeout = setTimeout(() => abort.abort(), 600_000);
     let closed = false;
+    let streamedChars = 0;
+    let streamError = false;
     const sse = new ReadableStream<Uint8Array>({
       async start(controller) {
         // 心跳注释行：推理模型长时间无输出时，避免反向代理按 idle 超时切断连接。
@@ -168,15 +171,30 @@ ${safeQuestion}` },
             maxTokens: Math.min(model.maxTokens ?? 2048, 8192),
             signal: abort.signal,
           })) {
-            if (chunk.content) send({ delta: chunk.content });
+            if (chunk.content) { streamedChars += chunk.content.length; send({ delta: chunk.content }); }
           }
           send({ done: true, model: model.modelId, latencyMs: Date.now() - started, skill: skillInfo });
         } catch (error) {
+          streamError = true;
           send({ error: abort.signal.aborted ? "模型流式调用超时或已取消" : friendlyModelError(error) });
         } finally {
           clearInterval(heartbeat);
           clearTimeout(timeout);
           closed = true;
+          // 记录用量（流式按字符估算 token），失败不影响主流程。
+          const promptTokens = Math.ceil((safeQuestion.length + context.length) / 2);
+          const completionTokens = Math.ceil(streamedChars / 2);
+          void recordUsage({
+            userId,
+            provider: model.providerType,
+            model: model.modelId,
+            taskType: "enterprise-chat",
+            promptTokens,
+            completionTokens,
+            totalTokens: promptTokens + completionTokens,
+            latencyMs: Date.now() - started,
+            success: !streamError,
+          });
           try {
             controller.close();
           } catch {
@@ -208,6 +226,18 @@ ${safeQuestion}` },
       temperature: model.temperature ?? 0.3,
       maxTokens: Math.min(model.maxTokens ?? 2048, 8192),
       signal: AbortSignal.timeout(600_000),
+    });
+    const usage = (response.usage ?? {}) as { promptTokens?: number; completionTokens?: number; totalTokens?: number };
+    void recordUsage({
+      userId,
+      provider: model.providerType,
+      model: response.model ?? model.modelId,
+      taskType: "enterprise-chat",
+      promptTokens: usage.promptTokens ?? 0,
+      completionTokens: usage.completionTokens ?? 0,
+      totalTokens: usage.totalTokens ?? 0,
+      latencyMs: response.latencyMs ?? 0,
+      success: true,
     });
     return NextResponse.json({
       result: {

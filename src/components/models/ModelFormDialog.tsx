@@ -50,6 +50,16 @@ export default function ModelFormDialog({ open, onClose, editing }: Props) {
 
   const preset = PROVIDER_PRESETS[providerType];
 
+  // Esc 关闭（保存中不关闭），与其它弹窗行为一致。
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !isSaving) onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, isSaving, onClose]);
+
   // 初始化 / 切换 provider 时填充默认值。
   useEffect(() => {
     if (!open) return;
@@ -181,7 +191,7 @@ export default function ModelFormDialog({ open, onClose, editing }: Props) {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
         >
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => { if (!isSaving) onClose(); }} />
           <motion.div
             className="relative z-10 w-full max-w-lg rounded-xl glass border border-white/10 p-6 text-white max-h-[90vh] overflow-y-auto"
             role="dialog"

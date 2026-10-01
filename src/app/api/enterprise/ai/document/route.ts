@@ -8,6 +8,7 @@ import { evaluateRules, type FactCandidate, type StructuredRule } from "@/lib/ru
 import { OpenAICompatibleProvider } from "@/ai/model-center/providers/OpenAICompatibleProvider";
 import { parseForAnalysis } from "@/multimodal/parser";
 import { inspectPrompt, promptGuardInstruction, redactPromptSecrets } from "@/security/prompt-guard";
+import { recordUsage } from "@/ai/usage/usage-tracker";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -328,6 +329,7 @@ export async function POST(req: NextRequest) {
   }
 
   const provider = new OpenAICompatibleProvider(model);
+  const docStarted = Date.now();
   const content = Buffer.from(await file.arrayBuffer());
   let extracted: ExtractionBundle;
   try {
@@ -397,6 +399,18 @@ export async function POST(req: NextRequest) {
         } finally {
           clearInterval(heartbeat);
           closed = true;
+          // 记录用量（资料研判按整体耗时与成功状态聚合），失败不影响主流程。
+          void recordUsage({
+            userId,
+            provider: model.providerType,
+            model: model.modelId,
+            taskType: "enterprise-document",
+            promptTokens: 0,
+            completionTokens: 0,
+            totalTokens: 0,
+            latencyMs: Date.now() - docStarted,
+            success: true,
+          });
           try {
             controller.close();
           } catch {
@@ -422,5 +436,16 @@ export async function POST(req: NextRequest) {
   if ("error" in outcome) {
     return NextResponse.json({ error: outcome.error }, { status: 502 });
   }
+  void recordUsage({
+    userId,
+    provider: model.providerType,
+    model: model.modelId,
+    taskType: "enterprise-document",
+    promptTokens: 0,
+    completionTokens: 0,
+    totalTokens: 0,
+    latencyMs: Date.now() - docStarted,
+    success: true,
+  });
   return NextResponse.json({ result: outcome.result });
 }

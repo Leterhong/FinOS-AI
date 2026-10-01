@@ -116,7 +116,10 @@ services:
     ports:
       # 便于本地直连调试；仅需 nginx 入口时可注释
       - "127.0.0.1:${API_PORT:-8300}:8300"
-    networks: [finos-net]
+    networks:
+      finos-net:
+        # 固定 IP，避免容器重建后 nginx 缓存的旧 IP 导致 502
+        ipv4_address: 172.28.0.12
 
   # ── 前端 Next.js ──────────────────────────────────────────
   web:
@@ -154,7 +157,9 @@ services:
       - "3000"
     ports:
       - "127.0.0.1:${WEB_PORT:-3000}:3000"
-    networks: [finos-net]
+    networks:
+      finos-net:
+        ipv4_address: 172.28.0.11
 
   # ── 反向代理 ──────────────────────────────────────────────
   nginx:
