@@ -170,6 +170,10 @@ class DocumentIn(BaseModel):
     status: str = Field(default="解析中", max_length=40)
     facts: int = Field(default=0, ge=0)
     ruleHits: int = Field(default=0, ge=0)
+    # 跨设备恢复所需元信息（此前不入库，恢复后页数/置信度/上传时间为空）。
+    pages: int = Field(default=0, ge=0, le=100_000)
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    uploadedAt: str | None = Field(default=None, max_length=40)
     # 上限对齐前端持久化截断与叙述生成规模，防止无界 Text 行（DoS 面）。
     analysis: str | None = Field(default=None, max_length=60_000)
     model: str | None = Field(default=None, max_length=200)
@@ -294,7 +298,7 @@ def _task_out(t: EnterpriseTask) -> dict:
 def _brief_out(b: EnterpriseBrief) -> dict:
     return {
         "id": b.id, "caseId": b.case_id, "title": b.title, "summary": b.summary, "topic": b.topic,
-        "model": b.model, "updatedAt": _iso(b.updated_at),
+        "model": b.model, "createdAt": _iso(b.created_at), "updatedAt": _iso(b.updated_at),
     }
 
 
@@ -330,6 +334,9 @@ def _apply_document(row: EnterpriseDocument, body: DocumentIn) -> None:
         "extractionMethod": body.extractionMethod,
         "ocrUsed": body.ocrUsed,
         "tables": body.tables or [],
+        "pages": body.pages,
+        "confidence": body.confidence,
+        "uploadedAt": body.uploadedAt,
     }, 200_000)
 
 

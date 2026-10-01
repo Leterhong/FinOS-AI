@@ -26,6 +26,8 @@ from backend.autonomous.models import (
     AutomationWorkflow,
 )
 from backend.core import get_current_user, ok
+from backend.core.cache import cache_invalidate_prefix
+from backend.core.logging_config import get_logger, log_event
 from backend.core.response import fail
 from backend.core.security import verify_password
 from backend.config import UPLOAD_DIR
@@ -78,6 +80,7 @@ from backend.tasks.models import AsyncTask
 from backend.user.models import User
 
 router = APIRouter(prefix="/security", tags=["security"])
+logger = get_logger("finos.security")
 
 
 class DeleteAccountIn(BaseModel):
@@ -134,4 +137,16 @@ def delete_account(
             db.execute(delete(table).where(table.c.user_id == user.id))
     db.delete(user)
     db.commit()
+
+    # 失效该用户的派生缓存（对话原文/预测/OCR 等），避免删除后仍可被读取。
+    for prefix in (
+        f"twin:{user.id}", f"twin:status:{user.id}", f"wi:pred:{user.id}",
+        f"wi:chat:{user.id}", f"agent:{user.id}", f"mm:vision:{user.id}",
+    ):
+        try:
+            cache_invalidate_prefix(prefix)
+        except Exception:  # noqa: BLE001
+            pass
+    # 删除回执：审计表随账户一并删除，这里额外写一条不可回删的运行日志作为凭证。
+    log_event(logger, "warning", "account.delete.ok", user_id=user.id)
     return ok({"deleted": True}, "账户及关联数据已删除")

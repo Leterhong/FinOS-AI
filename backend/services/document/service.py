@@ -58,8 +58,12 @@ def _parse_amount(raw: str) -> float:
         val *= 100_000_000
     elif unit == "亿":
         val *= 100_000_000
+    elif unit in {"百万元", "百万"}:
+        val *= 1_000_000
     elif unit in {"万元", "万", "w"}:
         val *= 10000
+    elif unit in {"千元", "千"}:
+        val *= 1000
     elif unit == "k":
         val *= 1000
     return round(val, 2)

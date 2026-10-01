@@ -1,5 +1,6 @@
 import type { EvidenceFact } from "@/types/enterprise";
 import { canonicalMetricName, metricTopicMatches } from "@/lib/metric-aliases";
+import { toYuan } from "@/lib/units";
 
 export interface FinancialMetric {
   id: string;
@@ -19,10 +20,8 @@ export interface FinancialTrend {
   sourceFactIds: string[];
 }
 
-const MONEY_UNITS: Record<string, number> = { 元: 1, 万元: 10_000, 亿元: 100_000_000 };
-
 function normalized(fact: EvidenceFact): number {
-  return fact.value * (MONEY_UNITS[fact.unit] ?? 1);
+  return toYuan(fact.value, fact.unit);
 }
 
 function matches(topic: string, names: string[]): boolean {
@@ -40,12 +39,15 @@ function ratioMetric(input: {
   numerator?: EvidenceFact;
   denominator?: EvidenceFact;
   percent?: boolean;
+  /** 分母必须为正（如利息保障：财务费用可能为负，负分母无意义）。 */
+  positiveDenominator?: boolean;
   explain: (value: number) => string;
 }): FinancialMetric | null {
   if (!input.numerator || !input.denominator) return null;
   const denominator = normalized(input.denominator);
   const numerator = normalized(input.numerator);
   if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator === 0) return null;
+  if (input.positiveDenominator && denominator <= 0) return null;
   const raw = numerator / denominator;
   const value = input.percent ? raw * 100 : raw;
   if (!Number.isFinite(value)) return null;
@@ -75,14 +77,15 @@ export function calculateFinancialMetrics(facts: EvidenceFact[]): FinancialMetri
   const totalAssets = findFact(scoped, ["资产总计", "总资产"]);
   const totalLiabilities = findFact(scoped, ["负债合计", "总负债"]);
   const revenue = findFact(scoped, ["营业收入", "主营业务收入"]);
-  const averageReceivables = findFact(scoped, ["平均应收账款"]);
+  const averageReceivables = findFact(scoped, ["平均应收账款", "应收账款平均余额"]);
   const netProfit = findFact(scoped, ["净利润"]);
   const operatingCashFlow = findFact(scoped, ["经营活动产生的现金流量净额", "经营现金流"]);
   const cash = findFact(scoped, ["货币资金", "现金及现金等价物"]);
-  const averageInventory = findFact(scoped, ["平均存货", "存货"]);
+  const averageInventory = findFact(scoped, ["平均存货", "存货平均余额"]);
   const operatingCost = findFact(scoped, ["营业成本", "主营业务成本"]);
   const interestBearingDebt = findFact(scoped, ["有息负债", "计息负债"]);
-  const interestExpense = findFact(scoped, ["利息费用", "财务费用"]);
+  // 利息保障优先用「利息费用/利息支出」；缺省时用「财务费用」近似（含汇兑/手续费）。
+  const interestExpense = findFact(scoped, ["利息费用", "利息支出", "财务费用"]);
 
   return [
     ratioMetric({ id: "current-ratio", name: "流动比率", category: "偿债", numerator: currentAssets, denominator: currentLiabilities, explain: (value) => value < 1 ? "流动资产低于流动负债，需结合回款和短债结构复核" : "短期偿债覆盖为正，仍需结合行业与资产质量判断" }),
@@ -93,7 +96,7 @@ export function calculateFinancialMetrics(facts: EvidenceFact[]): FinancialMetri
     ratioMetric({ id: "cash-ratio", name: "现金比率", category: "偿债", numerator: cash, denominator: currentLiabilities, explain: (value) => value < 0.2 ? "现金类资产对流动负债覆盖偏低，需关注即期偿付能力" : "现金类资产可覆盖部分流动负债，仍需结合受限资金比例" }),
     ratioMetric({ id: "inventory-turnover", name: "存货周转率", category: "营运", numerator: operatingCost, denominator: averageInventory, explain: (value) => value < 2 ? "存货周转偏慢，需结合库龄、跌价准备与销售节奏复核" : "反映营业成本对平均存货的周转水平，仍需结合行业特性" }),
     ratioMetric({ id: "interest-debt-ratio", name: "有息负债率", category: "结构", numerator: interestBearingDebt, denominator: totalAssets, percent: true, explain: (value) => value > 40 ? "有息负债占比较高，需复核融资成本与到期结构" : "有息负债占比未触发通用高位提示，仍以适用规则为准" }),
-    ratioMetric({ id: "cashflow-interest-cover", name: "经营现金流利息保障", category: "现金流", numerator: operatingCashFlow, denominator: interestExpense, explain: (value) => value < 2 ? "经营现金流对利息支出覆盖偏弱，需关注偿付压力" : "经营现金流可覆盖利息支出，仍需结合债务到期结构" }),
+    ratioMetric({ id: "cashflow-interest-cover", name: "经营现金流利息保障", category: "现金流", numerator: operatingCashFlow, denominator: interestExpense, positiveDenominator: true, explain: (value) => value < 2 ? "经营现金流对利息支出覆盖偏弱，需关注偿付压力" : "经营现金流可覆盖利息支出，仍需结合债务到期结构" }),
   ].filter((item): item is FinancialMetric => Boolean(item));
 }
 

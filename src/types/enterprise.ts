@@ -176,7 +176,7 @@ export interface RuleTestRecord {
   id: string;
   metric: string;
   actualValue: number;
-  unit: "元" | "万元" | "亿元" | "%";
+  unit: string;
   expectedHit: boolean;
   actualHit: boolean;
   passed: boolean;

@@ -16,6 +16,20 @@ import type { ImportSource } from "@/financial-data/types";
 /** 图片 MIME 白名单 */
 export const IMAGE_MIMES = ["image/png", "image/jpeg", "image/webp"];
 
+/** 文本解码：UTF-8 出现大量替换字符时回退 gb18030（兼容 GBK 导出的 CSV）。 */
+function decodeText(content: Buffer): string {
+  const utf8 = content.toString("utf8");
+  const replacements = utf8.match(/\uFFFD/g)?.length ?? 0;
+  if (replacements > utf8.length * 0.01) {
+    try {
+      return new TextDecoder("gb18030").decode(content);
+    } catch {
+      return utf8;
+    }
+  }
+  return utf8;
+}
+
 export function isImage(mimeType: string): boolean {
   return IMAGE_MIMES.includes(mimeType);
 }
@@ -133,7 +147,7 @@ export function parseForAnalysis(
   const out = parseFile({
     source: "manual",
     fileName,
-    content: isBinary ? content.toString("base64") : content.toString("utf8"),
+    content: isBinary ? content.toString("base64") : decodeText(content),
     encoding: isBinary ? "base64" : "utf8",
   });
   return {

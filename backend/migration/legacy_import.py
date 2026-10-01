@@ -57,7 +57,10 @@ def _to_dt(value: Any, default: datetime | None = None) -> datetime | None:
             return datetime.fromisoformat(s.replace("Z", "+00:00"))
         except ValueError:
             try:
-                return datetime.fromtimestamp(float(s) / 1000, tz=timezone.utc)
+                numeric = float(s)
+                # 按量级判断秒/毫秒，避免秒级时间戳被当作毫秒解析成 1970 年附近。
+                seconds = numeric / 1000 if numeric > 1e11 else numeric
+                return datetime.fromtimestamp(seconds, tz=timezone.utc)
             except (ValueError, OSError):
                 return default
     return default
@@ -199,10 +202,10 @@ def _migrate_financial(db, user_id: str, stats: dict, errors: list, secret: str)
         errors.append(f"financial/{user_id}.enc: 解密失败 {exc}")
         return
 
-    record_ts = _to_dt(record.get("updatedAt"), default=_now())
     if not isinstance(record, dict):
         errors.append(f"financial/{user_id}.enc: 结构异常")
         return
+    record_ts = _to_dt(record.get("updatedAt"), default=_now())
 
     # 交易
     for tx in record.get("transactions", []) or []:
@@ -214,11 +217,14 @@ def _migrate_financial(db, user_id: str, stats: dict, errors: list, secret: str)
             continue
         try:
             date_str = tx.get("date")
-            dt = _to_dt(date_str, default=_now()) if not isinstance(date_str, str) else datetime.fromisoformat(
-                date_str + "T00:00:00+00:00"
-            )
-        except Exception:  # noqa: BLE001
-            dt = _now()
+            if isinstance(date_str, str):
+                dt = _to_dt(date_str, default=None) or datetime.fromisoformat(date_str + "T00:00:00+00:00")
+            else:
+                dt = _to_dt(date_str, default=None) or _now()
+        except Exception:  # noqa: BLE001 无法解析时记错并跳过，不静默改成迁移当天
+            errors.append(f"financial/{user_id}: 交易 {tid} 日期无法解析：{tx.get('date')!r}")
+            stats["skipped"] += 1
+            continue
         try:
             db.add(
                 Transaction(

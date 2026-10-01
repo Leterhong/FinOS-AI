@@ -10,6 +10,16 @@ import type { FileFormat, ImportSource, RawRecord } from "../types";
 import { parseCsv } from "./csv";
 import { parseXlsx } from "./xlsx";
 import { extractPdfText } from "./pdf";
+import { HEADER_ALIASES } from "./rows";
+
+const JSON_ALIAS_TO_STD: Record<string, string> = (() => {
+  const map: Record<string, string> = {};
+  for (const [std, aliases] of Object.entries(HEADER_ALIASES)) {
+    map[std.toLowerCase()] = std;
+    for (const alias of aliases) map[alias.trim().toLowerCase()] = std;
+  }
+  return map;
+})();
 
 export interface ParseInput {
   source: ImportSource;
@@ -104,18 +114,17 @@ function parseJson(text: string): { records: RawRecord[]; warnings: string[] } {
     const records: RawRecord[] = arr.map((row, i) => {
       const obj = (row ?? {}) as Record<string, unknown>;
       const fields: Record<string, string> = {};
+      const rec: RawRecord = { fields, rowIndex: i + 1 };
       for (const [k, v] of Object.entries(obj)) {
-        fields[k] = v == null ? "" : String(v);
+        const value = v == null ? "" : String(v);
+        fields[k] = value;
+        // 走与 CSV/XLSX 相同的表头别名映射，避免 JSON 流水字段识别率偏低。
+        const std = JSON_ALIAS_TO_STD[k.trim().toLowerCase()];
+        if (std && value && !((rec as unknown as Record<string, unknown>)[std])) {
+          (rec as unknown as Record<string, unknown>)[std] = value;
+        }
       }
-      return {
-        fields,
-        rowIndex: i + 1,
-        date: fields.date ?? fields["日期"],
-        amount: fields.amount ?? fields["金额"],
-        description: fields.description ?? fields["摘要"],
-        merchant: fields.merchant ?? fields["商户"],
-        rawType: fields.type ?? fields["收支"],
-      };
+      return rec;
     });
     return { records, warnings };
   } catch {

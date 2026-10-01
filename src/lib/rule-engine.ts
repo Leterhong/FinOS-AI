@@ -8,6 +8,7 @@
  */
 
 import { metricTopicMatches } from "./metric-aliases";
+import { toYuan } from "./units";
 
 /** 规则条件：对事实主题 + 比较操作 + 阈值。 */
 export interface RuleCondition {
@@ -22,7 +23,7 @@ export interface RuleCondition {
 export interface FactCandidate {
   topic: string;
   value: number;
-  unit: "元" | "万元" | "亿元" | "%";
+  unit: string;
   quote: string;
   location?: string;
 }
@@ -37,16 +38,10 @@ export interface RuleOutcome {
   normalizedValue?: number;
 }
 
-const UNIT_FACTOR: Record<FactCandidate["unit"], number> = {
-  元: 1,
-  万元: 10_000,
-  亿元: 100_000_000,
-  "%": 1,
-};
-
 function normalizeFact(fact: FactCandidate): number {
-  const base = UNIT_FACTOR[fact.unit] ?? 1;
-  return fact.value * base;
+  // 百分比保留原值；金额按统一单位表换算，未知单位返回 NaN（不命中）。
+  if (fact.unit === "%") return fact.value;
+  return toYuan(fact.value, fact.unit);
 }
 
 function compare(actual: number, op: RuleCondition["op"], threshold: number): boolean {

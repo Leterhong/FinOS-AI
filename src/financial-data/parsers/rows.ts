@@ -135,9 +135,12 @@ export function rowsToRecords(rows: string[][]): {
     const rec: RawRecord = { fields, rowIndex: i + 1 };
     headers.forEach((h, idx) => {
       const value = (cells[idx] ?? "").trim();
-      fields[h || `col${idx}`] = value;
+      // 重复表头不互相覆盖：第二个同名列追加序号后缀。
+      let key = h || `col${idx}`;
+      if (fields[key] !== undefined) key = `${key}#${idx}`;
+      fields[key] = value;
       const std = headerMap[idx];
-      if (std && value) {
+      if (std && value && !(std in rec)) {
         (rec as unknown as Record<string, unknown>)[std] = value;
       }
     });

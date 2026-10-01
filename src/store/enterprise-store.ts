@@ -104,6 +104,7 @@ const syncMap = {
       id: item.id, caseId: item.caseId, name: item.name, kind: item.kind,
       classification: item.classification ?? "internal",
       status: item.status, facts: item.facts, ruleHits: item.ruleHits,
+      pages: item.pages, confidence: item.confidence, uploadedAt: item.uploadedAt,
       analysis: item.analysis, model: item.model, error: item.error,
       factItems: item.factItems, ruleOutcomes: item.ruleOutcomes, uncertainties: item.uncertainties,
       extractionMethod: item.extractionMethod, ocrUsed: item.ocrUsed, tables: item.tables,
@@ -683,9 +684,9 @@ export const useEnterpriseStore = create<EnterpriseState>()(
             documents: mergeById(state.documents, snapshot.documents, (row) => ({
               id: String(row.id), caseId: String(row.caseId ?? ""), name: String(row.name ?? ""),
               classification: (row.classification as AnalysisDocument["classification"]) ?? "internal",
-              kind: String(row.kind ?? "企业资料"), pages: 0,
+              kind: String(row.kind ?? "企业资料"), pages: Number(row.pages ?? 0),
               status: (row.status as AnalysisDocument["status"]) ?? "已解析",
-              confidence: 0, facts: Number(row.facts ?? 0), ruleHits: Number(row.ruleHits ?? 0),
+              confidence: Number(row.confidence ?? 0), facts: Number(row.facts ?? 0), ruleHits: Number(row.ruleHits ?? 0),
               uploadedAt: String(row.uploadedAt ?? row.updatedAt ?? ""), analysis: (row.analysis as string | undefined),
               model: (row.model as string | undefined), error: (row.error as string | undefined),
               factItems: row.factItems as AnalysisDocument["factItems"],
@@ -712,6 +713,8 @@ export const useEnterpriseStore = create<EnterpriseState>()(
               domain: String(row.domain ?? ""), version: String(row.version ?? "v1.0"),
               coverage: String(row.coverage ?? "待测试"), coverageRate: Number(row.coverageRate ?? 0),
               conditions: row.conditions as EnterpriseRule["conditions"], testRecords: row.testRecords as EnterpriseRule["testRecords"], updated: String(row.updatedAt ?? ""),
+              enabled: row.enabled === undefined ? true : Boolean(row.enabled),
+              industries: Array.isArray(row.industries) ? (row.industries as string[]) : [],
             }), (item) => item.updated),
             tasks: mergeById(state.tasks, snapshot.tasks, (row) => ({
               id: String(row.id), caseId: String(row.caseId ?? "") || undefined,
@@ -781,7 +784,8 @@ export const useEnterpriseStore = create<EnterpriseState>()(
         ...state,
         documents: state.documents.slice(0, 100).map((d) => ({
           ...d,
-          analysis: d.analysis ? d.analysis.slice(0, 16000) : undefined,
+          // 与服务端上限（60000）对齐：低于该值不再截断，避免刷新后用截断版覆盖服务端完整分析。
+          analysis: d.analysis ? d.analysis.slice(0, 60000) : undefined,
         })),
         agents: state.agents.slice(0, 50).map((a) => ({
           ...a,

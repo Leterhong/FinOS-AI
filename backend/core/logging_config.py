@@ -11,14 +11,37 @@ import logging
 import re
 
 _SENSITIVE = re.compile(r"(api[_-]?key|password|passwd|token|secret|authorization|key_mask|private)", re.IGNORECASE)
+_IP_KEY = re.compile(r"(^ip$|client_ip|remote_addr|real_ip)", re.IGNORECASE)
 _MASK = "***"
 
 _CONFIGURED: dict[str, bool] = {}
 
 
+def _mask_ip(value: object) -> object:
+    """IP 属个人数据：日志中只保留网段前缀，避免长期明文留存。"""
+    if not isinstance(value, str):
+        return value
+    text = value.strip()
+    if ":" in text:
+        parts = text.split(":")
+        return f"{parts[0]}::/16" if parts and parts[0] else _MASK
+    octets = text.split(".")
+    if len(octets) == 4:
+        return f"{octets[0]}.{octets[1]}.x.x"
+    return text or _MASK
+
+
 def _redact(obj):
     if isinstance(obj, dict):
-        return {k: (_MASK if _SENSITIVE.search(str(k)) else _redact(v)) for k, v in obj.items()}
+        out = {}
+        for key, value in obj.items():
+            if _SENSITIVE.search(str(key)):
+                out[key] = _MASK
+            elif _IP_KEY.search(str(key)):
+                out[key] = _mask_ip(value)
+            else:
+                out[key] = _redact(value)
+        return out
     if isinstance(obj, list):
         return [_redact(v) for v in obj]
     if isinstance(obj, str) and _SENSITIVE.search(obj):
