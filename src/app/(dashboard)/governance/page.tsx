@@ -51,6 +51,8 @@ export default function GovernancePage() {
   const [auditDetail, setAuditDetail] = useState<Audit | null>(null);
   const [removingMember, setRemovingMember] = useState<Member | null>(null);
   const [removeReason, setRemoveReason] = useState("");
+  // 仅在当前 busy 键仍是自己时才清空，避免并发操作互相提前解禁。
+  const clearBusy = (key: string) => setBusy((current) => (current === key ? "" : current));
 
   const load = useCallback(async (organizationId?: string) => {
     setBusy("load");
@@ -63,7 +65,7 @@ export default function GovernancePage() {
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "治理数据加载失败");
     } finally {
-      setBusy("");
+      clearBusy("load");
     }
   }, []);
 
@@ -73,7 +75,7 @@ export default function GovernancePage() {
     setBusy(key);
     try { await operation(); toast.success(message); await load(snapshot?.organization.id); }
     catch (error) { toast.error(error instanceof Error ? error.message : "操作失败"); }
-    finally { setBusy(""); }
+    finally { clearBusy(key); }
   };
 
   const acceptInvitation = async (invitation: GovernanceSnapshot["invitations"][number]) => {
@@ -91,7 +93,7 @@ export default function GovernancePage() {
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "接受邀请失败");
     } finally {
-      setBusy("");
+      clearBusy(`invite-${invitation.memberId}`);
     }
   };
 
@@ -172,7 +174,7 @@ export default function GovernancePage() {
     setBusy(`history-${ruleId}`);
     try { setHistory({ ruleId, data: await governanceApi<RuleHistory>(`/rules/${ruleId}/history`) }); }
     catch (error) { toast.error(error instanceof Error ? error.message : "规则历史加载失败"); }
-    finally { setBusy(""); }
+    finally { clearBusy(`history-${ruleId}`); }
   };
 
   const activeMembers = useMemo(() => snapshot?.members.filter((member) => member.userId && member.role !== "owner") ?? [], [snapshot]);

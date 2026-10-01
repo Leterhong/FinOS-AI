@@ -102,6 +102,14 @@ export default function CommandPalette() {
 
   useEffect(() => { setCursor(0); }, [query]);
 
+  // 打开时锁定背景滚动。
+  useEffect(() => {
+    if (!open) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previous; };
+  }, [open]);
+
   if (!open) return null;
 
   const go = (href: string) => {

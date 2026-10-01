@@ -47,6 +47,7 @@ export default function AssistantPage() {
   const [streamText, setStreamText] = useState("");
   const streamTextRef = useRef("");
   const mountedRef = useRef(true);
+  const lastStreamRenderRef = useRef(0);
   useEffect(() => () => { mountedRef.current = false; }, []);
   const [skills, setSkills] = useState<Array<{ id: string; name: string }>>([]);
   const [skillId, setSkillId] = useState("");
@@ -101,7 +102,12 @@ export default function AssistantPage() {
         },
         (delta) => {
           streamTextRef.current += delta;
-          if (mountedRef.current) setStreamText(streamTextRef.current);
+          // 节流渲染：避免每个 token 都全量重解析 Markdown 造成卡顿。
+          const now = Date.now();
+          if (mountedRef.current && now - lastStreamRenderRef.current >= 80) {
+            lastStreamRenderRef.current = now;
+            setStreamText(streamTextRef.current);
+          }
         }
       );
       if (!mountedRef.current) return;

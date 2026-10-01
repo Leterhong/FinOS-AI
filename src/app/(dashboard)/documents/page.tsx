@@ -228,16 +228,19 @@ export default function DocumentsPage() {
     const project = activeCase;
     setUploading(true);
     let succeeded = 0;
+    let processed = 0;
     const failures: string[] = [];
     const processingIds: number[] = [];
     for (const file of files) {
+      processed += 1;
       if (file.size > 10 * 1024 * 1024) {
         failures.push(`${file.name} 超过 10MB`);
         continue;
       }
       const item = addDocument(file, caseId);
       setSelected(item);
-      processingIds.push(toast.processing(`正在分析 ${succeeded + failures.length + 1}/${files.length}：${file.name}`));
+      setStageState({});
+      processingIds.push(toast.processing(`正在分析 ${processed}/${files.length}：${file.name}`));
       try {
         const result = await analyzeEnterpriseDocument({ file, project, rules, onStage: (stage, state) => setStageState((current) => ({ ...current, [stage]: state })) });
         completeDocumentAnalysis(item.id, result.analysis, result.model, {
@@ -274,6 +277,7 @@ export default function DocumentsPage() {
     const processingIds: number[] = [];
     for (const [index, item] of queue.entries()) {
       setSelected(documents.find((document) => document.id === item.documentId) ?? null);
+      setStageState({});
       processingIds.push(toast.processing(`正在重试 ${index + 1}/${queue.length}：${item.file.name}`));
       try {
         const result = await analyzeEnterpriseDocument({ file: item.file, project, rules, onStage: (stage, state) => setStageState((current) => ({ ...current, [stage]: state })) });

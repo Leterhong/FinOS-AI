@@ -55,6 +55,37 @@ def _validate_http_url(raw_url: str, *, allow_private: bool, label: str) -> str:
     return url
 
 
+def resolve_validated_ips(raw_url: str, *, allow_private: bool) -> tuple[str, list[str]]:
+    """校验 URL 并返回 (主机名, 通过校验的 IP 列表)。
+
+    供出站客户端「固定 IP 建连」使用，消除「校验与连接之间域名重新解析」的
+    DNS 重绑定窗口（TOCTOU）：校验得到的 IP 直接用于建连，而不是再解析一次。
+    """
+    url = _validate_http_url(raw_url, allow_private=allow_private, label="模型接口地址")
+    parsed = urlparse(url)
+    try:
+        infos = socket.getaddrinfo(parsed.hostname, parsed.port or (443 if parsed.scheme == "https" else 80))
+    except socket.gaierror as exc:
+        raise UnsafeOutboundUrl("模型接口地址域名无法解析") from exc
+    allowed: list[str] = []
+    for item in infos:
+        value = item[4][0].split("%", 1)[0]
+        ip = ipaddress.ip_address(value)
+        if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
+            ip = ip.ipv4_mapped
+        if ip.is_multicast or ip.is_reserved or ip.is_unspecified:
+            continue
+        if not allow_private:
+            if not ip.is_global:
+                continue
+        elif ip.is_link_local:
+            continue
+        allowed.append(str(ip))
+    if not allowed:
+        raise UnsafeOutboundUrl("模型接口地址未解析到允许的地址")
+    return parsed.hostname, allowed
+
+
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: ANN001, ANN201
         return None

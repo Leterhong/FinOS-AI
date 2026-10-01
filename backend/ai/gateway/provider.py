@@ -12,7 +12,7 @@ from collections.abc import AsyncGenerator
 
 import httpx
 
-from backend.security.network import UnsafeOutboundUrl, validate_model_endpoint_url
+from backend.security.network import UnsafeOutboundUrl, resolve_validated_ips
 
 DEFAULT_TIMEOUT = 60.0
 
@@ -25,20 +25,43 @@ def _headers(api_key: str) -> dict:
     return {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
 
 
-def _check_base_url(base_url: str) -> None:
-    """出站边界：拒绝非 HTTP(S)、云元数据/链路本地地址。
+class _PinnedTransport(httpx.AsyncHTTPTransport):
+    """把连接固定到已校验的 IP，同时保留原主机名做 Host 头与 TLS SNI。
 
-    自托管 Ollama 等本机/内网地址由 settings.ai_allow_private_endpoints 控制
-    （开发环境默认放行，生产默认禁止），链路本地段在任何模式下都禁止。
+    这样校验与建连使用同一个 IP，关闭 DNS 重绑定（TOCTOU）窗口。
     """
+
+    def __init__(self, hostname: str, ip: str) -> None:
+        super().__init__()
+        self._hostname = hostname
+        self._ip = ip
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        if request.url.host == self._hostname:
+            headers = [(k, v) for (k, v) in request.headers.raw if k.lower() != b"host"]
+            pinned = httpx.Request(
+                request.method,
+                request.url.copy_with(host=self._ip),
+                headers=headers,
+                extensions={**request.extensions, "sni_hostname": self._hostname},
+            )
+            pinned.headers["host"] = self._hostname
+            return await super().handle_async_request(pinned)
+        return await super().handle_async_request(request)
+
+
+def _client(base_url: str) -> httpx.AsyncClient:
+    """构造出站客户端：先校验地址并固定 IP，再建连。"""
     from backend.config.settings import get_settings
 
     try:
-        validate_model_endpoint_url(
+        hostname, ips = resolve_validated_ips(
             base_url, allow_private=get_settings().ai_allow_private_endpoints
         )
     except UnsafeOutboundUrl as exc:
         raise GatewayError(str(exc)) from exc
+    transport = _PinnedTransport(hostname, ips[0])
+    return httpx.AsyncClient(timeout=DEFAULT_TIMEOUT, follow_redirects=False, transport=transport)
 
 
 def _parse_completion(data: dict) -> dict:
@@ -55,10 +78,9 @@ async def generate(
     temperature: float = 0.7, max_tokens: int = 4096,
 ) -> dict:
     """非流式生成。返回 {content, tokens}。"""
-    _check_base_url(base_url)
     url = base_url.rstrip("/") + "/chat/completions"
     payload = {"model": model, "messages": messages, "temperature": temperature, "max_tokens": max_tokens}
-    async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT, follow_redirects=False) as client:
+    async with _client(base_url) as client:
         resp = await client.post(url, headers=_headers(api_key), json=payload)
     if resp.status_code != 200:
         raise GatewayError(f"模型调用失败（HTTP {resp.status_code}）")
@@ -89,13 +111,12 @@ async def stream(
     temperature: float = 0.7, max_tokens: int = 4096,
 ) -> AsyncGenerator[str, None]:
     """流式生成，逐段 yield 文本增量。"""
-    _check_base_url(base_url)
     url = base_url.rstrip("/") + "/chat/completions"
     payload = {
         "model": model, "messages": messages,
         "temperature": temperature, "max_tokens": max_tokens, "stream": True,
     }
-    async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT, follow_redirects=False) as client:
+    async with _client(base_url) as client:
         async with client.stream("POST", url, headers=_headers(api_key), json=payload) as resp:
             if resp.status_code != 200:
                 raise GatewayError(f"模型调用失败（HTTP {resp.status_code}）")
@@ -116,10 +137,9 @@ async def stream(
 
 async def embed(base_url: str, api_key: str, model: str, texts: list[str]) -> dict:
     """向量化。返回 {embeddings, tokens}。"""
-    _check_base_url(base_url)
     url = base_url.rstrip("/") + "/embeddings"
     payload = {"model": model, "input": texts}
-    async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT, follow_redirects=False) as client:
+    async with _client(base_url) as client:
         resp = await client.post(url, headers=_headers(api_key), json=payload)
     if resp.status_code != 200:
         raise GatewayError(f"Embedding 调用失败（HTTP {resp.status_code}）")

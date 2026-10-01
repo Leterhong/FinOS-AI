@@ -538,12 +538,14 @@ export const useEnterpriseStore = create<EnterpriseState>()(
         pushEntity("briefs", syncMap.briefs.payload(brief));
         return brief;
       },
-      appendAssistantMessage: (message) => set((state) => ({
-        assistantMessages: [
-          ...state.assistantMessages.slice(-99),
-          { ...message, id: uid("MSG"), at: new Date().toISOString() },
-        ],
-      })),
+      appendAssistantMessage: (message) => set((state) => {
+        // 每个项目各自保留最近 100 条，避免多项目共用时互相挤掉。
+        const others = state.assistantMessages.filter((item) => item.caseId !== message.caseId);
+        const sameCase = state.assistantMessages.filter((item) => item.caseId === message.caseId).slice(-99);
+        return {
+          assistantMessages: [...others, ...sameCase, { ...message, id: uid("MSG"), at: new Date().toISOString() }],
+        };
+      }),
       clearAssistantHistory: (caseId) => set((state) => ({
         assistantMessages: caseId
           ? state.assistantMessages.filter((message) => message.caseId !== caseId)
@@ -779,7 +781,7 @@ export const useEnterpriseStore = create<EnterpriseState>()(
           output: a.output ? a.output.slice(0, 8000) : undefined,
           error: a.error ? a.error.slice(0, 500) : undefined,
         })),
-        assistantMessages: state.assistantMessages.slice(-100),
+        assistantMessages: state.assistantMessages.slice(-500),
         briefs: state.briefs.slice(0, 50),
       }),
     },

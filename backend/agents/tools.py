@@ -14,6 +14,8 @@ Tool Calling 流程：
 """
 from __future__ import annotations
 
+import math
+
 from typing import TYPE_CHECKING, Any, Callable
 
 from sqlalchemy import select
@@ -97,18 +99,33 @@ def run_tool(ctx: "AgentContext", name: str, **kwargs) -> dict:
 
 
 # ------------------------------------------------------------------ calc
+def _finite(*values: float) -> None:
+    if not all(math.isfinite(float(value)) for value in values):
+        raise ValueError("参数必须为有限数值")
+
+
+def _years(value: object, low: int = 0, high: int = 100) -> int:
+    years = int(value)
+    if not low <= years <= high:
+        raise ValueError(f"years 需在 {low}–{high} 之间")
+    return years
+
+
 @tool("calc.compound", "复利终值：本金 + 定期追加", {"principal": "float", "annualRate": "float", "years": "int", "monthly": "float"})
 def _compound(ctx, principal: float = 0.0, annualRate: float = 0.05, years: int = 10, monthly: float = 0.0) -> dict:
+    _finite(principal, annualRate, monthly)
+    years = _years(years)
     balance = float(principal)
     r = float(annualRate)
-    for _ in range(max(0, int(years))):
+    for _ in range(years):
         balance = balance * (1 + r) + monthly * 12
     return {"futureValue": round(balance, 2), "years": years, "annualReturn": round(r, 4)}
 
 
 @tool("calc.loan", "等额本息月供", {"principal": "float", "annualRate": "float", "years": "int"})
 def _loan(ctx, principal: float = 0.0, annualRate: float = 0.04, years: int = 30) -> dict:
-    n = max(1, int(years) * 12)
+    _finite(principal, annualRate)
+    n = _years(years, low=1, high=60) * 12
     i = float(annualRate) / 12
     if i <= 0:
         monthly = principal / n
@@ -124,6 +141,7 @@ def _loan(ctx, principal: float = 0.0, annualRate: float = 0.04, years: int = 30
 
 @tool("calc.retirement_gap", "退休资金缺口（4% 法则）", {"annualExpense": "float", "withdrawRate": "float"})
 def _retirement_gap(ctx, annualExpense: float = 0.0, withdrawRate: float = 0.04) -> dict:
+    _finite(annualExpense, withdrawRate)
     need = annualExpense / max(0.001, withdrawRate)
     gap = need - ctx.wealth.net_worth
     return {
@@ -137,6 +155,7 @@ def _retirement_gap(ctx, annualExpense: float = 0.0, withdrawRate: float = 0.04)
 @tool("calc.tax_salary", "工资薪金个税估算（综合所得年度累计口径，简化版）", {"monthlyIncome": "float", "specialDeduction": "float"})
 def _tax_salary(ctx, monthlyIncome: float = 0.0, specialDeduction: float = 0.0) -> dict:
     """按 2019 起施行的七级超额累进税率估算，仅作参考不构成税务意见。"""
+    _finite(monthlyIncome, specialDeduction)
     annual = float(monthlyIncome) * 12
     taxable = max(0.0, annual - 60000 - float(specialDeduction) * 12 - annual * 0.105)
     brackets = (
@@ -238,9 +257,10 @@ def _rag_search(ctx, query: str = "", topK: int = 3) -> dict:
 @tool("market.quote", "获取行情快照（不可用时降级为空）", {"symbol": "str"})
 def _market_quote(ctx, symbol: str = "") -> dict:
     try:
-        from backend.services.monitor.service import fetch_quote  # type: ignore
+        from backend.autonomous.market.manager import get_manager
 
-        return {"symbol": symbol, "quote": fetch_quote(symbol)}
+        quote = get_manager().get_price(ctx.db, ctx.user, symbol, ttl=300)
+        return {"symbol": symbol, "quote": quote}
     except Exception:  # noqa: BLE001
         return {"ok": False, "symbol": symbol, "error": "行情源未配置，已跳过市场数据。"}
 

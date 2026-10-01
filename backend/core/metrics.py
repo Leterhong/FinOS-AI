@@ -45,7 +45,43 @@ def normalize_endpoint(path: str) -> str:
     return "/".join(":id" if (_ID_SEGMENT.match(p)) else p for p in parts)
 
 
+def _redis_client():
+    """生产多 worker 下用 Redis 共享计数，保证 /api/metrics 与 Prometheus 聚合一致。"""
+    try:
+        from backend.core.cache import cache
+
+        cache._ensure()
+        if cache.mode == "redis" and cache._redis is not None:
+            return cache._redis
+    except Exception:  # noqa: BLE001
+        pass
+    return None
+
+
+_MAX_LUA = (
+    "local cur = redis.call('HGET', KEYS[1], 'max_ms') "
+    "if (not cur) or tonumber(ARGV[1]) > tonumber(cur) then "
+    "redis.call('HSET', KEYS[1], 'max_ms', ARGV[1]) end "
+    "return 1"
+)
+
+
 def record(endpoint: str, ms: float, error: bool) -> None:
+    client = _redis_client()
+    if client is not None:
+        try:
+            key = f"metrics:stat:{endpoint}"
+            pipe = client.pipeline()
+            pipe.sadd("metrics:endpoints", endpoint)
+            pipe.hincrby(key, "count", 1)
+            if error:
+                pipe.hincrby(key, "errors", 1)
+            pipe.hincrbyfloat(key, "total_ms", ms)
+            pipe.execute()
+            client.eval(_MAX_LUA, 1, key, ms)
+            return
+        except Exception:  # noqa: BLE001 回退内存
+            pass
     global _dropped_endpoints
     with _lock:
         s = _stats.get(endpoint)
@@ -70,6 +106,36 @@ def record(endpoint: str, ms: float, error: bool) -> None:
 
 
 def snapshot() -> dict:
+    client = _redis_client()
+    if client is not None:
+        try:
+            out: dict[str, dict] = {}
+            endpoints = client.smembers("metrics:endpoints")
+            if endpoints:
+                pipe = client.pipeline()
+                for endpoint in endpoints:
+                    pipe.hgetall(f"metrics:stat:{endpoint}")
+                rows = pipe.execute()
+                for raw_endpoint, raw_stat in zip(endpoints, rows):
+                    endpoint = raw_endpoint.decode() if isinstance(raw_endpoint, bytes) else raw_endpoint
+                    stat = {
+                        (k.decode() if isinstance(k, bytes) else k): (v.decode() if isinstance(v, bytes) else v)
+                        for k, v in raw_stat.items()
+                    }
+                    count = int(float(stat.get("count", 0) or 0))
+                    errors = int(float(stat.get("errors", 0) or 0))
+                    total_ms = float(stat.get("total_ms", 0) or 0)
+                    max_ms = float(stat.get("max_ms", 0) or 0)
+                    out[endpoint] = {
+                        "count": count,
+                        "errors": errors,
+                        "error_rate": round(errors / count, 4) if count else 0.0,
+                        "avg_ms": round(total_ms / count, 2) if count else 0.0,
+                        "max_ms": round(max_ms, 2),
+                    }
+            return out
+        except Exception:  # noqa: BLE001 回退内存
+            pass
     with _lock:
         out: dict[str, dict] = {"_dropped_endpoints": _dropped_endpoints} if _dropped_endpoints else {}
         for ep, s in _stats.items():

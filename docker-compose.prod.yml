@@ -81,5 +81,16 @@ services:
       driver: json-file
       options: { max-size: "10m", max-file: "5" }
 
+  # 证书申请/续期工具容器（不常驻，按需 `--profile certbot run --rm`）。
+  # 续期由宿主机 cron 调用 deploy/scripts/renew-cert.sh 完成。
+  certbot:
+    image: certbot/certbot:latest
+    container_name: finos-certbot
+    profiles: ["certbot"]
+    volumes:
+      - ./deploy/nginx/certs:/etc/letsencrypt
+      - finos-certbot-www:/var/www/certbot
+    entrypoint: ["certbot"]
+
 volumes:
   finos-certbot-www:

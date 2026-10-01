@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Bot, Braces, CheckCircle2, Clock3, Cpu, FileSearch, GitBranch, Loader2, Play, ShieldCheck, XCircle } from "lucide-react";
 import { EmptyStateCard, PageIntro, Panel, PanelHeader } from "@/components/enterprise/EnterpriseUI";
@@ -39,6 +39,10 @@ export default function AgentsPage() {
   const [streamText, setStreamText] = useState("");
   const [skill, setSkill] = useState<{ id: string; name: string } | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const streamBufRef = useRef("");
+  const lastRenderRef = useRef(0);
+  const mountedRef = useRef(true);
+  useEffect(() => () => { mountedRef.current = false; abortRef.current?.abort(); }, []);
   const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
 
   const caseDocuments = useMemo(() => documents.filter((item) => item.caseId === activeCaseId && item.status === "已解析" && !item.error), [activeCaseId, documents]);
@@ -57,6 +61,7 @@ export default function AgentsPage() {
     setRunning(true);
     setStreamText("");
     setSkill(null);
+    streamBufRef.current = "";
     const controller = new AbortController();
     abortRef.current = controller;
     try {
@@ -68,16 +73,26 @@ export default function AgentsPage() {
           question: "请执行一次完整的企业经营与风险研判，列出可用事实、适用规则、风险观察、信息缺口和人工复核清单。",
           context: { cases: [activeCase!], documents: caseDocuments, rules, risks: caseRisks, external: external ?? undefined },
         },
-        (delta) => setStreamText((current) => current + delta),
+        (delta) => {
+          streamBufRef.current += delta;
+          // 节流渲染，避免每个 token 全量重解析 Markdown。
+          const now = Date.now();
+          if (mountedRef.current && now - lastRenderRef.current >= 80) {
+            lastRenderRef.current = now;
+            setStreamText(streamBufRef.current);
+          }
+        },
         controller.signal,
       );
+      if (!mountedRef.current) return;
       completeAgentRun(currentRun.id, result.answer, `${((performance.now() - startedAt) / 1000).toFixed(1)}s`);
       setSkill(result.skill ?? null);
     } catch (error) {
+      if (!mountedRef.current) return;
       const aborted = controller.signal.aborted;
       failAgentRun(currentRun.id, aborted ? "已取消本次研判" : error instanceof Error ? error.message : "模型调用失败", `${((performance.now() - startedAt) / 1000).toFixed(1)}s`);
     } finally {
-      setRunning(false);
+      if (mountedRef.current) setRunning(false);
       abortRef.current = null;
     }
   };
