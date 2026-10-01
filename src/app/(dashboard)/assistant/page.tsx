@@ -8,6 +8,7 @@ import CaseContextSelector from "@/components/enterprise/CaseContextSelector";
 import { Select } from "@/components/ui/Select";
 import { useActiveEnterpriseCase } from "@/hooks/use-active-enterprise-case";
 import { streamEnterpriseAI } from "@/lib/enterprise-ai";
+import { buildExternalContext } from "@/lib/external-context";
 import { ensureWorkspaceSession } from "@/lib/workspace-session";
 import { classifyError } from "@/components/feedback/ErrorState";
 import { Markdown } from "@/components/markdown/Markdown";
@@ -83,11 +84,12 @@ export default function AssistantPage() {
     setStreamText("");
     streamTextRef.current = "";
     try {
+      const external = await buildExternalContext();
       const result = await streamEnterpriseAI(
         {
           question,
           mode: "chat",
-          context: { cases: [activeCase], documents: caseDocuments, rules, risks: caseRisks },
+          context: { cases: [activeCase], documents: caseDocuments, rules, risks: caseRisks, external: external ?? undefined },
           skillId: skillId || undefined,
         },
         (delta) => {

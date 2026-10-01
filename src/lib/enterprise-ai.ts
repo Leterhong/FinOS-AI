@@ -17,6 +17,8 @@ export interface EnterpriseAIContext {
   documents: unknown[];
   rules: unknown[];
   risks: unknown[];
+  /** 外部参考数据（汇率 / 宏观），可选，需人工复核。 */
+  external?: unknown;
 }
 
 export interface EnterpriseAIResult {

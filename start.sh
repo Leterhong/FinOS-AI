@@ -76,7 +76,7 @@ export MODE=online
 #    先构建再启动后端，避免后端进程占用内存抬高构建峰值触发 OOM。
 if [ "$WEB_UP" -eq 0 ]; then
   rm -rf "$ROOT/.next"
-  if ! NODE_OPTIONS="--max-old-space-size=1024" NEXT_TELEMETRY_DISABLED=1 node "$NEXT_BIN" build --no-lint > "$LOG_DIR/build.log" 2>&1; then
+  if ! NODE_OPTIONS="--max-old-space-size=768" NEXT_TELEMETRY_DISABLED=1 node "$NEXT_BIN" build --no-lint > "$LOG_DIR/build.log" 2>&1; then
     echo "启动失败：生产构建未通过，详情见 $LOG_DIR/build.log" >&2
     exit 2
   fi

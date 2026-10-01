@@ -7,6 +7,7 @@ import { EmptyStateCard, PageIntro, Panel, PanelHeader } from "@/components/ente
 import CaseContextSelector from "@/components/enterprise/CaseContextSelector";
 import { useActiveEnterpriseCase } from "@/hooks/use-active-enterprise-case";
 import { streamEnterpriseAI } from "@/lib/enterprise-ai";
+import { buildExternalContext } from "@/lib/external-context";
 import { Markdown } from "@/components/markdown/Markdown";
 import { useEnterpriseStore } from "@/store/enterprise-store";
 import { useModelStore } from "@/store/model-store";
@@ -59,12 +60,13 @@ export default function AgentsPage() {
     const controller = new AbortController();
     abortRef.current = controller;
     try {
+      const external = await buildExternalContext();
       // 走 SSE 流式：推理模型首字节可能远晚于 60s，非流式会被反向代理按 idle 超时切断。
       const result = await streamEnterpriseAI(
         {
           mode: "agent",
           question: "请执行一次完整的企业经营与风险研判，列出可用事实、适用规则、风险观察、信息缺口和人工复核清单。",
-          context: { cases: [activeCase!], documents: caseDocuments, rules, risks: caseRisks },
+          context: { cases: [activeCase!], documents: caseDocuments, rules, risks: caseRisks, external: external ?? undefined },
         },
         (delta) => setStreamText((current) => current + delta),
         controller.signal,

@@ -10,6 +10,7 @@ import EnterpriseDialog from "@/components/enterprise/EnterpriseDialog";
 import CaseContextSelector from "@/components/enterprise/CaseContextSelector";
 import { useActiveEnterpriseCase } from "@/hooks/use-active-enterprise-case";
 import { streamEnterpriseAI } from "@/lib/enterprise-ai";
+import { buildExternalContext } from "@/lib/external-context";
 import { Markdown } from "@/components/markdown/Markdown";
 import ExternalDataPanel from "@/components/data-display/ExternalDataPanel";
 import { useEnterpriseStore } from "@/store/enterprise-store";
@@ -43,12 +44,13 @@ export default function ResearchPage() {
     setGenerating(true);
     setError("");
     try {
+      const external = await buildExternalContext();
       // 走 SSE 流式，避免非流式长请求被反向代理按 idle 超时切断。
       const result = await streamEnterpriseAI(
         {
           mode: "research",
           question: `研究主题：${topic}${scope ? `\n研究范围：${scope}` : ""}`,
-          context: { cases: [activeCase], documents: caseDocuments, rules, risks: caseRisks },
+          context: { cases: [activeCase], documents: caseDocuments, rules, risks: caseRisks, external: external ?? undefined },
         },
         () => {},
       );

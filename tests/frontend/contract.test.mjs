@@ -159,6 +159,15 @@ test("助手回答必须用 Markdown 渲染而非编号章节兜底", () => {
   assert.ok(existsSync(join(SRC, "components", "markdown", "Markdown.tsx")));
 });
 
+test("规则模板库与外部数据必须接入", () => {
+  assert.ok(existsSync(join(SRC, "lib", "rule-templates.ts")));
+  assert.ok(existsSync(join(SRC, "lib", "industry-thresholds.ts")));
+  assert.ok(existsSync(join(SRC, "lib", "external-context.ts")));
+  assert.match(read(join(SRC, "app", "(dashboard)", "rules", "page.tsx")), /RULE_TEMPLATES/);
+  assert.match(read(join(SRC, "app", "(dashboard)", "assistant", "page.tsx")), /buildExternalContext/);
+  assert.match(read(join(SRC, "app", "api", "enterprise", "ai", "route.ts")), /externalBlock/);
+});
+
 test("企业 AI 上下文和产出必须按项目隔离", () => {
   const assistant = read(join(SRC, "app", "(dashboard)", "assistant", "page.tsx"));
   const agents = read(join(SRC, "app", "(dashboard)", "agents", "page.tsx"));

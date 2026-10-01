@@ -2,14 +2,20 @@
 
 import { type FormEvent, useState } from "react";
 import { formatWhen } from "@/lib/relative-time";
-import { CheckCircle2, FileDiff, Plus, Search, ShieldCheck, Trash2 } from "lucide-react";
+import { CheckCircle2, FileDiff, Library, Plus, Search, ShieldCheck, Trash2 } from "lucide-react";
 import EnterpriseDialog from "@/components/enterprise/EnterpriseDialog";
 import { Select } from "@/components/ui/Select";
 import { EmptyStateCard, PageIntro, Panel } from "@/components/enterprise/EnterpriseUI";
 import { useEnterpriseStore } from "@/store/enterprise-store";
 import { evaluateRule, type FactCandidate } from "@/lib/rule-engine";
+import { RULE_TEMPLATES, ruleTemplateGroups, type RuleTemplate } from "@/lib/rule-templates";
 import { toast } from "@/components/feedback/toast";
 import type { EnterpriseRule } from "@/types/enterprise";
+
+/** 指标阈值单位提示：比率类按 %，其余按元。 */
+function conditionUnit(metric: string): string {
+  return /率|比|度|占比/.test(metric) ? "%" : "元";
+}
 
 export default function RulesPage() {
   const allRules = useEnterpriseStore((state) => state.rules);
@@ -23,7 +29,18 @@ export default function RulesPage() {
   const [testingRule, setTestingRule] = useState<EnterpriseRule | null>(null);
   const [deletingRule, setDeletingRule] = useState<EnterpriseRule | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [templateOpen, setTemplateOpen] = useState(false);
+  const [templateGroup, setTemplateGroup] = useState("全部");
   const rules = allRules.filter((rule) => `${rule.code}${rule.name}${rule.domain}`.toLowerCase().includes(query.toLowerCase()));
+
+  const addFromTemplate = (template: RuleTemplate) => {
+    if (allRules.some((rule) => rule.code === template.code)) {
+      toast.info(`规则 ${template.code} 已存在，已跳过`);
+      return;
+    }
+    addRule({ code: template.code, name: template.name, domain: template.domain, version: "v1.0", conditions: [{ metric: template.metric, op: template.op, value: template.value }] });
+    toast.success(`已从模板创建规则：${template.name}`);
+  };
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -75,7 +92,7 @@ export default function RulesPage() {
   ] as const;
 
   return <div className="page-shell">
-    <PageIntro eyebrow="Policy & rules" title="企业金融规则库" description="把准入制度、审查要点与监管要求转化为可版本化、可测试、可解释的机器规则，并保留原制度依据。" actions={<button onClick={() => setOpen(true)} className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]"><Plus className="h-3.5 w-3.5" />新建规则</button>} />
+    <PageIntro eyebrow="Policy & rules" title="企业金融规则库" description="把准入制度、审查要点与监管要求转化为可版本化、可测试、可解释的机器规则，并保留原制度依据。" actions={<><button onClick={() => setTemplateOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-cyan-400/25 px-4 py-2.5 text-xs text-cyan-200"><Library className="h-3.5 w-3.5" />规则模板</button><button onClick={() => setOpen(true)} className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]"><Plus className="h-3.5 w-3.5" />新建规则</button></>} />
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{metrics.map(([Icon, value, label]) => <div key={label} className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-4"><Icon className="h-4 w-4 text-cyan-300" /><p className="numeric mt-3 text-2xl font-semibold text-white">{value}</p><p className="mt-1 text-[11px] text-slate-500">{label}</p></div>)}</div>
     <Panel>
       <div className="flex flex-col gap-3 border-b border-white/[0.07] p-4 sm:flex-row sm:items-center"><label className="flex flex-1 items-center gap-2 rounded-xl border border-white/[0.08] bg-black/10 px-3"><Search className="h-3.5 w-3.5 text-slate-600" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索规则编号、名称或业务域" className="h-10 flex-1 bg-transparent text-xs text-white outline-none placeholder:text-slate-600" /></label><span className="text-[10px] text-slate-600">本地工作区自动保存</span></div>
@@ -126,7 +143,7 @@ export default function RulesPage() {
                       <span className="rounded-md border border-cyan-400/20 bg-cyan-400/[0.05] px-2 py-0.5 text-[9px] font-semibold text-cyan-300">{index === 0 ? "IF" : "AND"}</span>
                       <span className="text-slate-200">{condition.metric}</span>
                       <span className="text-[10px] text-slate-500">{condition.op === "lt" ? "<" : condition.op === "lte" ? "≤" : condition.op === "gt" ? ">" : condition.op === "gte" ? "≥" : "="}</span>
-                      <span className="numeric text-amber-200">{condition.value.toLocaleString()} 元</span>
+                      <span className="numeric text-amber-200">{condition.value.toLocaleString()} {conditionUnit(condition.metric)}</span>
                     </div>
                   ))}
                   <p className="pt-1 text-[10px] text-slate-600">THEN · 满足全部条件时生成风险信号，由规则引擎对已抽取事实确定性判定。</p>
@@ -143,5 +160,27 @@ export default function RulesPage() {
     </EnterpriseDialog>
     <EnterpriseDialog open={Boolean(testingRule)} onClose={() => setTestingRule(null)} title="运行规则测试样本" description={testingRule ? `${testingRule.code} · ${testingRule.name}` : undefined}><form onSubmit={submitTest} className="space-y-4"><div className="rounded-xl border border-white/[0.07] p-3 text-[10px] leading-5 text-slate-400">条件：{testingRule?.conditions?.[0]?.metric} · {testingRule?.conditions?.[0]?.op} · {testingRule?.conditions?.[0]?.value}</div><div className="grid grid-cols-2 gap-3"><label><span className="mb-1.5 block text-[11px] text-slate-400">测试数值</span><input required type="number" step="any" name="actualValue" className="field-control" /></label><label><span className="mb-1.5 block text-[11px] text-slate-400">单位</span><Select name="unit" defaultValue="元" options={[{ value: "元", label: "元" }, { value: "万元", label: "万元" }, { value: "亿元", label: "亿元" }, { value: "%", label: "%" }]} /></label></div><label className="block"><span className="mb-1.5 block text-[11px] text-slate-400">期望结果</span><Select name="expectedHit" defaultValue="true" options={[{ value: "true", label: "应命中" }, { value: "false", label: "不应命中" }]} /></label><label className="block"><span className="mb-1.5 block text-[11px] text-slate-400">测试证据</span><textarea required name="quote" rows={3} placeholder="记录测试样本来源或构造依据" className="field-control resize-none" /></label><label className="block"><span className="mb-1.5 block text-[11px] text-slate-400">测试人</span><input required name="tester" placeholder="填写真实测试人" className="field-control" /></label><div className="flex justify-end gap-2"><button type="button" onClick={() => setTestingRule(null)} className="rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-400">取消</button><button type="submit" className="rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]">执行并保存结果</button></div></form></EnterpriseDialog>
     <EnterpriseDialog open={Boolean(deletingRule)} onClose={() => setDeletingRule(null)} title="确认删除规则" description={deletingRule ? `${deletingRule.code} · ${deletingRule.name}` : undefined}><div className="space-y-4"><p className="text-xs leading-6 text-slate-400">删除后该规则及测试记录将从工作区和服务端备份移除。历史报告中的文字引用不会自动重写。</p><div className="flex justify-end gap-2"><button type="button" onClick={() => setDeletingRule(null)} className="rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-400">取消</button><button type="button" onClick={() => { if (deletingRule) deleteRule(deletingRule.id); setDeletingRule(null); }} className="rounded-xl bg-rose-400 px-4 py-2.5 text-xs font-semibold text-white">确认删除</button></div></div></EnterpriseDialog>
+    <EnterpriseDialog open={templateOpen} onClose={() => setTemplateOpen(false)} title="规则模板库" description="按行业/通用选择模板一键加入规则库（生成普通规则，可继续编辑或删除）。阈值仅作风险提示，不替代授信政策。">
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[11px] text-slate-400">分组</span>
+          <Select value={templateGroup} onChange={setTemplateGroup} className="min-w-40" options={["全部", ...ruleTemplateGroups()].map((group) => ({ value: group, label: group }))} />
+          <span className="text-[10px] text-slate-600">共 {RULE_TEMPLATES.length} 条模板</span>
+        </div>
+        <div className="scrollbar-thin max-h-[55vh] space-y-2 overflow-y-auto">
+          {RULE_TEMPLATES.filter((template) => templateGroup === "全部" || template.group === templateGroup).map((template) => {
+            const added = allRules.some((rule) => rule.code === template.code);
+            const opLabel = template.op === "lt" ? "<" : template.op === "lte" ? "≤" : template.op === "gt" ? ">" : template.op === "gte" ? "≥" : "=";
+            return <div key={template.id} className="flex items-center gap-3 rounded-xl border border-white/[0.07] p-3">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs text-slate-200">{template.code} · {template.name}</p>
+                <p className="mt-1 text-[10px] text-slate-600">{template.group} · {template.metric} {opLabel} {template.value}{conditionUnit(template.metric)} · {template.note}</p>
+              </div>
+              <button type="button" onClick={() => addFromTemplate(template)} disabled={added} className="shrink-0 rounded-lg border border-cyan-400/25 px-3 py-1.5 text-[10px] text-cyan-200 disabled:opacity-40">{added ? "已加入" : "加入规则库"}</button>
+            </div>;
+          })}
+        </div>
+      </div>
+    </EnterpriseDialog>
   </div>;
 }
