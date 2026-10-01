@@ -43,6 +43,13 @@ jobs:
       - run: pip install -r backend/requirements.txt
       - run: pip install ruff
       - run: ruff check backend
+      # 迁移烟测：空 SQLite 库完整 upgrade 到 head，防止迁移链回归
+      - run: python -m alembic -c backend/alembic.ini upgrade head
+        env:
+          ENV: test
+          DATABASE_URL: sqlite:///./migrate-check.db
+          JWT_SECRET: test-secret-0123456789abcdef0123456789abcdef
+          ENCRYPTION_MASTER_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
       - run: npm run test:backend
 
   e2e:

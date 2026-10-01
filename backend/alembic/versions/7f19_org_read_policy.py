@@ -27,7 +27,9 @@ def upgrade() -> None:
         "organizations",
         sa.Column("members_read_all_projects", sa.Boolean(), nullable=False, server_default=sa.false()),
     )
-    op.alter_column("organizations", "members_read_all_projects", server_default=None)
+    # SQLite 不支持 ALTER COLUMN，且 server_default 差异不影响业务语义，故跳过。
+    if bind.dialect.name != "sqlite":
+        op.alter_column("organizations", "members_read_all_projects", server_default=None)
 
 
 def downgrade() -> None:
@@ -37,4 +39,6 @@ def downgrade() -> None:
         return
     columns = {column["name"] for column in inspector.get_columns("organizations")}
     if "members_read_all_projects" in columns:
-        op.drop_column("organizations", "members_read_all_projects")
+        # batch 模式在 SQLite 上通过重建表实现，PostgreSQL 上等价于普通 DROP COLUMN。
+        with op.batch_alter_table("organizations") as batch:
+            batch.drop_column("members_read_all_projects")

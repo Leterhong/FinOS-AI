@@ -27,11 +27,14 @@ def upgrade() -> None:
     if not inspector.has_table("organization_members"):
         return
     existing = {column["name"] for column in inspector.get_columns("organization_members")}
+    is_sqlite = bind.dialect.name == "sqlite"
     for name, type_ in _COLUMNS.items():
         if name in existing:
             continue
         op.add_column("organization_members", sa.Column(name, type_, nullable=False, server_default=""))
-        op.alter_column("organization_members", name, server_default=None)
+        # SQLite 不支持 ALTER COLUMN；server_default 差异不影响业务语义。
+        if not is_sqlite:
+            op.alter_column("organization_members", name, server_default=None)
 
 
 def downgrade() -> None:
@@ -42,4 +45,9 @@ def downgrade() -> None:
     existing = {column["name"] for column in inspector.get_columns("organization_members")}
     for name in _COLUMNS:
         if name in existing:
-            op.drop_column("organization_members", name)
+            if bind.dialect.name == "sqlite":
+                # SQLite 通过 batch 重建表完成删列。
+                with op.batch_alter_table("organization_members") as batch:
+                    batch.drop_column(name)
+            else:
+                op.drop_column("organization_members", name)

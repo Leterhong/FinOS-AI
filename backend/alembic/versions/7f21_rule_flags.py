@@ -21,12 +21,15 @@ def upgrade() -> None:
     if not inspector.has_table("enterprise_rules"):
         return
     existing = {column["name"] for column in inspector.get_columns("enterprise_rules")}
+    is_sqlite = bind.dialect.name == "sqlite"
     if "enabled" not in existing:
         op.add_column("enterprise_rules", sa.Column("enabled", sa.Boolean(), nullable=False, server_default=sa.true()))
-        op.alter_column("enterprise_rules", "enabled", server_default=None)
+        if not is_sqlite:
+            op.alter_column("enterprise_rules", "enabled", server_default=None)
     if "industries_json" not in existing:
         op.add_column("enterprise_rules", sa.Column("industries_json", sa.Text(), nullable=False, server_default="[]"))
-        op.alter_column("enterprise_rules", "industries_json", server_default=None)
+        if not is_sqlite:
+            op.alter_column("enterprise_rules", "industries_json", server_default=None)
 
 
 def downgrade() -> None:
@@ -37,4 +40,8 @@ def downgrade() -> None:
     existing = {column["name"] for column in inspector.get_columns("enterprise_rules")}
     for name in ("enabled", "industries_json"):
         if name in existing:
-            op.drop_column("enterprise_rules", name)
+            if bind.dialect.name == "sqlite":
+                with op.batch_alter_table("enterprise_rules") as batch:
+                    batch.drop_column(name)
+            else:
+                op.drop_column("enterprise_rules", name)
