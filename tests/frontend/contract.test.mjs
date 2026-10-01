@@ -168,6 +168,13 @@ test("规则模板库与外部数据必须接入", () => {
   assert.match(read(join(SRC, "app", "api", "enterprise", "ai", "route.ts")), /externalBlock/);
 });
 
+test("通知中心与助手引用来源必须接入", () => {
+  assert.ok(existsSync(join(SRC, "app", "(dashboard)", "notifications", "page.tsx")));
+  assert.match(read(join(SRC, "components", "dashboard", "DashboardHeader.tsx")), /\/notifications/);
+  assert.ok(existsSync(join(SRC, "lib", "answer-references.ts")));
+  assert.match(read(join(SRC, "app", "(dashboard)", "assistant", "page.tsx")), /buildAnswerReferences/);
+});
+
 test("风险清单必须支持多格式导出（Word/PDF/Markdown）", () => {
   assert.ok(existsSync(join(SRC, "lib", "risk-export.ts")));
   assert.ok(existsSync(join(SRC, "lib", "risk-report-docx.ts")));

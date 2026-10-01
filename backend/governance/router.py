@@ -479,6 +479,11 @@ def create_review(body: ReviewIn, request: Request, user: User = Depends(get_cur
             return fail("引用的资源不存在", status_code=422)
     row = GovernanceReview(organization_id=org.id, user_id=user.id, case_id=body.caseId, resource_type=body.resourceType, resource_id=body.resourceId, title=body.title, assigned_role=body.assignedRole, requested_by=body.requestedBy)
     db.add(row)
+    # 站内通知：提醒该组织中承担对应角色的成员有新的待复核事项。
+    reviewers = list(db.scalars(select(OrganizationMember).where(OrganizationMember.organization_id == org.id, OrganizationMember.role == body.assignedRole, OrganizationMember.status == "active")))
+    for member in reviewers:
+        if member.user_id and member.user_id != user.id:
+            db.add(Notification(user_id=member.user_id, source="review", category="system", severity="medium", title=f"有待复核事项：{body.title}", body=f"组织：{org.name}；要求角色：{body.assignedRole}"))
     record_governance_audit(db, user=user, action="review.request", resource_type=body.resourceType, resource_id=body.resourceId, organization_id=org.id, case_id=body.caseId, request=request)
     db.commit()
     return ok(_review_out(row))
@@ -519,6 +524,13 @@ def decide_review(review_id: str, body: ReviewDecisionIn, request: Request, user
             eval_run.review_status = body.status
     # decided_by 一律取服务端已认证身份，杜绝客户端伪造复核人。
     row.decided_by = user.email[:120]
+    # 站内通知：告知发起人复核结论（按发起人邮箱匹配组织成员/账号）。
+    requester_email = (row.requested_by or "").strip().lower()
+    if requester_email:
+        member = db.scalar(select(OrganizationMember).where(OrganizationMember.organization_id == row.organization_id, OrganizationMember.email == requester_email))
+        target = db.get(User, member.user_id) if member and member.user_id else db.scalar(select(User).where(User.email == requester_email))
+        if target is not None and target.id != user.id:
+            db.add(Notification(user_id=target.id, source="review", category="system", severity="info", title=f"复核已完成：{row.title}", body=f"结论：{'通过' if body.status == 'approved' else '驳回'}；复核人：{user.email}"))
     record_governance_audit(db, user=user, action=f"review.{body.status}", resource_type=row.resource_type, resource_id=row.resource_id, organization_id=row.organization_id, case_id=row.case_id, details={"note": body.note[:500]}, request=request)
     db.commit()
     return ok(_review_out(row))

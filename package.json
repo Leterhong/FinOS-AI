@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "node --test tests/frontend/contract.test.mjs",
     "test:backend": "python -m pytest tests/backend tests/ai -q",
-    "test:unit": "node --conditions=react-server --require ./scripts/register-os-user.cjs --import tsx --test tests/unit/rule-engine.test.ts tests/unit/financial-analysis.test.ts tests/unit/pdf-parser.test.ts tests/unit/prompt-guard.test.ts tests/unit/skill-registry.test.ts tests/unit/skill-scan.test.ts tests/unit/rule-templates.test.ts tests/unit/risk-docx.test.ts"
+    "test:unit": "node --conditions=react-server --require ./scripts/register-os-user.cjs --import tsx --test tests/unit/rule-engine.test.ts tests/unit/financial-analysis.test.ts tests/unit/pdf-parser.test.ts tests/unit/prompt-guard.test.ts tests/unit/skill-registry.test.ts tests/unit/skill-scan.test.ts tests/unit/rule-templates.test.ts tests/unit/risk-docx.test.ts tests/unit/answer-references.test.ts"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.2",

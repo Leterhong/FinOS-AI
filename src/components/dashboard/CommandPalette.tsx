@@ -9,7 +9,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bot, BriefcaseBusiness, Files, Search, ShieldAlert, Sparkles, Upload, Cpu, Command } from "lucide-react";
+import { Bot, BriefcaseBusiness, Files, Search, ShieldAlert, Sparkles, Upload, Cpu, Command, Bell } from "lucide-react";
 import { useEnterpriseStore } from "@/store/enterprise-store";
 import { useModelStore } from "@/store/model-store";
 import { cn } from "@/lib/utils";
@@ -84,6 +84,7 @@ export default function CommandPalette() {
       { href: "/research", label: "投研中心", group: "Pages", icon: Files },
       { href: "/agents", label: "Agent 中心", group: "Pages", icon: Bot },
       { href: "/skills", label: "专属技能中心", group: "Pages", icon: Sparkles },
+      { href: "/notifications", label: "通知中心", group: "Pages", icon: Bell },
       { href: "/workflows", label: "流程中心", group: "Pages", icon: Files },
       { href: "/governance", label: "企业治理", group: "Pages", icon: ShieldAlert },
       { href: "/models", label: "AI 模型中心", group: "Pages", icon: Cpu },

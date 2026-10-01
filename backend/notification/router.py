@@ -85,6 +85,18 @@ def create_notification(body: CreateNotification, user: User = Depends(get_curre
     return ok(_serialize(n))
 
 
+@router.post("/read-all")
+def mark_all_read(category: str | None = None, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    stmt = select(Notification).where(Notification.user_id == user.id, Notification.read == False)  # noqa: E712
+    if category:
+        stmt = stmt.where(Notification.category == category)
+    rows = list(db.scalars(stmt))
+    for n in rows:
+        n.read = True
+    db.commit()
+    return ok({"updated": len(rows)}, "已全部标记为已读")
+
+
 @router.post("/{notification_id}/read")
 def mark_read(notification_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     n = db.scalar(select(Notification).where(Notification.id == notification_id, Notification.user_id == user.id))

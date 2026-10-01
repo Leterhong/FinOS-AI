@@ -40,6 +40,7 @@ from backend.governance.service import (
     record_rule_revision,
     rule_accessible,
 )
+from backend.notification.models import Notification
 from backend.user.models import User
 
 router = APIRouter(prefix="/enterprise", tags=["enterprise"])
@@ -542,7 +543,15 @@ def upsert_task(body: TaskIn, request: Request, user: User = Depends(get_current
         return fail("任务不存在", status_code=404)
     else:
         action = "task.update"
+    previous_assignee = row.assignee
     _apply_task(row, body)
+    # 站内通知：任务被指派/改派给某个账号邮箱时，提醒对方。
+    assignee = (row.assignee or "").strip().lower()
+    if assignee and assignee != (previous_assignee or "").strip().lower() and "@" in assignee:
+        target = db.scalar(select(User).where(User.email == assignee))
+        if target is not None and target.id != user.id:
+            case_name = f"{case.company} · {case.title}" if case else (row.case_name or "")
+            db.add(Notification(user_id=target.id, source="task", category="system", severity="medium", title=f"你被指派了任务：{row.title}", body=f"项目：{case_name or '未关联'}；截止：{row.due or '未设置'}；阶段：{row.stage}"))
     record_governance_audit(db, user=user, action=action, resource_type="task", resource_id=row.id, organization_id=case.organization_id if case else "", case_id=row.case_id, details={"stage": row.stage}, request=request)
     db.commit()
     return ok(_task_out(row))

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect } from "react";
-import { LayoutDashboard, BriefcaseBusiness, Files, ShieldAlert, ChartNoAxesCombined, Scale, Bot, Workflow, MessageSquareText, X, Cpu, Building2, ShieldCheck, XCircle, CheckCircle2, PanelLeftClose, PanelLeftOpen, BookOpenCheck, Sparkles } from "lucide-react";
+import { LayoutDashboard, BriefcaseBusiness, Files, ShieldAlert, ChartNoAxesCombined, Scale, Bot, Workflow, MessageSquareText, X, Cpu, Building2, ShieldCheck, XCircle, CheckCircle2, PanelLeftClose, PanelLeftOpen, BookOpenCheck, Sparkles, Bell } from "lucide-react";
 import Logo from "@/components/brand/Logo";
 import { cn } from "@/lib/utils";
 import { useEnterpriseStore } from "@/store/enterprise-store";
@@ -24,6 +24,7 @@ const groups = [
     { href: "/research", label: "投研中心", icon: ChartNoAxesCombined },
     { href: "/agents", label: "Agent 中心", icon: Bot },
     { href: "/skills", label: "技能中心", icon: Sparkles },
+    { href: "/notifications", label: "通知中心", icon: Bell },
   ]},
   { label: "Control", items: [
     { href: "/risk", label: "风险中心", icon: ShieldAlert },

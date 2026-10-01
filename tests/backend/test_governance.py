@@ -429,3 +429,23 @@ def test_remove_member_notifies_and_revokes_grant(client, user_a, user_b):
 
     notifications = client.get("/api/notifications?unread=true", headers=user_b["headers"]).json()["data"]["notifications"]
     assert any("移出组织" in n["title"] and "合作结束" in n["body"] for n in notifications), "应站内通知被移除成员"
+
+
+def test_review_assignment_notifies_reviewer(client, user_a, user_b):
+    """复核指派：组织内对应角色的成员收到站内通知。"""
+    _invite_and_accept(client, user_a["headers"], user_b, role="reviewer", clearance="internal")
+    resp = client.post(
+        "/api/governance/reviews",
+        json={"resourceType": "workflow", "resourceId": "WF-1", "title": "复核现金流异常", "assignedRole": "reviewer", "requestedBy": "owner"},
+        headers=user_a["headers"],
+    )
+    assert resp.status_code == 200, resp.text
+    notifications = client.get("/api/notifications?unread=true", headers=user_b["headers"]).json()["data"]["notifications"]
+    assert any("待复核" in n["title"] for n in notifications), "复核人应收到指派通知"
+
+
+def test_notifications_read_all(client, user_a):
+    client.post("/api/notifications", json={"title": "测试通知", "body": "内容", "category": "system"}, headers=user_a["headers"])
+    assert client.post("/api/notifications/read-all", headers=user_a["headers"]).status_code == 200
+    unread = client.get("/api/notifications?unread=true", headers=user_a["headers"]).json()["data"]["notifications"]
+    assert unread == []
