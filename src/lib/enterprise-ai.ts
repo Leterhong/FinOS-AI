@@ -128,6 +128,7 @@ export async function streamEnterpriseAI(
   let latencyMs = 0;
   const usage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
   let streamError: string | null = null;
+  let sawDone = false;
   let skill: { id: string; name: string } | undefined;
 
   const handleEvent = (raw: string) => {
@@ -141,6 +142,7 @@ export async function streamEnterpriseAI(
         onDelta(event.delta);
       }
       if (event.done) {
+        sawDone = true;
         model = event.model ?? model;
         latencyMs = event.latencyMs ?? latencyMs;
         skill = event.skill ?? skill;
@@ -161,7 +163,10 @@ export async function streamEnterpriseAI(
   }
   if (buffer) handleEvent(buffer.trim());
 
+  if (signal?.aborted) throw new DOMException("请求已取消", "AbortError");
   if (streamError) throw new Error(friendlyAIError(streamError, "模型返回错误"));
+  // 连接中途断开时不会有 done 事件：避免把半截输出当成完整回答落库。
+  if (!sawDone) throw new Error("模型响应未正常结束（连接可能中断），请重试");
   if (!answer.trim()) throw new Error("模型返回了空回复，请检查模型网关的流式响应兼容性");
   return { answer, model, provider: "user", latencyMs, usage, skill };
 }

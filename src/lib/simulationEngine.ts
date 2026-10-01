@@ -1,12 +1,28 @@
 import type { FinancialProfile, ProjectionPoint } from "@/data/types";
 
+// 与 backend/intelligence/constants.py 的 RISK_EXPECTED_RETURN 保持同一口径。
+// 中间档同时接受 moderate / balanced 两种命名，未知档位回退 balanced，避免 NaN。
 const DEFAULT_RETURNS: Record<string, number> = {
-  conservative: 0.05,
-  moderate: 0.07,
-  aggressive: 0.09,
+  conservative: 0.03,
+  balanced: 0.05,
+  moderate: 0.05,
+  aggressive: 0.07,
 };
 
-const SALARY_GROWTH = 0.05;
+const RISK_ALIAS: Record<string, string> = {
+  conservative: "conservative",
+  moderate: "moderate",
+  balanced: "balanced",
+  aggressive: "aggressive",
+};
+
+function expectedReturn(riskLevel: string): number {
+  const key = RISK_ALIAS[riskLevel] ?? "balanced";
+  return DEFAULT_RETURNS[key] ?? 0.05;
+}
+
+// 与后端 DEFAULT_SALARY_GROWTH 一致。
+const SALARY_GROWTH = 0.03;
 
 export interface SimulationModifiers {
   investmentReturn?: number;
@@ -22,7 +38,7 @@ export function projectWealth(
   years: number = 30,
   modifiers: SimulationModifiers = {}
 ): ProjectionPoint[] {
-  const baseReturn = DEFAULT_RETURNS[profile.riskLevel];
+  const baseReturn = expectedReturn(profile.riskLevel);
   const annualReturn = (modifiers.investmentReturn ?? baseReturn) + (modifiers.extraReturn ?? 0);
   const salaryGrowth = modifiers.salaryGrowth ?? SALARY_GROWTH;
   const extraMonthlyExpense = modifiers.extraExpense ?? 0;

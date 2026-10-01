@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Float, Index, String, Text
+from sqlalchemy import Boolean, DateTime, Float, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.database.base import Base
@@ -34,8 +34,8 @@ class EnterpriseCase(Base):
     owner: Mapped[str] = mapped_column(String(120), nullable=False, default="")
     next_action: Mapped[str] = mapped_column(String(300), nullable=False, default="")
     archived_at: Mapped[str] = mapped_column(String(40), nullable=False, default="")
-    created_at: Mapped[datetime] = mapped_column(default=_now)
-    updated_at: Mapped[datetime] = mapped_column(default=_now, onupdate=_now)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
 
     __table_args__ = (
         Index("ix_enterprise_cases_user", "user_id"),
@@ -59,8 +59,8 @@ class EnterpriseDocument(Base):
     model: Mapped[str | None] = mapped_column(String(200), nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     evidence_json: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(default=_now)
-    updated_at: Mapped[datetime] = mapped_column(default=_now, onupdate=_now)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
 
     __table_args__ = (Index("ix_enterprise_documents_user", "user_id"),)
 
@@ -79,8 +79,8 @@ class EnterpriseRisk(Base):
     impact: Mapped[str] = mapped_column(Text, nullable=False, default="")
     status: Mapped[str] = mapped_column(String(40), nullable=False, default="待核验")
     review_json: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(default=_now)
-    updated_at: Mapped[datetime] = mapped_column(default=_now, onupdate=_now)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
 
     __table_args__ = (Index("ix_enterprise_risks_user", "user_id"),)
 
@@ -103,8 +103,8 @@ class EnterpriseRule(Base):
     # 规则启用状态与适用行业标签（用于按项目行业筛选与自动推荐）。
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     industries_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
-    created_at: Mapped[datetime] = mapped_column(default=_now)
-    updated_at: Mapped[datetime] = mapped_column(default=_now, onupdate=_now)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
 
     __table_args__ = (
         Index("ix_enterprise_rules_user", "user_id"),
@@ -126,8 +126,8 @@ class EnterpriseTask(Base):
     stage: Mapped[str] = mapped_column(String(40), nullable=False, default="待处理")
     note: Mapped[str] = mapped_column(Text, nullable=False, default="")
     history_json: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(default=_now)
-    updated_at: Mapped[datetime] = mapped_column(default=_now, onupdate=_now)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
 
     __table_args__ = (Index("ix_enterprise_tasks_user", "user_id"),)
 
@@ -142,7 +142,7 @@ class EnterpriseBrief(Base):
     summary: Mapped[str] = mapped_column(Text, nullable=False, default="")
     topic: Mapped[str] = mapped_column(String(300), nullable=False, default="")
     model: Mapped[str | None] = mapped_column(String(200), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(default=_now)
-    updated_at: Mapped[datetime] = mapped_column(default=_now, onupdate=_now)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
 
     __table_args__ = (Index("ix_enterprise_briefs_user", "user_id"),)

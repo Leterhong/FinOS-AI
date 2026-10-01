@@ -11,6 +11,8 @@ WELCOME_MESSAGE = "欢迎创建你的财富数字分身"
 RISK_EXPECTED_RETURN: dict[str, float] = {
     "conservative": 0.03,
     "balanced": 0.05,
+    # 前端历史使用 moderate 命名，作为 balanced 的别名统一口径。
+    "moderate": 0.05,
     "aggressive": 0.07,
 }
 
@@ -18,6 +20,7 @@ RISK_EXPECTED_RETURN: dict[str, float] = {
 RISK_VOLATILITY: dict[str, float] = {
     "conservative": 0.04,
     "balanced": 0.10,
+    "moderate": 0.10,
     "aggressive": 0.18,
 }
 

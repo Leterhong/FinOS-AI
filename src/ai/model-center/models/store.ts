@@ -214,6 +214,11 @@ class ModelConfigStore {
     return this.withLock(userId, () => this._remove(userId, id));
   }
 
+  /** 清除某工作区的内存缓存（账户删除后调用，避免残留数据被继续读取）。 */
+  forget(userId: string): void {
+    this.cache.delete(userId);
+  }
+
   setDefault(userId: string, id: string): Promise<PublicProviderConfig | null> {
     return this.withLock(userId, () => this._setDefault(userId, id));
   }

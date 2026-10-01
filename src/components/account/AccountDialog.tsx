@@ -8,7 +8,7 @@
  */
 import { type FormEvent, useEffect, useState } from "react";
 import EnterpriseDialog from "@/components/enterprise/EnterpriseDialog";
-import { type BackendAccount, bindWorkspaceToAccount, loginAccount, registerAccount } from "@/lib/enterprise-sync";
+import { type BackendAccount, backendAuthedFetch, bindWorkspaceToAccount, loginAccount, logoutAccount, registerAccount } from "@/lib/enterprise-sync";
 import { useEnterpriseStore } from "@/store/enterprise-store";
 import { toast } from "@/components/feedback/toast";
 
@@ -31,6 +31,9 @@ export default function AccountDialog({
   const [email, setEmail] = useState(initialEmail ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const signedIn = Boolean(account && !account.guest);
 
   useEffect(() => {
@@ -42,6 +45,7 @@ export default function AccountDialog({
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (busy) return;
     const form = new FormData(event.currentTarget);
     const value = (email || String(form.get("email") || "")).trim();
     const password = String(form.get("password") || "");
@@ -69,6 +73,35 @@ export default function AccountDialog({
     }
   };
 
+  const removeAccount = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (deleteBusy) return;
+    const form = new FormData(event.currentTarget);
+    const password = String(form.get("password") || "");
+    const confirmation = String(form.get("confirmation") || "");
+    setDeleteBusy(true);
+    setDeleteError("");
+    try {
+      const resp = await backendAuthedFetch("/api/security/account", {
+        method: "DELETE",
+        body: JSON.stringify({ password, confirmation }),
+      });
+      const payload = await resp.json().catch(() => null) as { error?: string } | null;
+      if (!resp.ok) throw new Error(payload?.error || "账户删除失败");
+      // 清理 Next 侧残留（模型/技能/用量文件 + 内存缓存 + 会话 cookie）。
+      await fetch("/api/account/purge", { method: "POST" }).catch(() => undefined);
+      useEnterpriseStore.getState().purgeLocalWorkspace();
+      try { window.localStorage.removeItem("finos-workspace-owner"); } catch { /* 忽略 */ }
+      await logoutAccount();
+      toast.success("账户及关联数据已删除");
+      window.location.reload();
+    } catch (reason) {
+      setDeleteError(reason instanceof Error ? reason.message : "账户删除失败");
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
+
   return (
     <EnterpriseDialog
       open={open}
@@ -87,6 +120,22 @@ export default function AccountDialog({
             <div className="flex justify-end gap-2">
               <button type="button" onClick={onClose} className="rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-400">关闭</button>
               <button type="button" onClick={onLogout} className="rounded-xl border border-rose-400/25 px-4 py-2.5 text-xs text-rose-200 hover:bg-rose-400/[0.06]">退出登录</button>
+            </div>
+            <div className="rounded-xl border border-rose-400/20 bg-rose-400/[0.03] p-4">
+              {!deleteOpen ? (
+                <button type="button" onClick={() => { setDeleteOpen(true); setDeleteError(""); }} className="text-[11px] text-rose-300 hover:text-rose-200">删除账户及全部关联数据</button>
+              ) : (
+                <form onSubmit={removeAccount} className="space-y-3">
+                  <p className="text-[11px] leading-5 text-rose-200/80">此操作不可恢复：将删除账号、企业数据、上传文件、模型与技能配置及用量记录。</p>
+                  <label className="block"><span className="mb-1.5 block text-[11px] text-slate-400">当前密码</span><input required name="password" type="password" autoComplete="current-password" className="field-control" /></label>
+                  <label className="block"><span className="mb-1.5 block text-[11px] text-slate-400">输入 DELETE MY DATA 确认</span><input required name="confirmation" placeholder="DELETE MY DATA" className="field-control" /></label>
+                  {deleteError && <p className="rounded-xl border border-rose-400/20 bg-rose-400/[0.05] px-3 py-2 text-[11px] text-rose-200">{deleteError}</p>}
+                  <div className="flex justify-end gap-2">
+                    <button type="button" onClick={() => setDeleteOpen(false)} className="rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-400">取消</button>
+                    <button type="submit" disabled={deleteBusy} className="rounded-xl border border-rose-400/30 bg-rose-400/[0.08] px-4 py-2.5 text-xs text-rose-100 disabled:opacity-40">{deleteBusy ? "删除中…" : "确认删除账户"}</button>
+                  </div>
+                </form>
+              )}
             </div>
           </div>
         ) : (

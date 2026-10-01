@@ -15,6 +15,9 @@ import httpx
 from backend.security.network import UnsafeOutboundUrl, resolve_validated_ips
 
 DEFAULT_TIMEOUT = 60.0
+# 分层超时：连接 10s、读写 600s（与 nginx/Next 的 600s 对齐，避免慢推理模型
+# 首字节超 60s 被最内层先杀掉），连接池等待 10s。
+HTTP_TIMEOUT = httpx.Timeout(connect=10.0, read=600.0, write=60.0, pool=10.0)
 
 
 class GatewayError(Exception):
@@ -61,7 +64,7 @@ def _client(base_url: str) -> httpx.AsyncClient:
     except UnsafeOutboundUrl as exc:
         raise GatewayError(str(exc)) from exc
     transport = _PinnedTransport(hostname, ips[0])
-    return httpx.AsyncClient(timeout=DEFAULT_TIMEOUT, follow_redirects=False, transport=transport)
+    return httpx.AsyncClient(timeout=HTTP_TIMEOUT, follow_redirects=False, transport=transport)
 
 
 def _parse_completion(data: dict) -> dict:

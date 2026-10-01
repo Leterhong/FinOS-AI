@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -30,6 +31,7 @@ from backend.governance.models import (
     EnterpriseConnector,
     GovernanceReview,
     ProjectGrant,
+    RuleRevision,
 )
 from backend.governance.service import (
     CLASSIFICATION_ORDER,
@@ -48,6 +50,20 @@ from backend.user.models import User
 router = APIRouter(prefix="/enterprise", tags=["enterprise"])
 
 _ID_LEN = 64
+
+
+def _iso(value: datetime | None) -> str:
+    """统一序列化为带 UTC 偏移的 ISO 字符串。
+
+    SQLite 读回的 datetime 是 naive（无时区），若直接 isoformat() 会缺少偏移，
+    前端 Date.parse 会按本地时区解释，导致跨设备 LWW 合并误判。这里把 naive
+    一律视为 UTC 再输出。
+    """
+    if value is None:
+        return ""
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.isoformat()
 
 
 def _id(value: object) -> str:
@@ -229,8 +245,8 @@ def _case_out(c: EnterpriseCase) -> dict:
         "id": c.id, "organizationId": c.organization_id, "classification": c.classification,
         "company": c.company, "title": c.title, "industry": c.industry,
         "amount": c.amount, "status": c.status, "risk": c.risk, "progress": c.progress,
-        "owner": c.owner, "nextAction": c.next_action, "createdAt": c.created_at.isoformat(),
-        "updatedAt": c.updated_at.isoformat(), "archivedAt": c.archived_at or None,
+        "owner": c.owner, "nextAction": c.next_action, "createdAt": _iso(c.created_at),
+        "updatedAt": _iso(c.updated_at), "archivedAt": c.archived_at or None,
     }
 
 
@@ -241,7 +257,7 @@ def _document_out(d: EnterpriseDocument) -> dict:
         "status": d.status, "facts": d.facts, "ruleHits": d.rule_hits,
         "analysis": d.analysis, "model": d.model, "error": d.error,
         **_json_dict(d.evidence_json),
-        "updatedAt": d.updated_at.isoformat(),
+        "updatedAt": _iso(d.updated_at),
     }
 
 
@@ -249,7 +265,7 @@ def _risk_out(r: EnterpriseRisk) -> dict:
     return {
         "id": r.id, "caseId": r.case_id, "company": r.company, "title": r.title,
         "level": r.level, "evidence": r.evidence, "rule": r.rule, "impact": r.impact,
-        "status": r.status, **_json_dict(r.review_json), "updatedAt": r.updated_at.isoformat(),
+        "status": r.status, **_json_dict(r.review_json), "updatedAt": _iso(r.updated_at),
     }
 
 
@@ -262,7 +278,7 @@ def _rule_out(r: EnterpriseRule) -> dict:
         "coverage": r.coverage, "coverageRate": r.coverage_rate,
         "enabled": bool(getattr(r, "enabled", True)),
         "industries": _json_list(getattr(r, "industries_json", "[]")),
-        "updatedAt": r.updated_at.isoformat(),
+        "updatedAt": _iso(r.updated_at),
     }
 
 
@@ -271,14 +287,14 @@ def _task_out(t: EnterpriseTask) -> dict:
         "id": t.id, "caseId": t.case_id, "title": t.title, "caseName": t.case_name, "assignee": t.assignee,
         "due": t.due, "priority": t.priority, "stage": t.stage, "note": t.note,
         "history": _json_list(t.history_json),
-        "updatedAt": t.updated_at.isoformat(),
+        "updatedAt": _iso(t.updated_at),
     }
 
 
 def _brief_out(b: EnterpriseBrief) -> dict:
     return {
         "id": b.id, "caseId": b.case_id, "title": b.title, "summary": b.summary, "topic": b.topic,
-        "model": b.model, "updatedAt": b.updated_at.isoformat(),
+        "model": b.model, "updatedAt": _iso(b.updated_at),
     }
 
 
@@ -446,8 +462,10 @@ def delete_case(case_id: str, request: Request, user: User = Depends(get_current
     record_governance_audit(db, user=user, action="case.delete", resource_type="case", resource_id=row.id, organization_id=row.organization_id, case_id=row.id, request=request)
     for model in (EnterpriseDocument, EnterpriseRisk, EnterpriseTask, EnterpriseBrief):
         db.execute(delete(model).where(model.case_id == case_id))
-    # 级联清理项目授权，避免 case id 复用时残留授权重新生效。
+    # 级联清理项目授权、连接器（含加密凭证）、待复核项，避免悬挂与密钥残留。
     db.execute(delete(ProjectGrant).where(ProjectGrant.case_id == case_id))
+    db.execute(delete(EnterpriseConnector).where(EnterpriseConnector.case_id == case_id))
+    db.execute(delete(GovernanceReview).where(GovernanceReview.case_id == case_id))
     db.delete(row)
     db.commit()
     return ok({"deleted": True})
@@ -485,6 +503,14 @@ def delete_document(document_id: str, request: Request, user: User = Depends(get
     if row is None or (row.user_id != user.id and (case is None or not can_access_case(db, user, case, "editor"))):
         return fail("资料不存在", status_code=404)
     record_governance_audit(db, user=user, action="document.delete", resource_type="document", resource_id=row.id, organization_id=case.organization_id if case else "", case_id=row.case_id, request=request)
+    # 关闭引用该资料的待复核项，避免留下可被审批的悬挂任务。
+    db.execute(
+        delete(GovernanceReview).where(
+            GovernanceReview.resource_type == "document",
+            GovernanceReview.resource_id == document_id,
+            GovernanceReview.status == "pending",
+        )
+    )
     db.delete(row)
     db.commit()
     return ok({"deleted": True})
@@ -555,6 +581,8 @@ def delete_rule(rule_id: str, request: Request, user: User = Depends(get_current
     if row is None or not rule_accessible(db, user, row, "analyst"):
         return fail("规则不存在", status_code=404)
     record_governance_audit(db, user=user, action="rule.delete", resource_type="rule", resource_id=row.id, organization_id=row.organization_id, details={"version": row.version}, request=request)
+    # 清理该规则的历史版本快照，避免已删规则的完整内容长期残留。
+    db.execute(delete(RuleRevision).where(RuleRevision.rule_id == rule_id))
     db.delete(row)
     db.commit()
     return ok({"deleted": True})

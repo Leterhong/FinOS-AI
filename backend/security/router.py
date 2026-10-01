@@ -30,6 +30,7 @@ from backend.core.response import fail
 from backend.core.security import verify_password
 from backend.config import UPLOAD_DIR
 from backend.database import get_db
+from backend.database.base import Base
 from backend.document.models import Document
 from backend.enterprise.models import (
     EnterpriseBrief,
@@ -77,70 +78,6 @@ from backend.tasks.models import AsyncTask
 from backend.user.models import User
 
 router = APIRouter(prefix="/security", tags=["security"])
-
-# 账户删除必须覆盖全部含 user_id 的业务表——遗漏任何一张都会让
-# 「账户及关联数据已删除」变成虚假承诺（合规硬要求）。
-_USER_SCOPED_MODELS = (
-    KnowledgeChunk,
-    AgentTask,
-    FinancialTwin,
-    AsyncTask,
-    AgentRunLog,
-    UserAgentConfig,
-    AIConversation,
-    AIUsageLog,
-    AIModelConfig,
-    AutomationEvent,
-    AutomationRun,
-    AutomationAction,
-    AutomationSnapshot,
-    AutomationPlan,
-    AutomationPreference,
-    AutomationMarketCache,
-    AutomationWebhook,
-    AutomationScheduled,
-    AutomationWorkflow,
-    AutomationRule,
-    WealthReport,
-    MultimodalInput,
-    ExtractionResult,
-    WealthAvatar,
-    TimelineEvent,
-    KnowledgeItem,
-    DecisionJournal,
-    PlanVersion,
-    DailyBriefing,
-    WealthPrediction,
-    ScenarioSimulation,
-    WealthStrategy,
-    HealthScoreHistory,
-    LongTermMemory,
-    Notification,
-    Memory,
-    Document,
-    Transaction,
-    Asset,
-    FinancialProfile,
-    RefreshToken,
-    SecurityEvent,
-    AuditLog,
-    EnterpriseConnector,
-    GovernanceReview,
-    ModelEvalRun,
-    ModelEvalCase,
-    RuleRevision,
-    GovernanceAudit,
-    ProjectGrant,
-    OrganizationMember,
-    Organization,
-    # 2.1 企业工作区六表——此前遗漏，删除账户后业务数据残留（合规硬要求）。
-    EnterpriseCase,
-    EnterpriseDocument,
-    EnterpriseRisk,
-    EnterpriseRule,
-    EnterpriseTask,
-    EnterpriseBrief,
-)
 
 
 class DeleteAccountIn(BaseModel):
@@ -190,8 +127,11 @@ def delete_account(
         if user_dir.is_dir():
             shutil.rmtree(user_dir, ignore_errors=True)
 
-    for model in _USER_SCOPED_MODELS:
-        db.execute(delete(model).where(model.user_id == user.id))
+    # 按元数据拓扑顺序「子表先删、父表后删」，避免 PostgreSQL 外键约束导致整单回滚
+    # （例如 multimodal_extractions.input_id → multimodal_inputs.id）。
+    for table in reversed(Base.metadata.sorted_tables):
+        if "user_id" in table.c:
+            db.execute(delete(table).where(table.c.user_id == user.id))
     db.delete(user)
     db.commit()
     return ok({"deleted": True}, "账户及关联数据已删除")

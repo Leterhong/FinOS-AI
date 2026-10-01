@@ -14,6 +14,7 @@ WELCOME_MESSAGE = "欢迎创建你的财富数字分身"
 RISK_EXPECTED_RETURN = {
     "conservative": 0.03,
     "balanced": 0.05,
+    "moderate": 0.05,
     "aggressive": 0.07,
 }
 

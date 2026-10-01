@@ -13,6 +13,7 @@ import { useActiveEnterpriseCase } from "@/hooks/use-active-enterprise-case";
 import { analyzeEnterpriseDocument } from "@/lib/enterprise-ai";
 import { canonicalMetricName } from "@/lib/metric-aliases";
 import { triggerDownload } from "@/lib/risk-report-docx";
+import { csvCell } from "@/lib/csv";
 import { AIProcessingState } from "@/components/intelligence/AIProcessingState";
 import { toast } from "@/components/feedback/toast";
 import { ErrorState } from "@/components/feedback/ErrorState";
@@ -123,7 +124,7 @@ export default function DocumentsPage() {
   const exportFactsCsv = () => {
     const rows = projectDocuments.flatMap((document) => (document.factItems ?? []).map((fact) => ({ ...fact, documentName: document.name })));
     if (!rows.length) { toast.info("当前项目还没有结构化事实"); return; }
-    const cell = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+    const cell = csvCell;
     const header = ["主题", "数值", "单位", "期间", "复核状态", "复核人", "原文引用", "位置", "来源资料"];
     const lines = [header.map(cell).join(",")].concat(rows.map((fact) => [fact.topic, fact.value, fact.unit, fact.period ?? "", fact.reviewStatus, fact.reviewedBy ?? "", fact.quote, fact.location ?? "", fact.documentName].map(cell).join(",")));
     triggerDownload(new Blob([`\ufeff${lines.join("\n")}`], { type: "text/csv;charset=utf-8" }), `${activeCase?.company ?? "资料"}-事实台账.csv`);

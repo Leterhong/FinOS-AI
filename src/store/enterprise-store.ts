@@ -586,6 +586,7 @@ export const useEnterpriseStore = create<EnterpriseState>()(
         const tasks = state.tasks.map((item) => ({ ...item, id: newId("TASK"), caseId: item.caseId ? remapCase(item.caseId) : item.caseId }));
         const briefs = state.briefs.map((item) => ({ ...item, id: newId("BRIEF"), caseId: item.caseId ? remapCase(item.caseId) : item.caseId }));
 
+        let failures = 0;
         const push = async (kind: SyncKind, items: Array<{ id: string }>) => {
           const build = syncMap[kind].payload as unknown as (item: unknown) => Record<string, unknown>;
           for (const item of items) {
@@ -594,7 +595,7 @@ export const useEnterpriseStore = create<EnterpriseState>()(
               delete payload.organizationId; // 由后端归入账号默认组织
               await pushEntityAwait(syncMap[kind].api, payload);
             } catch {
-              // 单条失败不阻断其余迁移。
+              failures += 1;
             }
           }
         };
@@ -605,7 +606,13 @@ export const useEnterpriseStore = create<EnterpriseState>()(
         await push("tasks", tasks);
         await push("briefs", briefs);
 
-        // 本地切换为迁移后的实体，保持与服务端一致，避免重载后出现重复。
+        // 只要有任何一条失败，就保留本地原数据（含原 ID）并明确报错，
+        // 避免「本地换成新 ID、服务端却没有」导致后续永不重试、换设备即丢失。
+        if (failures > 0) {
+          throw new Error(`本地数据迁移未完成（${failures} 条失败），已保留本机数据，请稍后重试`);
+        }
+
+        // 全部成功后本地切换为迁移后的实体，保持与服务端一致，避免重载后出现重复。
         set(() => {
           const derived = deriveCaseProgress({ cases, documents, risks, tasks });
           return { cases: derived.cases, documents: derived.documents, risks, rules, tasks, briefs };

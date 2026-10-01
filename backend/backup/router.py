@@ -32,6 +32,14 @@ from backend.security.audit import client_ip, write_audit
 from backend.user.models import User
 
 router = APIRouter(prefix="/backup", tags=["backup"])
+
+
+def _csv_safe(value: object) -> str:
+    """防止 CSV 公式注入：以 = + - @ 或制表/回车开头时前置单引号。"""
+    text = "" if value is None else str(value)
+    if text[:1] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + text
+    return text
 logger = get_logger("finos.backup")
 settings = get_settings()
 
@@ -147,11 +155,11 @@ def export_my_data(
         writer = csv.writer(buf)
         writer.writerow(["category", "id", "name_or_type", "amount_or_detail", "created_at"])
         for a in data["assets"]:
-            writer.writerow(["asset", a["id"], f'{a["type"]}:{a["name"]}', a["amount"], a["createdAt"]])
+            writer.writerow(["asset", _csv_safe(a["id"]), _csv_safe(f'{a["type"]}:{a["name"]}'), _csv_safe(a["amount"]), _csv_safe(a["createdAt"])])
         for t in data["transactions"]:
-            writer.writerow(["transaction", t["id"], t["type"], t["amount"], t["date"]])
+            writer.writerow(["transaction", _csv_safe(t["id"]), _csv_safe(t["type"]), _csv_safe(t["amount"]), _csv_safe(t["date"])])
         for p in data["financialProfiles"]:
-            writer.writerow(["profile", p["id"], f'income/expense', f'{p["income"]}/{p["expense"]}', p["createdAt"]])
+            writer.writerow(["profile", _csv_safe(p["id"]), "income/expense", _csv_safe(f'{p["income"]}/{p["expense"]}'), _csv_safe(p["createdAt"])])
         buf.seek(0)
         return StreamingResponse(
             iter([buf.getvalue()]),

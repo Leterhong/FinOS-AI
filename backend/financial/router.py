@@ -77,8 +77,8 @@ def get_profile(user: User = Depends(get_current_user), db: Session = Depends(ge
 
 @router.post("/profile")
 def upsert_profile(body: ProfileIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    if body.risk_level not in {"conservative", "balanced", "aggressive"}:
-        return fail("risk_level 必须是 conservative/balanced/aggressive")
+    if body.risk_level not in {"conservative", "balanced", "moderate", "aggressive"}:
+        return fail("risk_level 必须是 conservative/balanced/moderate/aggressive")
     profile = db.scalar(select(FinancialProfile).where(FinancialProfile.user_id == user.id))
     if profile is None:
         profile = FinancialProfile(user_id=user.id)

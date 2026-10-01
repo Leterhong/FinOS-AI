@@ -283,8 +283,12 @@ def _apply_one(db: Session, user: User, x: ExtractionResult) -> tuple[bool, str]
         if payload.get("aggregate"):
             monthly = payload.get("monthlyAvg")
             profile.income = round(float(monthly), 2) if monthly else amount
+        # 年度口径金额按月均入账，避免「年终奖」被当成当月收入、现金流按近 30 天汇总时放大 12 倍。
+        tx_amount = amount
+        if payload.get("period") == "yearly" and payload.get("monthlyAvg"):
+            tx_amount = round(float(payload["monthlyAvg"]), 2)
         db.add(
-            Transaction(user_id=user.id, type="income", amount=amount, category="salary")
+            Transaction(user_id=user.id, type="income", amount=tx_amount, category="salary")
         )
         db.flush()
         return True, profile.id
@@ -295,8 +299,11 @@ def _apply_one(db: Session, user: User, x: ExtractionResult) -> tuple[bool, str]
         if payload.get("aggregate"):
             monthly = payload.get("monthlyAvg")
             profile.expense = round(float(monthly), 2) if monthly else amount
+        tx_amount = amount
+        if payload.get("period") == "yearly" and payload.get("monthlyAvg"):
+            tx_amount = round(float(payload["monthlyAvg"]), 2)
         db.add(
-            Transaction(user_id=user.id, type="expense", amount=amount,
+            Transaction(user_id=user.id, type="expense", amount=tx_amount,
                         category=payload.get("category", "other"))
         )
         db.flush()
