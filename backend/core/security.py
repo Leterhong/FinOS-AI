@@ -130,7 +130,11 @@ def decode_refresh_token(token: str) -> dict | None:
 
 # ---------- API Key 加密（AES-256-GCM；兼容读取 Phase 7.0.1 Fernet 密文） ----------
 def _legacy_fernet() -> Fernet:
-    digest = hashlib.sha256(settings.jwt_secret.encode("utf-8")).digest()
+    # 遗留 Fernet 密文优先使用独立密钥 LEGACY_ENCRYPTION_KEY；未配置时回退到历史派生方式（向后兼容）。
+    import os
+
+    source = os.getenv("LEGACY_ENCRYPTION_KEY") or settings.jwt_secret
+    digest = hashlib.sha256(source.encode("utf-8")).digest()
     return Fernet(base64.urlsafe_b64encode(digest))
 
 

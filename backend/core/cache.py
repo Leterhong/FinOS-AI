@@ -17,6 +17,7 @@ import hashlib
 import json
 import threading
 import time
+import uuid
 from collections import OrderedDict, defaultdict, deque
 from typing import Any, Callable, Optional
 
@@ -151,7 +152,7 @@ class Cache:
                 pipe = self._redis.pipeline()
                 zset = f"ratelimit:{key}"
                 pipe.zremrangebyscore(zset, "-inf", window_start)
-                pipe.zadd(zset, {str(now): now})
+                pipe.zadd(zset, {uuid.uuid4().hex: now})
                 pipe.zcard(zset)
                 pipe.expire(zset, window_seconds)
                 _, _, count, _ = pipe.execute()

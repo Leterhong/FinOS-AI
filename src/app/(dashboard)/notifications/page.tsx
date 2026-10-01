@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Archive, Bell, CheckCheck, Loader2, Trash2 } from "lucide-react";
+import { Archive, Bell, CheckCheck, Trash2 } from "lucide-react";
 import { EmptyStateCard, PageIntro, Panel } from "@/components/enterprise/EnterpriseUI";
 import { Select } from "@/components/ui/Select";
 import { backendAuthedFetch } from "@/lib/enterprise-sync";
+import { Skeleton } from "@/components/feedback/Skeleton";
 import { toast } from "@/components/feedback/toast";
 import { ensureWorkspaceSession } from "@/lib/workspace-session";
 
@@ -100,7 +101,7 @@ export default function NotificationsPage() {
         <span className="ml-auto text-[10px] text-slate-600">共 {items.length} 条 · 未读 {unread} 条</span>
       </div>
       {error && <p className="px-4 py-3 text-xs text-rose-200">{error}</p>}
-      {loading ? <div className="flex items-center gap-2 p-6 text-xs text-slate-400"><Loader2 className="h-4 w-4 animate-spin text-cyan-300" />正在加载通知…</div>
+      {loading ? <div className="p-6"><Skeleton rows={5} /></div>
         : items.length === 0 ? <EmptyStateCard icon={Bell} title="暂无通知" description="组织邀请、任务指派与系统提醒会出现在这里。" />
         : <div className="divide-y divide-white/[0.06]">{items.map((item) => <article key={item.id} className={`flex flex-wrap items-start gap-3 px-5 py-4 ${item.read ? "opacity-70" : ""}`}>
           <div className="min-w-0 flex-1">

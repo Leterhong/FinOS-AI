@@ -59,6 +59,16 @@ export default function ModelsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<PublicProviderConfig | null>(null);
   const [question, setQuestion] = useState("");
+  const [usage, setUsage] = useState<{ calls: number; tokens: number; avgLatencyMs: number; errorRate: number } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/models/usage")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => { if (!cancelled && data?.usage) setUsage(data.usage); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [models.length, playgroundResult]);
 
   useEffect(() => {
     void Promise.all([loadModels(), loadActive()]);
@@ -110,6 +120,18 @@ export default function ModelsPage() {
         <div className="p-5"><textarea value={question} onChange={(event) => setQuestion(event.target.value)} rows={3} className="field-control resize-none" placeholder="输入用于验证模型连接的问题；不会自动填入业务数据" /><button onClick={() => void runPlayground(question)} disabled={!active?.configured || !question.trim() || playgroundRunning} className="mt-3 inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018] disabled:cursor-not-allowed disabled:opacity-40">{playgroundRunning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}发送真实请求</button>{playgroundResult && <div className={`mt-4 rounded-xl border p-4 ${playgroundResult.ok ? "border-emerald-400/15 bg-emerald-400/[0.035]" : "border-rose-400/15 bg-rose-400/[0.035]"}`}><div className="flex items-center gap-2 text-xs">{playgroundResult.ok ? <CheckCircle2 className="h-4 w-4 text-emerald-300" /> : <XCircle className="h-4 w-4 text-rose-300" />}<span className={playgroundResult.ok ? "text-emerald-200" : "text-rose-200"}>{playgroundResult.ok ? "调用成功" : "调用失败"}</span>{playgroundResult.ok && <span className="ml-auto text-[10px] text-slate-500">{playgroundResult.latencyMs} ms · {playgroundResult.totalTokens} tokens</span>}</div><p className="mt-3 whitespace-pre-wrap text-xs leading-6 text-slate-300">{playgroundResult.ok ? playgroundResult.reply : playgroundResult.error}</p></div>}</div>
       </Panel>
     </div>
+
+    <Panel>
+      <PanelHeader eyebrow="Usage" title="调用用量" description="当前工作区近期模型调用统计，用于观察 Token 消耗与错误率。" />
+      <div className="grid grid-cols-2 gap-3 p-5 lg:grid-cols-4">
+        {[
+          ["调用次数", usage ? String(usage.calls) : "—"],
+          ["Token 合计", usage ? usage.tokens.toLocaleString("zh-CN") : "—"],
+          ["平均耗时", usage ? `${usage.avgLatencyMs} ms` : "—"],
+          ["错误率", usage ? `${(usage.errorRate * 100).toFixed(1)}%` : "—"],
+        ].map(([label, value]) => <div key={label} className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-4"><p className="text-[10px] text-slate-500">{label}</p><p className="numeric mt-2 text-lg font-semibold text-white">{value}</p></div>)}
+      </div>
+    </Panel>
 
     <Panel>
       <PanelHeader eyebrow="Model registry" title="已配置模型" description="首个模型自动设为默认；修改地址、模型或密钥后需重新测试。" action={<span className="rounded-lg border border-white/[0.07] px-2.5 py-1.5 text-[10px] text-slate-500">{models.length} 个连接</span>} />

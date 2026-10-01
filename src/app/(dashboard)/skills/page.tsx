@@ -4,6 +4,7 @@ import { type ChangeEvent, useEffect, useRef, useState } from "react";
 import { AlertTriangle, BookOpenCheck, FileArchive, Loader2, Power, ShieldAlert, Sparkles, Trash2, Upload } from "lucide-react";
 import { EmptyStateCard, PageIntro, Panel, PanelHeader } from "@/components/enterprise/EnterpriseUI";
 import EnterpriseDialog from "@/components/enterprise/EnterpriseDialog";
+import { Skeleton } from "@/components/feedback/Skeleton";
 import { toast } from "@/components/feedback/toast";
 import { ensureWorkspaceSession } from "@/lib/workspace-session";
 
@@ -190,7 +191,7 @@ export default function SkillsPage() {
       actions={<><span className="rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-300">已启用 {enabledCount}/{skills.length}</span><button onClick={() => { resetUpload(); setUploadOpen(true); }} className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]"><Upload className="h-3.5 w-3.5" />上传技能</button></>}
     />
     {error && <p className="rounded-xl border border-rose-400/20 bg-rose-400/[0.05] px-4 py-3 text-xs text-rose-200">{error}</p>}
-    {loading ? <Panel><div className="flex items-center gap-2 p-6 text-xs text-slate-400"><Loader2 className="h-4 w-4 animate-spin text-cyan-300" />正在加载技能…</div></Panel>
+    {loading ? <Panel><div className="p-6"><Skeleton rows={5} /></div></Panel>
       : skills.length === 0 ? <Panel><EmptyStateCard icon={Sparkles} title="暂无技能" description="点击右上角「上传技能」，上传技能文件或压缩包即可导入。" /></Panel>
       : <div className="grid gap-4 xl:grid-cols-2">
         {skills.map((skill) => <Panel key={skill.id}>

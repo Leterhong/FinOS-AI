@@ -36,6 +36,23 @@ def external_meta(user: User = Depends(get_current_user)):
     return ok({"worldbankIndicators": worldbank_indicators(), "secTags": sec_tags(), "note": NOTE})
 
 
+@router.get("/catalog")
+def catalog(user: User = Depends(get_current_user)):
+    sources = [
+        {"provider": "akshare", "dataset": item["id"], "label": item["label"], "category": item["category"], "requiresKey": False, "cacheSeconds": 3600, "host": "akshare"}
+        for item in list_datasets()
+    ]
+    for provider, label, host, datasets in [
+        ("fx", "ECB 汇率", "api.frankfurter.dev", ["latest", "series"]),
+        ("worldbank", "世界银行", "api.worldbank.org", ["indicator"]),
+        ("gleif", "GLEIF 法人识别", "api.gleif.org", ["search"]),
+        ("sec", "SEC EDGAR", "data.sec.gov", ["concept", "tags"]),
+    ]:
+        for dataset in datasets:
+            sources.append({"provider": provider, "dataset": dataset, "label": label, "category": "external", "requiresKey": False, "cacheSeconds": 3600, "host": host})
+    return ok({"sources": sources, "note": NOTE})
+
+
 @router.get("/fx/latest")
 def external_fx_latest(base: str = "USD", symbols: str = "CNY,EUR,JPY,HKD", user: User = Depends(get_current_user)):
     return _external(fx_latest, base, symbols)
