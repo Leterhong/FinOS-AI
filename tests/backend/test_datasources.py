@@ -19,3 +19,19 @@ def test_akshare_datasets_list(client, auth):
 def test_akshare_unknown_dataset(client, auth):
     resp = client.get("/api/data-sources/akshare/not-exist", headers=auth)
     assert resp.status_code == 404
+
+
+def test_external_meta(client, auth):
+    resp = client.get("/api/data-sources/external/meta", headers=auth)
+    assert resp.status_code == 200, resp.text
+    data = resp.json()["data"]
+    assert any(item["id"] == "NY.GDP.MKTP.CD" for item in data["worldbankIndicators"])
+    assert any(item["id"] == "Revenues" for item in data["secTags"])
+
+
+def test_gleif_requires_name(client, auth):
+    assert client.get("/api/data-sources/gleif?name=", headers=auth).status_code == 502
+
+
+def test_worldbank_unknown_indicator(client, auth):
+    assert client.get("/api/data-sources/worldbank?indicator=NOPE", headers=auth).status_code == 502
