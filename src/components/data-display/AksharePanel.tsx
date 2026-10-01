@@ -59,7 +59,7 @@ export default function AksharePanel() {
   return <Panel>
     <PanelHeader
       eyebrow="External data · AKShare"
-      title="外部宏观与汇率数据（免费）"
+      title="外部宏观与汇率数据"
       description="来自开源免费数据源 AKShare，仅作研判参考；外部数据需人工复核，不自动写入项目结论。"
       action={<Select value={dataset} onChange={setDataset} className="min-w-56" options={datasets.map((item) => ({ value: item.id, label: `${item.category} · ${item.label}` }))} placeholder="选择数据集" />}
     />
