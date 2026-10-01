@@ -7,9 +7,10 @@ import { Archive, ArrowLeft, Bot, CheckCircle2, Download, FileText, Pencil, Scal
 import EnterpriseDialog from "@/components/enterprise/EnterpriseDialog";
 import { Select } from "@/components/ui/Select";
 import { EmptyStateCard, PageIntro, Panel, PanelHeader, RiskBadge } from "@/components/enterprise/EnterpriseUI";
-import { buildEnterpriseReport } from "@/lib/enterprise-report";
+import { buildEnterpriseReport, type ReportExternalData } from "@/lib/enterprise-report";
 import { calculateFinancialMetrics, calculateFinancialTrends } from "@/lib/financial-analysis";
 import { governancePost } from "@/lib/governance-client";
+import { backendAuthedFetch } from "@/lib/enterprise-sync";
 import { toast } from "@/components/feedback/toast";
 import { useEnterpriseStore } from "@/store/enterprise-store";
 import { useModelStore } from "@/store/model-store";
@@ -31,6 +32,12 @@ export default function CaseWorkspacePage() {
   const [editOpen, setEditOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviting, setInviting] = useState(false);
+  const [external, setExternal] = useState<ReportExternalData | null>(null);
+  const [extLoading, setExtLoading] = useState(false);
+  const [extError, setExtError] = useState("");
+  const [amount, setAmount] = useState("1000000");
+  const [fromCurrency, setFromCurrency] = useState("USD");
+  const [toCurrency, setToCurrency] = useState("CNY");
 
   const project = cases.find((item) => item.id === caseId);
   const projectDocuments = documents.filter((item) => item.caseId === caseId);
@@ -91,13 +98,46 @@ export default function CaseWorkspacePage() {
   };
 
   const exportReport = () => {
-    const markdown = buildEnterpriseReport({ project, documents: projectDocuments, risks: projectRisks, rules, tasks: projectTasks, briefs: projectBriefs, runs: projectRuns });
+    const markdown = buildEnterpriseReport({ project, documents: projectDocuments, risks: projectRisks, rules, tasks: projectTasks, briefs: projectBriefs, runs: projectRuns, external });
     const url = URL.createObjectURL(new Blob([markdown], { type: "text/markdown;charset=utf-8" }));
     const anchor = document.createElement("a");
     anchor.href = url;
     anchor.download = `${project.company}-${project.title}-研判报告.md`.replace(/[\\/:*?"<>|]/g, "-");
     anchor.click();
     URL.revokeObjectURL(url);
+  };
+
+  const loadExternal = async () => {
+    setExtLoading(true);
+    setExtError("");
+    try {
+      const base = fromCurrency.toUpperCase();
+      const target = toCurrency.toUpperCase();
+      const fxResp = await backendAuthedFetch(`/api/data-sources/fx/latest?base=${base}&symbols=${target}`);
+      const fxPayload = await fxResp.json() as { data?: { rows?: Array<Record<string, unknown>> } };
+      const rows = fxPayload.data?.rows ?? [];
+      const rates = rows.map((row) => ({ symbol: String(row["目标货币"] ?? ""), rate: Number(row["汇率"] ?? 0) })).filter((item) => item.symbol && Number.isFinite(item.rate));
+      const date = String(rows[0]?.["日期"] ?? "");
+      const rate = rates.find((item) => item.symbol === target)?.rate ?? 0;
+      let lpr: Array<Record<string, unknown>> = [];
+      try {
+        const lprResp = await backendAuthedFetch("/api/data-sources/akshare/lpr?limit=6");
+        const lprPayload = await lprResp.json() as { data?: { rows?: Array<Record<string, unknown>> } };
+        lpr = lprPayload.data?.rows ?? [];
+      } catch { /* LPR 失败不阻塞汇率 */ }
+      const value = Number(amount);
+      setExternal({
+        fetchedAt: new Date().toLocaleString("zh-CN"),
+        fx: rates.length ? { base, date, rates } : undefined,
+        lpr,
+        conversions: rate > 0 && value > 0 ? [{ amount: value, from: base, to: target, rate, converted: value * rate, date }] : undefined,
+      });
+      toast.success("外部数据已拉取，可重新导出报告");
+    } catch (error) {
+      setExtError(error instanceof Error ? error.message : "外部数据拉取失败");
+    } finally {
+      setExtLoading(false);
+    }
   };
 
   return <div className="page-shell">
@@ -132,6 +172,24 @@ export default function CaseWorkspacePage() {
       <Panel><PanelHeader eyebrow="Agent records" title="项目 Agent 运行" /><div className="space-y-2 p-4">{projectRuns.length ? projectRuns.slice(0, 6).map((run) => <div key={run.id} className="rounded-xl border border-white/[0.07] p-3"><p className="text-xs text-slate-300">{run.task}</p><p className="mt-1 text-[9px] text-slate-600">{run.status} · {run.model || "未记录模型"} · {run.id}</p></div>) : <p className="text-xs text-slate-600">尚无当前项目运行记录</p>}</div></Panel>
       <Panel><PanelHeader eyebrow="Research records" title="项目研究底稿" /><div className="space-y-2 p-4">{projectBriefs.length ? projectBriefs.slice(0, 6).map((brief) => <div key={brief.id} className="rounded-xl border border-white/[0.07] p-3"><p className="text-xs text-slate-300">{brief.title}</p><p className="mt-1 text-[9px] text-slate-600">{brief.topic} · {brief.model || "未记录模型"}</p></div>) : <p className="text-xs text-slate-600">尚无当前项目研究底稿</p>}</div></Panel>
     </div>
+
+    <Panel><PanelHeader eyebrow="External linkage" title="外部数据联动" description="拉取公开汇率与 LPR，折算金额并写入研判报告；所有外部数据仅供参考，需人工复核。" />
+      <div className="space-y-4 p-5">
+        <div className="grid gap-3 sm:grid-cols-[1.2fr_.7fr_.7fr_auto]">
+          <label className="block"><span className="mb-1.5 block text-[11px] text-slate-400">金额</span><input value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="decimal" className="field-control" /></label>
+          <label className="block"><span className="mb-1.5 block text-[11px] text-slate-400">原币种</span><input value={fromCurrency} onChange={(event) => setFromCurrency(event.target.value)} maxLength={3} className="field-control uppercase" /></label>
+          <label className="block"><span className="mb-1.5 block text-[11px] text-slate-400">目标币种</span><input value={toCurrency} onChange={(event) => setToCurrency(event.target.value)} maxLength={3} className="field-control uppercase" /></label>
+          <div className="flex items-end"><button type="button" onClick={() => void loadExternal()} disabled={extLoading} className="w-full rounded-xl border border-cyan-400/20 bg-cyan-400/[0.06] px-4 py-2.5 text-xs text-cyan-200 disabled:opacity-40 sm:w-auto">{extLoading ? "拉取中…" : "拉取并折算"}</button></div>
+        </div>
+        {extError && <p className="text-[11px] text-rose-300">{extError}</p>}
+        {external && <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-4 text-[11px] text-slate-300">
+          <p className="text-[10px] text-slate-500">获取时间 {external.fetchedAt} · 公开数据，需人工复核</p>
+          {external.fx && <p className="mt-2">汇率（基准 {external.fx.base}{external.fx.date ? ` · ${external.fx.date}` : ""}）：{external.fx.rates.map((item) => `${item.symbol} ${item.rate}`).join("，")}</p>}
+          {external.conversions?.map((item) => <p key={`${item.from}-${item.to}`} className="mt-2 text-cyan-200">折算：{item.amount} {item.from} ≈ {item.converted.toLocaleString("zh-CN", { maximumFractionDigits: 2 })} {item.to}</p>)}
+          {external.lpr && external.lpr.length > 0 && <p className="mt-2 text-slate-400">LPR 最新走势：{external.lpr.slice(0, 3).map((row) => Object.entries(row).filter(([, value]) => value != null).slice(0, 3).map(([key, value]) => `${key} ${value}`).join("/")).join("；")}</p>}
+        </div>}
+      </div>
+    </Panel>
 
     <Panel><PanelHeader eyebrow="Deliverable" title="研判交付" description="导出的 Markdown 报告包含事实引用、财务指标、风险状态和人工流程" /><div className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-medium text-slate-200">项目研判报告</p><p className="mt-1 text-[10px] text-slate-600">导出前请先处理待复核事实与候选风险。</p></div><button type="button" onClick={exportReport} className="inline-flex items-center justify-center gap-2 rounded-xl border border-cyan-400/20 bg-cyan-400/[0.06] px-4 py-2.5 text-xs text-cyan-200"><Download className="h-3.5 w-3.5" />下载 Markdown 报告</button></div></Panel>
 

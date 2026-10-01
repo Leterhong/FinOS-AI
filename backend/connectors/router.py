@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from backend.connectors.akshare_provider import DATASETS, AkshareError, fetch_dataset, list_datasets
 from backend.connectors.http_providers import (
     ExternalDataError,
+    external_runtime_config,
     fx_latest,
     fx_series,
     gleif_search,
@@ -38,8 +39,9 @@ def external_meta(user: User = Depends(get_current_user)):
 
 @router.get("/catalog")
 def catalog(user: User = Depends(get_current_user)):
+    runtime = external_runtime_config()
     sources = [
-        {"provider": "akshare", "dataset": item["id"], "label": item["label"], "category": item["category"], "requiresKey": False, "cacheSeconds": 3600, "host": "akshare"}
+        {"provider": "akshare", "dataset": item["id"], "label": item["label"], "category": item["category"], "requiresKey": False, "cacheSeconds": runtime["cacheSeconds"], "host": "akshare"}
         for item in list_datasets()
     ]
     for provider, label, host, datasets in [
@@ -49,8 +51,13 @@ def catalog(user: User = Depends(get_current_user)):
         ("sec", "SEC EDGAR", "data.sec.gov", ["concept", "tags"]),
     ]:
         for dataset in datasets:
-            sources.append({"provider": provider, "dataset": dataset, "label": label, "category": "external", "requiresKey": False, "cacheSeconds": 3600, "host": host})
-    return ok({"sources": sources, "note": NOTE})
+            sources.append({"provider": provider, "dataset": dataset, "label": label, "category": "external", "requiresKey": False, "cacheSeconds": runtime["cacheSeconds"], "host": host})
+    return ok({"sources": sources, "runtime": runtime, "note": NOTE})
+
+
+@router.get("/config")
+def external_config(user: User = Depends(get_current_user)):
+    return ok({**external_runtime_config(), "note": NOTE})
 
 
 @router.get("/fx/latest")

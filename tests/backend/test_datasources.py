@@ -35,3 +35,20 @@ def test_gleif_requires_name(client, auth):
 
 def test_worldbank_unknown_indicator(client, auth):
     assert client.get("/api/data-sources/worldbank?indicator=NOPE", headers=auth).status_code == 502
+
+
+def test_catalog_lists_sources_and_runtime(client, auth):
+    resp = client.get("/api/data-sources/catalog", headers=auth)
+    assert resp.status_code == 200, resp.text
+    data = resp.json()["data"]
+    providers = {item["provider"] for item in data["sources"]}
+    assert {"akshare", "fx", "worldbank", "gleif", "sec"} <= providers
+    assert all(item["requiresKey"] is False for item in data["sources"])
+    assert "cacheSeconds" in data["runtime"] and "minIntervalSeconds" in data["runtime"]
+
+
+def test_external_config_requires_auth(client, auth):
+    assert client.get("/api/data-sources/config").status_code in (401, 403)
+    resp = client.get("/api/data-sources/config", headers=auth)
+    assert resp.status_code == 200, resp.text
+    assert "cacheEnabled" in resp.json()["data"]

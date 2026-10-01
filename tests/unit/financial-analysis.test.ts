@@ -69,6 +69,28 @@ test("项目报告标识候选风险、事实引用和人工复核要求", () =>
   assert.match(report, /不替代/);
 });
 
+test("外部市场数据按要求写入报告，缺失时给出提示", () => {
+  const base = {
+    project: { id: "CASE-1", company: "测试企业", title: "经营研判", industry: "制造业", amount: "", owner: "张三", progress: 50, status: "研判中" as const, risk: "medium" as const, nextAction: "复核", updatedAt: "2026-08-31" },
+    documents: [], risks: [], rules: [], tasks: [], briefs: [], runs: [],
+  };
+  const withoutExternal = buildEnterpriseReport(base);
+  assert.match(withoutExternal, /未附加外部市场数据/);
+  const withExternal = buildEnterpriseReport({
+    ...base,
+    external: {
+      fetchedAt: "2026-08-31 10:00",
+      fx: { base: "USD", date: "2026-08-30", rates: [{ symbol: "CNY", rate: 7.12 }] },
+      conversions: [{ amount: 1000000, from: "USD", to: "CNY", rate: 7.12, converted: 7120000, date: "2026-08-30" }],
+      lpr: [{ TRADE_DATE: "2026-08-20", LPR1Y: 3.1, LPR5Y: 3.6 }],
+    },
+  });
+  assert.match(withExternal, /外部市场数据/);
+  assert.match(withExternal, /CNY 7.12/);
+  assert.match(withExternal, /7,120,000/);
+  assert.match(withExternal, /LPR1Y 3.1/);
+});
+
 test("新增财务指标：现金比率/存货周转/有息负债率/现金流利息保障", () => {
   const facts = [
     fact("F-1", "货币资金", 100), fact("F-2", "流动负债", 500),

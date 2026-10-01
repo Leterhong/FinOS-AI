@@ -8,11 +8,14 @@
 from __future__ import annotations
 
 import math
+import os
 import time
 from typing import Any, Callable
 
 _CACHE: dict[str, tuple[float, list[dict[str, Any]]]] = {}
-_CACHE_TTL_SECONDS = 3600
+# 缓存可通过环境变量关闭或调整：EXTERNAL_AKSHARE_CACHE / EXTERNAL_AKSHARE_CACHE_TTL。
+_CACHE_ENABLED = os.getenv("EXTERNAL_AKSHARE_CACHE", "1").strip().lower() not in {"0", "false", "no", "off"}
+_CACHE_TTL_SECONDS = max(0, int(os.getenv("EXTERNAL_AKSHARE_CACHE_TTL", "3600")))
 
 
 class AkshareError(RuntimeError):
@@ -82,8 +85,9 @@ def fetch_dataset(dataset: str, limit: int = 12, mc: Any = None) -> list[dict[st
         raise AkshareError("未知的数据集")
     limit = max(1, min(int(limit), 60))
 
+    use_cache = _CACHE_ENABLED and _CACHE_TTL_SECONDS > 0
     cached = _CACHE.get(dataset)
-    if cached and time.time() - cached[0] < _CACHE_TTL_SECONDS:
+    if use_cache and cached and time.time() - cached[0] < _CACHE_TTL_SECONDS:
         return cached[1][-limit:][::-1]
 
     akshare = mc
@@ -108,6 +112,7 @@ def fetch_dataset(dataset: str, limit: int = 12, mc: Any = None) -> list[dict[st
     except Exception as exc:  # noqa: BLE001
         raise AkshareError(f"数据源解析失败：{type(exc).__name__}") from exc
 
-    _CACHE[dataset] = (time.time(), rows)
+    if use_cache:
+        _CACHE[dataset] = (time.time(), rows)
     # 时间序列多为升序，取最近 limit 条并以最新在前返回。
     return rows[-limit:][::-1]

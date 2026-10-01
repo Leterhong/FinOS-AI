@@ -6,13 +6,19 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import time
 import urllib.parse
 import urllib.request
 from typing import Any
 
 _CACHE: dict[str, tuple[float, Any]] = {}
-_TTL_SECONDS = 600
+# 缓存与限流均可通过环境变量配置；缓存 TTL 为 0 或开关关闭时禁用缓存。
+_CACHE_ENABLED = os.getenv("EXTERNAL_HTTP_CACHE", "1").strip().lower() not in {"0", "false", "no", "off"}
+_TTL_SECONDS = max(0, int(os.getenv("EXTERNAL_HTTP_CACHE_TTL", "600")))
+_MIN_INTERVAL = max(0.0, float(os.getenv("EXTERNAL_HTTP_MIN_INTERVAL", "0.3")))
+_LAST_CALL: dict[str, float] = {}
+_THROTTLE_LOCK = threading.Lock()
 # SEC EDGAR 要求带联系方式的 User-Agent；可用环境变量覆盖。
 _UA = os.getenv("EXTERNAL_HTTP_USER_AGENT", "FinOS-AI research contact@finos.local")
 
@@ -21,17 +27,39 @@ class ExternalDataError(RuntimeError):
     """外部数据获取失败。"""
 
 
+def external_runtime_config() -> dict[str, Any]:
+    """当前外部数据源缓存/限流配置，供目录接口展示。"""
+    return {
+        "cacheEnabled": _CACHE_ENABLED and _TTL_SECONDS > 0,
+        "cacheSeconds": _TTL_SECONDS if _CACHE_ENABLED else 0,
+        "minIntervalSeconds": _MIN_INTERVAL,
+    }
+
+
+def _throttle(host: str) -> None:
+    if _MIN_INTERVAL <= 0 or not host:
+        return
+    with _THROTTLE_LOCK:
+        wait = _MIN_INTERVAL - (time.time() - _LAST_CALL.get(host, 0.0))
+        if wait > 0:
+            time.sleep(wait)
+        _LAST_CALL[host] = time.time()
+
+
 def _get_json(url: str, timeout: int = 15) -> Any:
+    use_cache = _CACHE_ENABLED and _TTL_SECONDS > 0
     cached = _CACHE.get(url)
-    if cached and time.time() - cached[0] < _TTL_SECONDS:
+    if use_cache and cached and time.time() - cached[0] < _TTL_SECONDS:
         return cached[1]
+    _throttle(urllib.parse.urlparse(url).netloc)
     request = urllib.request.Request(url, headers={"User-Agent": _UA, "Accept": "application/json"})
     try:
         with urllib.request.urlopen(request, timeout=timeout) as resp:
             data = json.loads(resp.read().decode("utf-8"))
     except Exception as exc:  # noqa: BLE001
         raise ExternalDataError(f"外部数据请求失败：{type(exc).__name__}") from exc
-    _CACHE[url] = (time.time(), data)
+    if use_cache:
+        _CACHE[url] = (time.time(), data)
     return data
 
 

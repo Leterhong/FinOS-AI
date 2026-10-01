@@ -1,6 +1,13 @@
 import type { AgentRun, AnalysisDocument, EnterpriseCase, EnterpriseRule, ResearchBrief, RiskSignal, WorkflowTask } from "@/types/enterprise";
 import { calculateFinancialMetrics } from "@/lib/financial-analysis";
 
+export interface ReportExternalData {
+  fetchedAt: string;
+  fx?: { base: string; date: string; rates: Array<{ symbol: string; rate: number }> };
+  lpr?: Array<Record<string, unknown>>;
+  conversions?: Array<{ amount: number; from: string; to: string; rate: number; converted: number; date: string }>;
+}
+
 export function buildEnterpriseReport(input: {
   project: EnterpriseCase;
   documents: AnalysisDocument[];
@@ -9,6 +16,7 @@ export function buildEnterpriseReport(input: {
   tasks: WorkflowTask[];
   briefs: ResearchBrief[];
   runs: AgentRun[];
+  external?: ReportExternalData | null;
 }): string {
   const facts = input.documents.flatMap((document) => document.factItems ?? []);
   const metrics = calculateFinancialMetrics(facts);
@@ -46,6 +54,18 @@ export function buildEnterpriseReport(input: {
     "## 人工流程",
     "",
     ...(input.tasks.length ? input.tasks.map((task) => `- ${task.title}：${task.stage}，负责人 ${task.assignee}，截止 ${task.due}`) : ["- 尚无人工任务"]),
+    "",
+    "## 外部市场数据（需人工复核）",
+    "",
+    ...(input.external
+      ? [
+          `- 数据获取时间：${input.external.fetchedAt}`,
+          "- 数据来源：AKShare（LPR）与 ECB Frankfurter（汇率），均为公开数据，仅供研判参考。",
+          ...(input.external.fx ? [`- 汇率（基准 ${input.external.fx.base}，日期 ${input.external.fx.date || "未提供"}）：${input.external.fx.rates.map((item) => `${item.symbol} ${item.rate}`).join("，")}`] : []),
+          ...(input.external.conversions?.length ? input.external.conversions.map((item) => `- 折算：${item.amount} ${item.from} = ${item.converted.toLocaleString("zh-CN", { maximumFractionDigits: 2 })} ${item.to}（汇率 ${item.rate}，${item.date || "日期未提供"}）`) : []),
+          ...(input.external.lpr?.length ? input.external.lpr.map((row) => `- LPR：${Object.entries(row).filter(([, value]) => value != null).slice(0, 4).map(([key, value]) => `${key} ${value}`).join(" / ")}`) : []),
+        ]
+      : ["- 本项目未附加外部市场数据；如需汇率折算或 LPR 参考，请在项目工作台「外部数据联动」中拉取后重新导出。"]),
     "",
     "## AI 与研究记录",
     "",
