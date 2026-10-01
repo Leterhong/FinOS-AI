@@ -167,6 +167,7 @@ from backend.autonomous.router import router as autonomic_router  # noqa: E402  
 from backend.backup import router as backup_router  # noqa: E402  Phase 7.6 备份/导出
 from backend.enterprise import router as enterprise_router  # noqa: E402  2.1 企业工作区持久化
 from backend.governance import router as governance_router  # noqa: E402  2.2 企业治理
+from backend.connectors.router import router as data_sources_router  # noqa: E402  外部数据源（AKShare）
 
 for r in (
     auth_router,
@@ -193,6 +194,7 @@ for r in (
     backup_router,
     enterprise_router,
     governance_router,
+    data_sources_router,
     task_router,
     health_router,
     metrics_router,
