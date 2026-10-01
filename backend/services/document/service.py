@@ -17,6 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.document.models import Document
+from backend.document.storage import load_document
 from backend.financial.models import Asset
 from backend.user.models import User
 
@@ -189,8 +190,7 @@ def analyze_document(db: Session, user: User, document_id: str) -> dict:
     doc = db.scalar(select(Document).where(Document.id == document_id, Document.user_id == user.id))
     if doc is None:
         raise KeyError("document_not_found")
-    p = Path(doc.storage_path)
-    raw = p.read_bytes() if p.is_file() else b""
+    raw = load_document(user.id, doc.storage_path) or b""
     text, encoding = _decode_text(raw)
     note_parts: list[str] = []
 

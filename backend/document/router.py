@@ -6,20 +6,19 @@ DELETE /api/documents/{id}   — 仅本人可删（含物理文件）
 """
 from __future__ import annotations
 
-import uuid
 from pathlib import Path
+from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, Request, UploadFile
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends, Request, Response, UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.config import UPLOAD_DIR
 from backend.core import get_current_user, ok
 from backend.core.response import fail
 from backend.core.uploads import UploadTooLarge, read_upload_limited
 from backend.database import get_db
 from backend.document.models import Document
+from backend.document.storage import delete_document_file, load_document, save_document
 from backend.security.audit import write_audit
 from backend.security.permission import require_owned_resource
 from backend.user.models import User
@@ -41,14 +40,10 @@ async def upload(file: UploadFile, request: Request, user: User = Depends(get_cu
     except UploadTooLarge as exc:
         return fail(str(exc), status_code=413)
 
-    # 按用户隔离目录存储，文件名用 UUID 防穿越/冲突
-    user_dir = UPLOAD_DIR / user.id
-    user_dir.mkdir(parents=True, exist_ok=True)
-    stored_name = f"{uuid.uuid4().hex}{ext}"
-    storage_path = user_dir / stored_name
-    storage_path.write_bytes(content)
+    # 按用户隔离目录存储，文件名用 UUID 防穿越/冲突；内容 AES-256-GCM 加密落盘。
+    storage_path = save_document(user.id, ext, content)
 
-    doc = Document(user_id=user.id, filename=filename, storage_path=str(storage_path), status="uploaded")
+    doc = Document(user_id=user.id, filename=filename, storage_path=storage_path, status="uploaded")
     db.add(doc)
     db.commit()
     db.refresh(doc)
@@ -80,22 +75,17 @@ def list_documents(user: User = Depends(get_current_user), db: Session = Depends
 @router.get("/{doc_id}/download")
 def download_document(doc_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     doc = require_owned_resource(db, Document, doc_id, user.id)
-    path = Path(doc.storage_path).resolve()
-    user_root = (UPLOAD_DIR / user.id).resolve()
-    if not path.is_file() or user_root not in path.parents:
+    raw = load_document(user.id, doc.storage_path)
+    if raw is None:
         return fail("文件不可用", status_code=404)
-    return FileResponse(path=path, filename=doc.filename, media_type="application/octet-stream")
+    headers = {"Content-Disposition": f"attachment; filename*=UTF-8''{quote(doc.filename)}"}
+    return Response(content=raw, media_type="application/octet-stream", headers=headers)
 
 
 @router.delete("/{doc_id}")
 def delete_document(doc_id: str, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     doc = require_owned_resource(db, Document, doc_id, user.id)
-    try:
-        p = Path(doc.storage_path)
-        if p.is_file() and UPLOAD_DIR in p.parents:
-            p.unlink()
-    except OSError:
-        pass
+    delete_document_file(user.id, doc.storage_path)
     db.delete(doc)
     write_audit(db, user_id=user.id, action="document.delete", resource=f"document:{doc_id}", request=request)
     db.commit()

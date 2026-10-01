@@ -11,6 +11,7 @@ import path from "node:path";
 
 import { skillIds } from "./registry";
 import type { DomainSkill } from "./types";
+import { decodeAtRest, encodeAtRest } from "@/security/at-rest";
 
 const DATA_DIR = path.join(process.cwd(), ".data", "skills");
 const MODES = new Set(["chat", "agent", "research"]);
@@ -55,7 +56,7 @@ function sanitizeSkill(raw: unknown): DomainSkill | null {
 async function readConfig(userId: string): Promise<SkillsConfig> {
   try {
     const raw = await fs.readFile(filePath(userId), "utf8");
-    const parsed = JSON.parse(raw) as { disabled?: unknown; custom?: unknown };
+    const parsed = decodeAtRest<{ disabled?: unknown; custom?: unknown }>(raw, {});
     const custom = Array.isArray(parsed.custom)
       ? parsed.custom.map(sanitizeSkill).filter((item): item is DomainSkill => item !== null)
       : [];
@@ -69,7 +70,8 @@ async function writeConfig(userId: string, config: SkillsConfig): Promise<void> 
   await fs.mkdir(DATA_DIR, { recursive: true });
   const target = filePath(userId);
   const tmp = `${target}.${process.pid}.${Date.now()}.tmp`;
-  await fs.writeFile(tmp, JSON.stringify(config), "utf8");
+  // 加密落盘：自定义技能 playbook 等可能含内部方法论，磁盘不留明文。
+  await fs.writeFile(tmp, encodeAtRest(config), "utf8");
   await fs.rename(tmp, target);
 }
 

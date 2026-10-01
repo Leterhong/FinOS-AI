@@ -3,6 +3,8 @@ import "server-only";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 
+import { decodeAtRest, encodeAtRest } from "@/security/at-rest";
+
 /**
  * AI 用量审计（Phase 5.9.1 / spec #9、#10）。
  *
@@ -102,8 +104,7 @@ export async function recordUsage(
     let arr: UsageRecord[] = [];
     try {
       const raw = await fs.readFile(file, "utf8");
-      const parsed = JSON.parse(raw) as UsageRecord[];
-      if (Array.isArray(parsed)) arr = parsed;
+      arr = decodeAtRest<UsageRecord[]>(raw, []);
     } catch {
       arr = [];
     }
@@ -124,7 +125,8 @@ export async function recordUsage(
     };
     arr.push(entry);
     if (arr.length > MAX_RECORDS) arr = arr.slice(arr.length - MAX_RECORDS);
-    await fs.writeFile(file, JSON.stringify(arr), "utf8");
+    // 加密落盘：用量记录反映用户行为，避免明文留存。
+    await fs.writeFile(file, encodeAtRest(arr), "utf8");
   } catch {
     // 用量记录失败不影响主流程
   }
@@ -134,8 +136,7 @@ export async function recordUsage(
 export async function listUsage(userId: string): Promise<UsageRecord[]> {
   try {
     const raw = await fs.readFile(fileFor(userId), "utf8");
-    const parsed = JSON.parse(raw) as UsageRecord[];
-    return Array.isArray(parsed) ? parsed : [];
+    return decodeAtRest<UsageRecord[]>(raw, []);
   } catch {
     return [];
   }
@@ -155,7 +156,7 @@ export async function getUsage(userId: string): Promise<UsageSummary> {
   };
   try {
     const raw = await fs.readFile(fileFor(userId), "utf8");
-    const arr = JSON.parse(raw) as UsageRecord[];
+    const arr = decodeAtRest<UsageRecord[]>(raw, []);
     if (!Array.isArray(arr) || arr.length === 0) return empty;
 
     const now = new Date();
