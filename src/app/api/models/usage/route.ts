@@ -9,5 +9,5 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const userId = await getSessionUserId();
   if (!userId) return NextResponse.json({ error: "未登录" }, { status: 401 });
-  return NextResponse.json({ usage: getUsageSummary(userId) });
+  return NextResponse.json({ usage: await getUsageSummary(userId) });
 }

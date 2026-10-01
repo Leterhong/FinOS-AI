@@ -59,7 +59,7 @@ export default function ModelsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<PublicProviderConfig | null>(null);
   const [question, setQuestion] = useState("");
-  const [usage, setUsage] = useState<{ calls: number; tokens: number; avgLatencyMs: number; errorRate: number } | null>(null);
+  const [usage, setUsage] = useState<{ calls: number; tokens: number; avgLatencyMs: number; errorRate: number; estimatedCost: number; pricedCalls: number } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -123,14 +123,16 @@ export default function ModelsPage() {
 
     <Panel>
       <PanelHeader eyebrow="Usage" title="调用用量" description="当前工作区近期模型调用统计，用于观察 Token 消耗与错误率。" />
-      <div className="grid grid-cols-2 gap-3 p-5 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 p-5 lg:grid-cols-5">
         {[
           ["调用次数", usage ? String(usage.calls) : "—"],
           ["Token 合计", usage ? usage.tokens.toLocaleString("zh-CN") : "—"],
           ["平均耗时", usage ? `${usage.avgLatencyMs} ms` : "—"],
           ["错误率", usage ? `${(usage.errorRate * 100).toFixed(1)}%` : "—"],
+          ["估算费用", usage ? `$${usage.estimatedCost.toFixed(4)}` : "—"],
         ].map(([label, value]) => <div key={label} className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-4"><p className="text-[10px] text-slate-500">{label}</p><p className="numeric mt-2 text-lg font-semibold text-white">{value}</p></div>)}
       </div>
+      <p className="px-5 pb-5 pt-0 text-[10px] text-slate-600">费用按各模型配置的输入/输出单价（美元/百万 Token）估算{usage && usage.pricedCalls < usage.calls ? `；${usage.calls - usage.pricedCalls} 次调用因模型未配置单价未计入` : ""}，仅供参考。</p>
     </Panel>
 
     <Panel>

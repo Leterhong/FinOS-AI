@@ -47,6 +47,10 @@ export interface AIProviderConfig {
   temperature?: number;
   /** 单次回复最大 Token 数。缺省由 AIService 给 4096。 */
   maxTokens?: number;
+  /** 输入单价（美元 / 百万 Token），用于用量费用估算；缺省不估算费用。 */
+  inputPricePerMillion?: number;
+  /** 输出单价（美元 / 百万 Token），用于用量费用估算；缺省不估算费用。 */
+  outputPricePerMillion?: number;
   /** 加密后的 API Key —— 持久化字段。 */
   encryptedApiKey?: EncryptedApiKey;
   /** 语义化 provider 类型（与 providerName 一致，保留 spec 字段）。 */
@@ -91,6 +95,8 @@ export interface PublicProviderConfig {
   roles?: ModelRole[];
   temperature?: number;
   maxTokens?: number;
+  inputPricePerMillion?: number;
+  outputPricePerMillion?: number;
   keyMask: string;
   createdAt: string;
   updatedAt: string;
@@ -112,6 +118,10 @@ export interface ProviderConfigInput {
   temperature?: number;
   /** 单次回复最大 Token 数。 */
   maxTokens?: number;
+  /** 输入单价（美元 / 百万 Token）。 */
+  inputPricePerMillion?: number;
+  /** 输出单价（美元 / 百万 Token）。 */
+  outputPricePerMillion?: number;
 }
 
 /** Provider 预设（前端下拉与默认值来源）。 */

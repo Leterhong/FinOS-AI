@@ -47,6 +47,12 @@ function coerceMaxTokens(value: unknown): number | undefined {
   return typeof n === "number" && Number.isInteger(n) && n > 0 && n <= 1_000_000 ? n : undefined;
 }
 
+/** 单价校验：非负有限数，上限 100000 美元/百万 Token，防误填。 */
+function coercePrice(value: unknown): number | undefined {
+  const n = typeof value === "string" ? Number(value) : value;
+  return typeof n === "number" && Number.isFinite(n) && n >= 0 && n <= 100_000 ? n : undefined;
+}
+
 /** 字符串兜底：非字符串输入一律返回空串，避免对对象/数字调用 .trim() 抛错。 */
 function safeTrim(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -145,6 +151,8 @@ class ModelConfigStore {
       roles: c.roles,
       temperature: c.temperature,
       maxTokens: c.maxTokens,
+      inputPricePerMillion: c.inputPricePerMillion,
+      outputPricePerMillion: c.outputPricePerMillion,
       keyMask: mask,
       createdAt: c.createdAt,
       updatedAt: c.updatedAt,
@@ -237,6 +245,8 @@ class ModelConfigStore {
       encryptedApiKey: typeof input.apiKey === "string" && input.apiKey.trim() ? encryptApiKey(input.apiKey.trim()) : undefined,
       temperature: coerceTemperature(input.temperature),
       maxTokens: coerceMaxTokens(input.maxTokens),
+      inputPricePerMillion: coercePrice(input.inputPricePerMillion),
+      outputPricePerMillion: coercePrice(input.outputPricePerMillion),
       status: "untested",
       isDefault: configs.length === 0, // 首个模型自动设为默认
       roles: input.roles ?? ["default"],
@@ -274,6 +284,8 @@ class ModelConfigStore {
     if (temperature !== undefined) c.temperature = temperature;
     const maxTokens = coerceMaxTokens(input.maxTokens);
     if (maxTokens !== undefined) c.maxTokens = maxTokens;
+    if (input.inputPricePerMillion !== undefined) c.inputPricePerMillion = coercePrice(input.inputPricePerMillion);
+    if (input.outputPricePerMillion !== undefined) c.outputPricePerMillion = coercePrice(input.outputPricePerMillion);
     // apiKey 留空表示不修改；提供则重新加密。
     if (typeof input.apiKey === "string" && input.apiKey.trim()) c.encryptedApiKey = encryptApiKey(input.apiKey.trim());
     c.status = "untested"; // 配置变更后需重新测试

@@ -38,6 +38,8 @@ export default function ModelFormDialog({ open, onClose, editing }: Props) {
   const [apiKey, setApiKey] = useState("");
   const [temperature, setTemperature] = useState("0.7");
   const [maxTokens, setMaxTokens] = useState("4096");
+  const [inputPrice, setInputPrice] = useState("");
+  const [outputPrice, setOutputPrice] = useState("");
   const [roles, setRoles] = useState<ModelRole[]>(["default"]);
   const [testState, setTestState] = useState<{
     ok: boolean;
@@ -60,6 +62,8 @@ export default function ModelFormDialog({ open, onClose, editing }: Props) {
       setBaseUrl(editing.baseUrl);
       setTemperature(editing.temperature != null ? String(editing.temperature) : "0.7");
       setMaxTokens(editing.maxTokens != null ? String(editing.maxTokens) : "4096");
+      setInputPrice(editing.inputPricePerMillion != null ? String(editing.inputPricePerMillion) : "");
+      setOutputPrice(editing.outputPricePerMillion != null ? String(editing.outputPricePerMillion) : "");
       setRoles(editing.roles?.length ? editing.roles : ["default"]);
       setApiKey(""); // 编辑时留空表示不改
       setTestState(null);
@@ -78,6 +82,8 @@ export default function ModelFormDialog({ open, onClose, editing }: Props) {
     setModelName(first?.name ?? "");
     setTemperature("0.7");
     setMaxTokens("4096");
+    setInputPrice("");
+    setOutputPrice("");
     setRoles(["default"]);
     setApiKey("");
     setTestState(null);
@@ -100,6 +106,8 @@ export default function ModelFormDialog({ open, onClose, editing }: Props) {
       roles,
       temperature: parseNum(temperature),
       maxTokens: parseNum(maxTokens),
+      inputPricePerMillion: parseNum(inputPrice),
+      outputPricePerMillion: parseNum(outputPrice),
     };
   }
 
@@ -352,6 +360,33 @@ export default function ModelFormDialog({ open, onClose, editing }: Props) {
                 </div>
                 <p className="-mt-1 text-[11px] text-white/35">
                   温度越高输出越发散（建议 0.3–0.8）；Max Tokens 控制单次回复长度上限。
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="输入单价（$/百万 Token）">
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={inputPrice}
+                      onChange={(e) => setInputPrice(e.target.value)}
+                      placeholder="留空则不估算"
+                      className="input"
+                    />
+                  </Field>
+                  <Field label="输出单价（$/百万 Token）">
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={outputPrice}
+                      onChange={(e) => setOutputPrice(e.target.value)}
+                      placeholder="留空则不估算"
+                      className="input"
+                    />
+                  </Field>
+                </div>
+                <p className="-mt-1 text-[11px] text-white/35">
+                  可选。填写后「调用用量」会按 Token 估算费用；留空则只统计 Token 与耗时，不做费用估算。
                 </p>
               </div>
             )}
