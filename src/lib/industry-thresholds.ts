@@ -99,3 +99,24 @@ export const INDUSTRY_PROFILES: IndustryProfile[] = [
 export function industryProfiles(): IndustryProfile[] {
   return INDUSTRY_PROFILES;
 }
+
+/** 行业关键词 → 分组（用于根据项目所属行业推荐模板）。 */
+const INDUSTRY_KEYWORDS: Array<{ id: string; keywords: string[] }> = [
+  { id: "manufacturing", keywords: ["制造", "生产", "加工", "装备", "机械", "电子", "化工", "医药", "纺织", "汽车", "材料", "食品"] },
+  { id: "trading", keywords: ["贸易", "批发", "零售", "商贸", "流通", "供应链", "分销", "电商"] },
+  { id: "realestate", keywords: ["房地产", "地产", "置业", "物业", "不动产", "开发"] },
+  { id: "construction", keywords: ["建筑", "工程", "施工", "建设", "基建", "安装", "装饰"] },
+];
+
+/** 根据自由文本行业匹配到阈值分组；无法匹配时回退到「通用」。 */
+export function matchIndustryProfile(industryText: string | undefined | null): IndustryProfile {
+  const text = (industryText ?? "").trim();
+  const general = INDUSTRY_PROFILES.find((profile) => profile.id === "general")!;
+  if (!text) return general;
+  for (const entry of INDUSTRY_KEYWORDS) {
+    if (entry.keywords.some((keyword) => text.includes(keyword))) {
+      return INDUSTRY_PROFILES.find((profile) => profile.id === entry.id) ?? general;
+    }
+  }
+  return general;
+}

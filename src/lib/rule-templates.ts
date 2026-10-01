@@ -1,4 +1,4 @@
-import { INDUSTRY_PROFILES } from "./industry-thresholds";
+import { INDUSTRY_PROFILES, matchIndustryProfile, type IndustryProfile } from "./industry-thresholds";
 
 /**
  * 规则模板库：提供可一键启用的规则定义（阈值口径）。
@@ -61,4 +61,11 @@ export const RULE_TEMPLATES: RuleTemplate[] = [...GENERAL, ...fromIndustries()];
 
 export function ruleTemplateGroups(): string[] {
   return [...new Set(RULE_TEMPLATES.map((item) => item.group))];
+}
+
+/** 依据企业所属行业推荐规则模板：命中行业返回该行业模板，否则返回通用模板。 */
+export function recommendedTemplates(industryText: string | undefined | null): { profile: IndustryProfile; templates: RuleTemplate[] } {
+  const profile = matchIndustryProfile(industryText);
+  const templates = RULE_TEMPLATES.filter((item) => item.industry === (profile.id === "general" ? "general" : profile.id));
+  return { profile, templates };
 }

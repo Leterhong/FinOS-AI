@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { RULE_TEMPLATES, ruleTemplateGroups } from "../../src/lib/rule-templates";
-import { INDUSTRY_PROFILES } from "../../src/lib/industry-thresholds";
+import { RULE_TEMPLATES, recommendedTemplates, ruleTemplateGroups } from "../../src/lib/rule-templates";
+import { INDUSTRY_PROFILES, matchIndustryProfile } from "../../src/lib/industry-thresholds";
 import { canonicalMetricName } from "../../src/lib/metric-aliases";
 
 test("规则模板库非空且编号唯一", () => {
@@ -26,4 +26,19 @@ test("模板指标可被口径归一化", () => {
   for (const item of RULE_TEMPLATES) {
     assert.ok(canonicalMetricName(item.metric).length > 0);
   }
+});
+
+test("按企业所属行业匹配分组并推荐模板", () => {
+  assert.equal(matchIndustryProfile("制造业").id, "manufacturing");
+  assert.equal(matchIndustryProfile("房地产开发").id, "realestate");
+  assert.equal(matchIndustryProfile("商贸零售").id, "trading");
+  assert.equal(matchIndustryProfile("建筑工程").id, "construction");
+  assert.equal(matchIndustryProfile("").id, "general");
+  const rec = recommendedTemplates("制造业");
+  assert.equal(rec.profile.id, "manufacturing");
+  assert.ok(rec.templates.length > 0);
+  assert.ok(rec.templates.every((item) => item.industry === "manufacturing"));
+  const general = recommendedTemplates("未知行业XYZ");
+  assert.equal(general.profile.id, "general");
+  assert.ok(general.templates.every((item) => item.industry === "general"));
 });
