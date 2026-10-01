@@ -76,6 +76,7 @@ def init_db() -> None:
     _ensure_ai_usage_logs_columns(engine)
     _ensure_enterprise_scope_columns(engine)
     _ensure_organization_settings_columns(engine)
+    _ensure_organization_member_columns(engine)
 
 
 def _ensure_organization_settings_columns(engine) -> None:
@@ -96,6 +97,33 @@ def _ensure_organization_settings_columns(engine) -> None:
     )
     with engine.begin() as conn:
         conn.execute(text(statement))
+
+
+def _ensure_organization_member_columns(engine) -> None:
+    """开发库自愈：organization_members 表补充邀请即授权相关列。"""
+    from sqlalchemy import inspect, text
+
+    insp = inspect(engine)
+    if not insp.has_table("organization_members"):
+        return
+    existing = {column["name"] for column in insp.get_columns("organization_members")}
+    needed = {
+        "invited_by": "VARCHAR(32) NOT NULL DEFAULT ''",
+        "invite_case_id": "VARCHAR(64) NOT NULL DEFAULT ''",
+        "invite_permission": "VARCHAR(24) NOT NULL DEFAULT ''",
+    }
+    missing = {col: typ for col, typ in needed.items() if col not in existing}
+    if not missing:
+        return
+    is_sqlite = engine.dialect.name == "sqlite"
+    with engine.begin() as conn:
+        for col, typ in missing.items():
+            statement = (
+                f"ALTER TABLE organization_members ADD COLUMN {col} {typ}"
+                if is_sqlite
+                else f"ALTER TABLE organization_members ADD COLUMN IF NOT EXISTS {col} {typ}"
+            )
+            conn.execute(text(statement))
 
 
 def _ensure_ai_usage_logs_columns(engine) -> None:

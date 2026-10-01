@@ -3,12 +3,14 @@
 import { type FormEvent, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Archive, ArrowLeft, Bot, CheckCircle2, Download, FileText, Pencil, Scale, ShieldAlert, Sparkles, Workflow } from "lucide-react";
+import { Archive, ArrowLeft, Bot, CheckCircle2, Download, FileText, Pencil, Scale, ShieldAlert, Sparkles, UserPlus, Workflow } from "lucide-react";
 import EnterpriseDialog from "@/components/enterprise/EnterpriseDialog";
 import { Select } from "@/components/ui/Select";
 import { EmptyStateCard, PageIntro, Panel, PanelHeader, RiskBadge } from "@/components/enterprise/EnterpriseUI";
 import { buildEnterpriseReport } from "@/lib/enterprise-report";
 import { calculateFinancialMetrics, calculateFinancialTrends } from "@/lib/financial-analysis";
+import { governancePost } from "@/lib/governance-client";
+import { toast } from "@/components/feedback/toast";
 import { useEnterpriseStore } from "@/store/enterprise-store";
 import { useModelStore } from "@/store/model-store";
 import type { CaseStatus, RiskLevel } from "@/types/enterprise";
@@ -27,6 +29,8 @@ export default function CaseWorkspacePage() {
   const setActiveCaseId = useEnterpriseStore((state) => state.setActiveCaseId);
   const activeModel = useModelStore((state) => state.active);
   const [editOpen, setEditOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviting, setInviting] = useState(false);
 
   const project = cases.find((item) => item.id === caseId);
   const projectDocuments = documents.filter((item) => item.caseId === caseId);
@@ -64,6 +68,28 @@ export default function CaseWorkspacePage() {
     setEditOpen(false);
   };
 
+  const inviteCollaborator = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    setInviting(true);
+    try {
+      await governancePost("/members", {
+        organizationId: project.organizationId,
+        email: String(data.get("email") || "").trim(),
+        role: String(data.get("role") || "analyst"),
+        clearance: String(data.get("clearance") || "internal"),
+        caseId: project.id,
+        permission: String(data.get("permission") || "viewer"),
+      });
+      toast.success("邀请已创建：对方用该邮箱登录并接受后，即可协作本项目");
+      setInviteOpen(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "邀请失败");
+    } finally {
+      setInviting(false);
+    }
+  };
+
   const exportReport = () => {
     const markdown = buildEnterpriseReport({ project, documents: projectDocuments, risks: projectRisks, rules, tasks: projectTasks, briefs: projectBriefs, runs: projectRuns });
     const url = URL.createObjectURL(new Blob([markdown], { type: "text/markdown;charset=utf-8" }));
@@ -76,7 +102,7 @@ export default function CaseWorkspacePage() {
 
   return <div className="page-shell">
     <Link href="/cases" className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-cyan-300"><ArrowLeft className="h-3.5 w-3.5" />返回项目中心</Link>
-    <PageIntro eyebrow={`Case workspace · ${project.id}`} title={project.company} description={`${project.title} · ${project.industry || "未填写行业"}。项目工作台统一汇总证据、风险、规则、流程与交付结果。`} actions={<><button type="button" onClick={() => setEditOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-300"><Pencil className="h-3.5 w-3.5" />编辑项目</button><button type="button" onClick={exportReport} className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]"><Download className="h-3.5 w-3.5" />导出研判报告</button></>} />
+    <PageIntro eyebrow={`Case workspace · ${project.id}`} title={project.company} description={`${project.title} · ${project.industry || "未填写行业"}。项目工作台统一汇总证据、风险、规则、流程与交付结果。`} actions={<><button type="button" onClick={() => setInviteOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-cyan-400/25 px-4 py-2.5 text-xs text-cyan-200"><UserPlus className="h-3.5 w-3.5" />邀请协作者</button><button type="button" onClick={() => setEditOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-300"><Pencil className="h-3.5 w-3.5" />编辑项目</button><button type="button" onClick={exportReport} className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]"><Download className="h-3.5 w-3.5" />导出研判报告</button></>} />
 
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <Panel className="p-4"><p className="text-[10px] text-slate-600">项目状态</p><div className="mt-2 flex items-center gap-2"><RiskBadge level={project.risk} /><span className="text-xs text-slate-300">{project.archivedAt ? "已归档" : project.status}</span></div></Panel>
@@ -113,6 +139,21 @@ export default function CaseWorkspacePage() {
 
     <EnterpriseDialog open={editOpen} onClose={() => setEditOpen(false)} title="编辑企业项目" description="项目状态和责任人变更会同步到工作区">
       <form onSubmit={saveProject} className="space-y-4">{[["company","企业名称",project.company],["title","研判任务",project.title],["industry","所属行业",project.industry],["amount","融资/分析规模",project.amount],["owner","负责人",project.owner],["nextAction","下一步动作",project.nextAction]].map(([name,label,value]) => <label key={name} className="block"><span className="mb-1.5 block text-[11px] text-slate-400">{label}</span><input required name={name} defaultValue={value} className="field-control" /></label>)}<div className="grid grid-cols-2 gap-3"><label><span className="mb-1.5 block text-[11px] text-slate-400">状态</span><Select name="status" defaultValue={project.status} options={[{ value: "研判中", label: "研判中" }, { value: "资料补充", label: "资料补充" }, { value: "待复核", label: "待复核" }, { value: "已完成", label: "已完成" }]} /></label><label><span className="mb-1.5 block text-[11px] text-slate-400">风险等级</span><Select name="risk" defaultValue={project.risk} options={[{ value: "low", label: "低风险" }, { value: "medium", label: "中风险" }, { value: "high", label: "高风险" }, { value: "critical", label: "重大风险" }]} /></label></div><div className="flex justify-end gap-2"><button type="button" onClick={() => setEditOpen(false)} className="rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-400">取消</button><button type="submit" className="rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]">保存项目</button></div></form>
+    </EnterpriseDialog>
+    <EnterpriseDialog open={inviteOpen} onClose={() => setInviteOpen(false)} title="邀请协作者一起研判" description="邀请按邮箱绑定身份；对方用该邮箱注册/登录并接受后，自动获得本项目的协作权限。">
+      <form onSubmit={inviteCollaborator} className="space-y-4">
+        <label className="block"><span className="mb-1.5 block text-[11px] text-slate-400">协作者邮箱</span><input required name="email" type="email" placeholder="name@company.com" className="field-control" /></label>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block"><span className="mb-1.5 block text-[11px] text-slate-400">组织角色</span><Select name="role" defaultValue="analyst" options={[{ value: "analyst", label: "分析师" }, { value: "reviewer", label: "复核人" }, { value: "viewer", label: "只读" }, { value: "admin", label: "管理员" }]} /></label>
+          <label className="block"><span className="mb-1.5 block text-[11px] text-slate-400">数据密级</span><Select name="clearance" defaultValue="internal" options={[{ value: "internal", label: "内部" }, { value: "confidential", label: "机密" }, { value: "restricted", label: "严格受限" }, { value: "public", label: "公开" }]} /></label>
+        </div>
+        <label className="block"><span className="mb-1.5 block text-[11px] text-slate-400">本项目协作权限</span><Select name="permission" defaultValue="viewer" options={[{ value: "viewer", label: "查看" }, { value: "reviewer", label: "复核" }, { value: "editor", label: "编辑" }, { value: "admin", label: "项目管理" }]} /></label>
+        <div className="rounded-xl border border-cyan-400/15 bg-cyan-400/[0.04] p-3 text-[10px] leading-5 text-cyan-100/70">对方接受邀请后即可查看「{project.company} · {project.title}」的资料、事实、风险与研判记录；也可在治理页「复制邀请链接」直接发送。</div>
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={() => setInviteOpen(false)} className="rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-400">取消</button>
+          <button type="submit" disabled={inviting} className="rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018] disabled:opacity-40">{inviting ? "创建中…" : "发送邀请"}</button>
+        </div>
+      </form>
     </EnterpriseDialog>
   </div>;
 }

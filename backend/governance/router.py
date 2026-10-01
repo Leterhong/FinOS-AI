@@ -104,6 +104,8 @@ def _member_out(row: OrganizationMember) -> dict:
         "id": row.id, "organizationId": row.organization_id, "userId": row.user_id,
         "email": row.email, "role": row.role, "clearance": row.clearance,
         "status": row.status,
+        "inviteCaseId": getattr(row, "invite_case_id", "") or "",
+        "invitePermission": getattr(row, "invite_permission", "") or "",
         "createdAt": row.created_at.isoformat() if row.created_at else None,
     }
 
@@ -183,6 +185,9 @@ class MemberIn(BaseModel):
     role: str = "viewer"
     clearance: str = "internal"
     organizationId: str | None = Field(default=None, max_length=32)
+    # 邀请即授权：可选指定协作项目与权限，成员接受后自动建立项目授权。
+    caseId: str | None = Field(default=None, max_length=64)
+    permission: str | None = None
 
 
 class GrantIn(BaseModel):
@@ -258,7 +263,17 @@ def governance_snapshot(organizationId: str | None = None, auditLimit: int = 200
     for row in pending_rows:
         candidate = db.get(Organization, row.organization_id)
         if candidate:
-            invitations.append({"memberId": row.id, "organizationId": row.organization_id, "organizationName": candidate.name, "role": row.role, "clearance": row.clearance})
+            invite_case = db.get(EnterpriseCase, row.invite_case_id) if row.invite_case_id else None
+            invitations.append({
+                "memberId": row.id,
+                "organizationId": row.organization_id,
+                "organizationName": candidate.name,
+                "role": row.role,
+                "clearance": row.clearance,
+                "caseId": row.invite_case_id or "",
+                "caseName": f"{invite_case.company} · {invite_case.title}" if invite_case else "",
+                "permission": row.invite_permission or "",
+            })
     organizations = []
     seen_orgs: set[str] = set()
     for membership in memberships:
@@ -301,6 +316,17 @@ def add_member(body: MemberIn, request: Request, user: User = Depends(get_curren
     if body.role not in _ROLES or body.clearance not in _CLEARANCES:
         return fail("角色或数据权限级别不合法", status_code=422)
     email = body.email.strip().lower()
+    # 邀请即授权：校验协作项目属于该组织，且权限合法。
+    invite_case_id = (body.caseId or "").strip()
+    invite_permission = (body.permission or "").strip()
+    if invite_case_id:
+        case = db.get(EnterpriseCase, invite_case_id)
+        if case is None or case.organization_id != org.id:
+            return fail("项目不存在", status_code=404)
+        if invite_permission not in _PERMISSIONS:
+            return fail("项目权限不合法", status_code=422)
+    else:
+        invite_permission = ""
     target = db.scalar(select(User).where(User.email == email))
     row = db.scalar(select(OrganizationMember).where(OrganizationMember.organization_id == org.id, OrganizationMember.email == email))
     if row is None:
@@ -315,6 +341,9 @@ def add_member(body: MemberIn, request: Request, user: User = Depends(get_curren
         if row.status != "active":
             row.status = "invited"
     row.role, row.clearance = body.role, body.clearance
+    row.invited_by = user.id
+    row.invite_case_id = invite_case_id
+    row.invite_permission = invite_permission
     try:
         db.flush()
         record_governance_audit(db, user=user, action="member.upsert", resource_type="member", resource_id=row.id, organization_id=org.id, details={"email": email, "role": body.role, "clearance": body.clearance, "status": row.status}, request=request)
@@ -336,9 +365,16 @@ def accept_invite(member_id: str, request: Request, user: User = Depends(get_cur
     row.status = "active"
     if not row.user_id:
         row.user_id = user.id
-    record_governance_audit(db, user=user, action="member.accept", resource_type="member", resource_id=row.id, organization_id=row.organization_id, details={"email": row.email}, request=request)
+    # 邀请即授权：按邀请时约定的项目与权限，自动建立/更新项目授权。
+    if row.invite_case_id and row.invite_permission:
+        grant = db.scalar(select(ProjectGrant).where(ProjectGrant.case_id == row.invite_case_id, ProjectGrant.user_id == user.id))
+        if grant is None:
+            db.add(ProjectGrant(organization_id=row.organization_id, case_id=row.invite_case_id, user_id=user.id, permission=row.invite_permission, granted_by=row.invited_by or user.id))
+        else:
+            grant.permission = row.invite_permission
+    record_governance_audit(db, user=user, action="member.accept", resource_type="member", resource_id=row.id, organization_id=row.organization_id, details={"email": row.email, "caseId": row.invite_case_id, "permission": row.invite_permission}, request=request)
     db.commit()
-    return ok(_member_out(row), "邀请已接受，组织权限已生效")
+    return ok(_member_out(row), "邀请已接受，组织权限与项目协作权限已生效")
 
 
 @router.delete("/members/{member_id}")

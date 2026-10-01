@@ -378,3 +378,31 @@ def test_org_members_read_all_projects_policy(client, user_a, user_b):
         headers=user_b["headers"],
     )
     assert forbidden.status_code == 403
+
+
+def test_invite_with_project_grant_on_accept(client, user_a, user_b):
+    """邀请即授权：邀请时指定项目，成员接受后自动获得该项目只读访问。"""
+    org = client.get("/api/governance/snapshot", headers=user_a["headers"]).json()["data"]["organization"]["id"]
+    assert client.post("/api/enterprise/cases", json={"id": "CASE-INV-1", "company": "协作企业", "title": "t"}, headers=user_a["headers"]).status_code == 200
+    invited = client.post(
+        "/api/governance/members",
+        json={"email": user_b["email"], "role": "analyst", "clearance": "internal", "organizationId": org, "caseId": "CASE-INV-1", "permission": "viewer"},
+        headers=user_a["headers"],
+    )
+    assert invited.status_code == 200, invited.text
+    member_id = invited.json()["data"]["id"]
+
+    snap_b = client.get("/api/governance/snapshot", headers=user_b["headers"]).json()["data"]
+    invitation = next(item for item in snap_b["invitations"] if item["memberId"] == member_id)
+    assert invitation["caseId"] == "CASE-INV-1" and invitation["permission"] == "viewer"
+    assert "协作企业" in invitation["caseName"]
+
+    # 接受前看不到该项目
+    before = client.get("/api/enterprise/snapshot", headers=user_b["headers"]).json()["data"]
+    assert not any(c["id"] == "CASE-INV-1" for c in before["cases"])
+
+    accepted = client.post(f"/api/governance/members/{member_id}/accept", headers=user_b["headers"])
+    assert accepted.status_code == 200, accepted.text
+
+    after = client.get("/api/enterprise/snapshot", headers=user_b["headers"]).json()["data"]
+    assert any(c["id"] == "CASE-INV-1" for c in after["cases"]), "接受邀请后应可访问被授权项目"

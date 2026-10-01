@@ -40,6 +40,10 @@ class OrganizationMember(Base):
     role: Mapped[str] = mapped_column(String(24), nullable=False, default="viewer")
     clearance: Mapped[str] = mapped_column(String(24), nullable=False, default="internal")
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
+    # 邀请即授权：记录受邀要协作的项目与权限，成员接受后自动建立项目授权。
+    invited_by: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    invite_case_id: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    invite_permission: Mapped[str] = mapped_column(String(24), nullable=False, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
     __table_args__ = (UniqueConstraint("organization_id", "email", name="uq_org_member_email"),)
