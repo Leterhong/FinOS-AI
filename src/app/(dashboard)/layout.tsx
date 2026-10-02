@@ -7,6 +7,7 @@ import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import { useEnterpriseStore } from "@/store/enterprise-store";
 import { useUiStore } from "@/store/ui-store";
 import { ToastViewport } from "@/components/feedback/toast";
+import { initPendingSync } from "@/lib/enterprise-sync";
 
 /** 同步状态徽标：让部署者一眼确认服务端持久化是否生效。 */
 function SyncBadge() {
@@ -40,6 +41,8 @@ export default function DashboardLayout({
     useUiStore.getState().hydrateSidebar();
     void useEnterpriseStore.getState().syncFromServer();
     void useModelStore.getState().loadActive();
+    // 重发上次未成功的写入（离线/重启导致的瞬断）。
+    initPendingSync();
   }, []);
 
   useEffect(() => {

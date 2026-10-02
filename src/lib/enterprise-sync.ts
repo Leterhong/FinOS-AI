@@ -108,16 +108,98 @@ export async function pullSnapshot(): Promise<EnterpriseSnapshot | null> {
 
 export type EnterpriseKind = "cases" | "documents" | "risks" | "rules" | "tasks" | "briefs";
 
-/** 幂等 upsert；fire-and-forget，失败静默（本地已是第一真相）。 */
+interface PendingOp {
+  kind: EnterpriseKind;
+  id: string;
+  method: "POST" | "DELETE";
+  payload?: Record<string, unknown>;
+  ts: number;
+}
+
+const PENDING_KEY = "finos-pending-sync";
+const PENDING_MAX = 500;
+let flushTimer: ReturnType<typeof setInterval> | null = null;
+let onlineBound = false;
+
+function loadPending(): PendingOp[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(PENDING_KEY) || "[]") as PendingOp[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function savePending(queue: PendingOp[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(PENDING_KEY, JSON.stringify(queue.slice(-PENDING_MAX)));
+  } catch {
+    // 配额/隐私模式失败：忽略。
+  }
+}
+
+function enqueuePending(op: PendingOp): void {
+  const queue = loadPending().filter((item) => !(item.kind === op.kind && item.id === op.id));
+  queue.push(op);
+  savePending(queue);
+  scheduleFlush();
+}
+
+function removePending(kind: EnterpriseKind, id: string): void {
+  savePending(loadPending().filter((item) => !(item.kind === kind && item.id === id)));
+}
+
+function scheduleFlush(): void {
+  if (typeof window === "undefined") return;
+  if (!onlineBound) {
+    onlineBound = true;
+    window.addEventListener("online", () => void flushPendingSync());
+  }
+  if (flushTimer !== null) return;
+  flushTimer = setInterval(() => { void flushPendingSync(); }, 15_000);
+}
+
+/** 重发待同步队列（离线/重启导致失败的写入）。成功或目标已不存在（404）即出队。 */
+export async function flushPendingSync(): Promise<void> {
+  if (typeof window === "undefined") return;
+  const queue = loadPending();
+  if (queue.length === 0) return;
+  for (const op of queue) {
+    try {
+      const path = `/api/enterprise/${op.kind}${op.method === "DELETE" ? `/${encodeURIComponent(op.id)}` : ""}`;
+      const resp = await backendAuthedFetch(path, {
+        method: op.method,
+        ...(op.method === "POST" ? { body: JSON.stringify(op.payload ?? {}) } : {}),
+      });
+      if (resp.ok || resp.status === 404) removePending(op.kind, op.id);
+    } catch {
+      // 仍失败：保留在队列，等待下次重试。
+    }
+  }
+}
+
+/** 页面挂载时调用：恢复上次未完成的写入并尝试重发。 */
+export function initPendingSync(): void {
+  if (typeof window === "undefined") return;
+  scheduleFlush();
+  void flushPendingSync();
+}
+
+/** 幂等 upsert；fire-and-forget。失败进入重试队列，避免瞬断丢同步。 */
 export function pushEntity(kind: EnterpriseKind, payload: Record<string, unknown>): void {
+  const id = String(payload.id ?? "");
   void (async () => {
     try {
-      await backendAuthedFetch(`/api/enterprise/${kind}`, {
+      const resp = await backendAuthedFetch(`/api/enterprise/${kind}`, {
         method: "POST",
         body: JSON.stringify(payload),
       });
+      if (!resp.ok) throw new Error(`push ${kind} ${resp.status}`);
+      if (id) removePending(kind, id);
     } catch {
-      // 离线：静默。
+      if (id) enqueuePending({ kind, id, method: "POST", payload, ts: Date.now() });
     }
   })();
 }
@@ -125,9 +207,11 @@ export function pushEntity(kind: EnterpriseKind, payload: Record<string, unknown
 export function pushDelete(kind: EnterpriseKind, id: string): void {
   void (async () => {
     try {
-      await backendAuthedFetch(`/api/enterprise/${kind}/${encodeURIComponent(id)}`, { method: "DELETE" });
+      const resp = await backendAuthedFetch(`/api/enterprise/${kind}/${encodeURIComponent(id)}`, { method: "DELETE" });
+      if (!resp.ok && resp.status !== 404) throw new Error(`delete ${kind} ${resp.status}`);
+      removePending(kind, id);
     } catch {
-      // 离线：静默。
+      enqueuePending({ kind, id, method: "DELETE", ts: Date.now() });
     }
   })();
 }
