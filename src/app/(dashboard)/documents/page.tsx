@@ -53,6 +53,7 @@ export default function DocumentsPage() {
   const completeDocumentAnalysis = useEnterpriseStore((state) => state.completeDocumentAnalysis);
   const failDocumentAnalysis = useEnterpriseStore((state) => state.failDocumentAnalysis);
   const reviewFact = useEnterpriseStore((state) => state.reviewFact);
+  const reviewFacts = useEnterpriseStore((state) => state.reviewFacts);
   const deleteDocument = useEnterpriseStore((state) => state.deleteDocument);
   const rerunRulesForDocument = useEnterpriseStore((state) => state.rerunRulesForDocument);
   const addRisk = useEnterpriseStore((state) => state.addRisk);
@@ -134,12 +135,11 @@ export default function DocumentsPage() {
     if (!reviewer) { toast.error("请填写复核人"); return; }
     let count = 0;
     for (const document of projectDocuments) {
-      for (const fact of document.factItems ?? []) {
-        if (fact.reviewStatus === "待复核") {
-          reviewFact(document.id, fact.id, { status: "已确认", reviewer, note: "批量确认" });
-          count += 1;
-        }
-      }
+      const pendingIds = (document.factItems ?? []).filter((fact) => fact.reviewStatus === "待复核").map((fact) => fact.id);
+      if (pendingIds.length === 0) continue;
+      // 每份资料一次性更新并推送，避免逐条事实触发 N 次全量 upsert。
+      reviewFacts(document.id, pendingIds, { status: "已确认", reviewer, note: "批量确认" });
+      count += pendingIds.length;
     }
     toast.success(`已批量确认 ${count} 条事实`);
     setBulkReviewOpen(false);

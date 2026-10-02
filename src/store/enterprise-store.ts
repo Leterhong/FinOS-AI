@@ -55,6 +55,8 @@ interface EnterpriseState {
   addDocument: (file: File, caseId: string) => AnalysisDocument;
   completeDocumentAnalysis: (id: string, analysis: string, model: string, detail?: { facts?: Array<Omit<EvidenceFact, "id" | "caseId" | "documentId" | "documentName" | "reviewStatus">>; ruleOutcomes?: AnalysisDocument["ruleOutcomes"]; uncertainties?: string[]; extractionMethod?: AnalysisDocument["extractionMethod"]; ocrUsed?: boolean; tables?: AnalysisDocument["tables"] }) => void;
   reviewFact: (documentId: string, factId: string, input: { status: EvidenceFact["reviewStatus"]; reviewer: string; note?: string }) => void;
+  /** 批量复核同一份资料的多个事实：一次 set、一次推送（避免 N 次全量 upsert）。 */
+  reviewFacts: (documentId: string, factIds: string[], input: { status: EvidenceFact["reviewStatus"]; reviewer: string; note?: string }) => void;
   failDocumentAnalysis: (id: string, error: string) => void;
   addRisk: (input: NewRisk) => RiskSignal;
   verifyRisk: (id: string, input: { reviewer: string; note: string }) => void;
@@ -336,6 +338,23 @@ export const useEnterpriseStore = create<EnterpriseState>()(
                 ...document,
                 updatedAt: new Date().toISOString(),
                 factItems: (document.factItems ?? []).map((fact) => fact.id === factId
+                  ? { ...fact, reviewStatus: input.status, reviewedBy: input.reviewer, reviewedAt: new Date().toISOString(), reviewNote: input.note }
+                  : fact),
+              }
+            : document),
+        }));
+        const doc = get().documents.find((item) => item.id === documentId);
+        if (doc) pushEntity("documents", syncMap.documents.payload(doc));
+      },
+      reviewFacts: (documentId, factIds, input) => {
+        const targets = new Set(factIds);
+        if (targets.size === 0) return;
+        set((state) => ({
+          documents: state.documents.map((document) => document.id === documentId
+            ? {
+                ...document,
+                updatedAt: new Date().toISOString(),
+                factItems: (document.factItems ?? []).map((fact) => targets.has(fact.id)
                   ? { ...fact, reviewStatus: input.status, reviewedBy: input.reviewer, reviewedAt: new Date().toISOString(), reviewNote: input.note }
                   : fact),
               }

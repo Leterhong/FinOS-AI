@@ -162,13 +162,19 @@ function scheduleFlush(): void {
   flushTimer = setInterval(() => { void flushPendingSync(); }, 15_000);
 }
 
+const KIND_ORDER: EnterpriseKind[] = ["cases", "documents", "risks", "rules", "tasks", "briefs"];
+const MAX_ATTEMPTS = 12;
+
 /** 重发待同步队列（离线/重启导致失败的写入）。 */
 export async function flushPendingSync(): Promise<void> {
   if (typeof window === "undefined") return;
   const queue = loadPending();
   if (queue.length === 0) return;
+  // 按依赖顺序重发：先项目，再资料/风险等，避免子表先于父表导致 404。
+  const ordered = [...queue].sort((a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind));
   const remaining: PendingOp[] = [];
-  for (const op of queue) {
+  for (const op of ordered) {
+    const attempts = (op.attempts ?? 0) + 1;
     try {
       const path = `/api/enterprise/${op.kind}${op.method === "DELETE" ? `/${encodeURIComponent(op.id)}` : ""}`;
       const resp = await backendAuthedFetch(path, {
@@ -177,17 +183,10 @@ export async function flushPendingSync(): Promise<void> {
       });
       // 成功；或删除时目标已不存在 → 出队。
       if (resp.ok || (op.method === "DELETE" && resp.status === 404)) continue;
-      // 认证/限流/服务端错误：保留，等待恢复后重试。
-      if (resp.status === 401 || resp.status === 403 || resp.status === 429 || resp.status >= 500) {
-        remaining.push(op);
-        continue;
-      }
-      // 其它 4xx（参数/校验类）：累计尝试，超过 5 次才丢弃，避免永久滞留。
-      const attempts = (op.attempts ?? 0) + 1;
-      if (attempts < 5) remaining.push({ ...op, attempts });
+      // 认证/限流/服务端错误：保留，等待恢复后重试（仍设上限，避免无限刷屏）。
+      if (attempts < MAX_ATTEMPTS) remaining.push({ ...op, attempts });
     } catch {
-      // 网络/后端不可达：保留重试。
-      remaining.push(op);
+      if (attempts < MAX_ATTEMPTS) remaining.push({ ...op, attempts });
     }
   }
   savePending(remaining);
