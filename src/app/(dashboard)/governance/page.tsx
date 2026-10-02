@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Activity, BookOpenCheck, Search, Cable, History, Loader2, ShieldCheck, UsersRound } from "lucide-react";
 import { EmptyStateCard, MetricCard, PageIntro, Panel, PanelHeader } from "@/components/enterprise/EnterpriseUI";
 import { governanceApi, governanceDelete, governancePatch, governancePost } from "@/lib/governance-client";
@@ -79,23 +79,35 @@ export default function GovernancePage() {
   };
 
   const acceptInvitation = async (invitation: GovernanceSnapshot["invitations"][number]) => {
-    // 邀请令牌来自管理员发送的邀请链接（?invite=...&token=...）；不接受仅凭邮箱确认。
+    // 令牌来自管理员发送的邀请链接（?invite=...&token=...）；邀请时已注册的账号可直接接受。
     const token = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("token") ?? "" : "";
-    if (!token) {
-      toast.error("缺少邀请令牌，请使用管理员发送的邀请链接打开后再接受");
-      return;
-    }
     setBusy(`invite-${invitation.memberId}`);
     try {
-      await governancePost(`/members/${invitation.memberId}/accept?token=${encodeURIComponent(token)}`, {});
+      const query = token ? `?token=${encodeURIComponent(token)}` : "";
+      await governancePost(`/members/${invitation.memberId}/accept${query}`, {});
       toast.success(`已接受「${invitation.organizationName}」邀请，已切换到该组织`);
       await load(invitation.organizationId);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "接受邀请失败");
+      const message = error instanceof Error ? error.message : "接受邀请失败";
+      toast.error(message.includes("令牌") ? "该邀请需通过管理员发送的邀请链接接受（未注册邮箱需令牌验证）" : message);
     } finally {
       clearBusy(`invite-${invitation.memberId}`);
     }
   };
+
+  // 从邀请链接打开（/governance?invite=<id>&token=<token>）且已登录时，自动接受一次。
+  const autoAcceptRef = useRef(false);
+  useEffect(() => {
+    if (autoAcceptRef.current || !snapshot) return;
+    const params = new URLSearchParams(window.location.search);
+    const inviteId = params.get("invite");
+    const token = params.get("token");
+    if (!inviteId || !token) return;
+    const invitation = (snapshot.invitations ?? []).find((item) => item.memberId === inviteId);
+    if (!invitation) return;
+    autoAcceptRef.current = true;
+    void acceptInvitation(invitation);
+  }, [snapshot, acceptInvitation]);
 
   const confirmRemoveMember = async () => {
     if (!removingMember) return;
@@ -219,7 +231,7 @@ export default function GovernancePage() {
 
     {tab === "权限与分级" && <div className="grid gap-4 xl:grid-cols-2">
       <Panel className="xl:col-span-2"><PanelHeader eyebrow="Access policy" title="项目可见策略" description="默认最小权限：非管理员成员需显式项目授权。开启后，组织成员可读取本组织全部项目（仅读取，仍受数据密级限制；编辑与管理仍需授权）。" /><div className="flex flex-wrap items-center gap-3 p-5"><p className="min-w-0 flex-1 text-xs text-slate-400">{snapshot?.organization.membersReadAllProjects ? "已开启：组织成员可读取本组织全部项目（只读）" : "已关闭：成员需按项目授权访问（最小权限）"}</p><button type="button" onClick={() => toggleMemberReadAll(!snapshot?.organization.membersReadAllProjects)} disabled={busy === "org-policy"} className={`rounded-xl border px-4 py-2.5 text-xs disabled:opacity-40 ${snapshot?.organization.membersReadAllProjects ? "border-rose-400/25 text-rose-200" : "border-cyan-400/25 text-cyan-200"}`}>{snapshot?.organization.membersReadAllProjects ? "关闭该策略" : "开启该策略"}</button></div></Panel>
-      <Panel><PanelHeader eyebrow="Organization & RBAC" title={snapshot?.organization.name || "企业组织"} description="Owner / Admin / Analyst / Reviewer / Viewer 五级角色，数据权限独立控制。" /><form onSubmit={submitMember} className="grid gap-3 p-5 sm:grid-cols-3"><input required name="email" type="email" placeholder="成员邮箱" className="field-control sm:col-span-3" /><Select name="role" defaultValue="analyst" options={[{ value: "analyst", label: "分析师" }, { value: "reviewer", label: "复核人" }, { value: "viewer", label: "只读" }, { value: "admin", label: "管理员" }]} /><Select name="clearance" defaultValue="internal" options={[{ value: "internal", label: "内部" }, { value: "confidential", label: "机密" }, { value: "restricted", label: "严格受限" }, { value: "public", label: "公开" }]} /><button disabled={busy === "member"} className="rounded-xl bg-cyan-300 px-3 text-xs font-semibold text-[#041018]">保存成员</button></form><div className="divide-y divide-white/[0.06]">{snapshot?.members.map((member) => <div key={member.id} className="flex items-center gap-3 px-5 py-3 text-xs"><UsersRound className="h-4 w-4 text-cyan-300" /><span className="min-w-0 flex-1 truncate text-slate-300">{member.email}</span><span className="text-slate-500">{member.role}</span><span className="text-slate-600">{member.clearance}</span><span className={`rounded-md px-2 py-0.5 text-[9px] ${member.status === "active" ? "border border-emerald-400/20 text-emerald-300" : "border border-amber-400/20 text-amber-300"}`}>{member.status === "active" ? "已生效" : "待本人确认"}</span>{member.status !== "active" && <button type="button" disabled={!member.inviteToken} onClick={() => { if (!member.inviteToken) return; const link = `${window.location.origin}/?invite=${encodeURIComponent(member.id)}&token=${encodeURIComponent(member.inviteToken)}`; void navigator.clipboard?.writeText(link).then(() => toast.success("邀请链接已复制，请发送给被邀请人（需以该邮箱登录并通过链接确认）")); }} className="rounded-lg border border-white/10 px-2 py-1 text-[9px] text-slate-400 disabled:opacity-40">复制邀请链接</button>}{member.role !== "owner" && <button type="button" onClick={() => { setRemoveReason(""); setRemovingMember(member); }} className="rounded-lg border border-rose-400/20 px-2 py-1 text-[9px] text-rose-300">移除</button>}</div>)}</div></Panel>
+      <Panel><PanelHeader eyebrow="Organization & RBAC" title={snapshot?.organization.name || "企业组织"} description="Owner / Admin / Analyst / Reviewer / Viewer 五级角色，数据权限独立控制。" /><form onSubmit={submitMember} className="grid gap-3 p-5 sm:grid-cols-3"><input required name="email" type="email" placeholder="成员邮箱" className="field-control sm:col-span-3" /><Select name="role" defaultValue="analyst" options={[{ value: "analyst", label: "分析师" }, { value: "reviewer", label: "复核人" }, { value: "viewer", label: "只读" }, { value: "admin", label: "管理员" }]} /><Select name="clearance" defaultValue="internal" options={[{ value: "internal", label: "内部" }, { value: "confidential", label: "机密" }, { value: "restricted", label: "严格受限" }, { value: "public", label: "公开" }]} /><button disabled={busy === "member"} className="rounded-xl bg-cyan-300 px-3 text-xs font-semibold text-[#041018]">保存成员</button></form><div className="divide-y divide-white/[0.06]">{snapshot?.members.map((member) => <div key={member.id} className="flex items-center gap-3 px-5 py-3 text-xs"><UsersRound className="h-4 w-4 text-cyan-300" /><span className="min-w-0 flex-1 truncate text-slate-300">{member.email}</span><span className="text-slate-500">{member.role}</span><span className="text-slate-600">{member.clearance}</span><span className={`rounded-md px-2 py-0.5 text-[9px] ${member.status === "active" ? "border border-emerald-400/20 text-emerald-300" : "border border-amber-400/20 text-amber-300"}`}>{member.status === "active" ? "已生效" : "待本人确认"}</span>{member.status !== "active" && (member.userId ? <span className="rounded-lg border border-white/10 px-2 py-1 text-[9px] text-slate-500">对方登录后可直接确认</span> : <button type="button" disabled={!member.inviteToken} title={member.inviteToken ? "复制邀请链接" : "仅管理员可复制邀请链接"} onClick={() => { if (!member.inviteToken) return; const link = `${window.location.origin}/governance?invite=${encodeURIComponent(member.id)}&token=${encodeURIComponent(member.inviteToken)}`; void navigator.clipboard?.writeText(link).then(() => toast.success("邀请链接已复制：对方用被邀请邮箱登录后打开即可接受")); }} className="rounded-lg border border-white/10 px-2 py-1 text-[9px] text-slate-400 disabled:opacity-40">复制邀请链接</button>)}{member.role !== "owner" && <button type="button" onClick={() => { setRemoveReason(""); setRemovingMember(member); }} className="rounded-lg border border-rose-400/20 px-2 py-1 text-[9px] text-rose-300">移除</button>}</div>)}</div></Panel>
       <Panel><PanelHeader eyebrow="Project permissions" title="项目最小权限" description="非管理员成员必须获得明确项目授权，且不得超过其数据密级。" /><form onSubmit={submitGrant} className="grid gap-3 p-5 sm:grid-cols-3"><Select required name="caseId" disabled={!organizationCases.length} placeholder={organizationCases.length ? "选择项目" : "暂无项目，请先创建"} options={[{ value: "", label: organizationCases.length ? "选择项目" : "暂无项目，请先创建" }, ...organizationCases.map((item) => ({ value: item.id, label: `${item.company} · ${item.title}` }))]} /><Select required name="userId" disabled={!activeMembers.length} placeholder={activeMembers.length ? "选择成员" : "暂无其他成员"} options={[{ value: "", label: activeMembers.length ? "选择成员" : "暂无其他成员" }, ...activeMembers.map((member) => ({ value: member.userId ?? "", label: member.email }))]} /><Select name="permission" defaultValue="viewer" options={[{ value: "viewer", label: "查看" }, { value: "reviewer", label: "复核" }, { value: "editor", label: "编辑" }, { value: "admin", label: "项目管理" }]} /><button disabled={!organizationCases.length || !activeMembers.length || busy === "grant"} className="rounded-xl bg-cyan-300 px-3 py-2.5 text-xs font-semibold text-[#041018] sm:col-span-3 disabled:opacity-40">保存项目授权</button></form><div className="px-5 pb-5 text-[10px] text-slate-600">已配置 {snapshot?.grants.length ?? 0} 条显式授权。</div></Panel>
       <Panel className="xl:col-span-2"><PanelHeader eyebrow="Data classification" title="项目数据分级" description="外部连接器资料继承项目密级；用户数据许可低于密级时不可访问。" /><div className="grid gap-3 p-5 md:grid-cols-2">{organizationCases.length ? organizationCases.map((item) => <div key={item.id} className="rounded-xl border border-white/[0.07] p-3"><p className="text-xs text-slate-200">{item.company} · {item.title}</p><Select value={item.classification ?? "internal"} onChange={(next) => classify(item.id, next as DataClassification)} className="mt-3" options={classifications.map((level) => ({ value: level.value, label: level.label }))} /></div>) : <p className="text-xs text-slate-600">创建项目后可设置数据级别。</p>}</div></Panel>
     </div>}

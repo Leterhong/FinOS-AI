@@ -261,24 +261,43 @@ def test_member_invite_requires_acceptance_before_access(client, user_a, user_b)
     before = client.get(f"/api/governance/snapshot?organizationId={org_id}", headers=user_b["headers"])
     assert before.status_code == 404, before.status_code
 
-    # 缺少邀请令牌：即便邮箱匹配也拒绝（防止仅凭注册被邀请邮箱即继承权限）
-    no_token = client.post(f"/api/governance/members/{invited['id']}/accept", headers=user_b["headers"])
-    assert no_token.status_code == 403, no_token.text
-
-    # B 本人凭邀请令牌确认
-    accepted = client.post(f"/api/governance/members/{invited['id']}/accept?token={invited['inviteToken']}", headers=user_b["headers"])
+    # 邀请时该邮箱已是注册账号：本人登录后可直接接受（无需令牌）
+    accepted = client.post(f"/api/governance/members/{invited['id']}/accept", headers=user_b["headers"])
     assert accepted.status_code == 200, accepted.text
     assert accepted.json()["data"]["status"] == "active"
-
-    # 令牌一次性：接受后不可重复使用
-    reused = client.post(f"/api/governance/members/{invited['id']}/accept?token={invited['inviteToken']}", headers=user_b["headers"])
-    assert reused.status_code in (200, 403)
 
     after = client.get(f"/api/governance/snapshot?organizationId={org_id}", headers=user_b["headers"])
     assert after.status_code == 200
     # viewer 看不到审计明细与成员名册（含 IP/邮箱）
     body = after.json()["data"]
     assert body["audits"] == [] and body["members"] == []
+
+
+def test_unregistered_invite_requires_token(client, user_a):
+    """邀请时邮箱尚未注册：之后注册该邮箱的人必须凭邀请令牌接受，防止冒领。"""
+    org_id = client.get("/api/governance/snapshot", headers=user_a["headers"]).json()["data"]["organization"]["id"]
+    email = f"pending-{uuid.uuid4().hex[:8]}@finos.test"
+    invited = client.post(
+        "/api/governance/members",
+        json={"organizationId": org_id, "email": email, "role": "viewer", "clearance": "internal"},
+        headers=user_a["headers"],
+    ).json()["data"]
+    # 邀请创建时该邮箱未注册 → 未绑定账号
+    assert not invited.get("userId")
+
+    registered = client.post("/api/auth/register", json={"email": email, "password": "Test1234!"})
+    assert registered.status_code == 200, registered.text
+    target = {"headers": {"Authorization": f"Bearer {registered.json()['data']['token']}"}}
+
+    no_token = client.post(f"/api/governance/members/{invited['id']}/accept", headers=target["headers"])
+    assert no_token.status_code == 403, no_token.text
+
+    with_token = client.post(
+        f"/api/governance/members/{invited['id']}/accept?token={invited['inviteToken']}",
+        headers=target["headers"],
+    )
+    assert with_token.status_code == 200, with_token.text
+    assert with_token.json()["data"]["status"] == "active"
 
 
 def test_review_resource_must_exist(client, user_a):

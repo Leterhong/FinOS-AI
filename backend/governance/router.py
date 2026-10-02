@@ -366,14 +366,21 @@ def add_member(body: MemberIn, request: Request, user: User = Depends(get_curren
 
 @router.post("/members/{member_id}/accept")
 def accept_invite(member_id: str, request: Request, token: str = "", user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """受邀成员本人确认：必须同时匹配邀请邮箱与邀请令牌。"""
+    """受邀成员本人确认。
+
+    邮箱匹配是前提；此外满足其一即可：
+    - 邀请时该邮箱已是注册账号（row.user_id 已绑定），本人登录后可直接接受（无需令牌）；
+    - 未绑定账号的邀请，必须携带邀请令牌（防止他人注册被邀请邮箱冒领）。
+    """
     row = db.get(OrganizationMember, member_id)
     if row is None or row.email != user.email.strip().lower():
         return fail("该邀请邮箱与当前登录账号不一致，请使用被邀请邮箱登录后再确认", status_code=404)
-    expected = getattr(row, "invite_token", "") or ""
-    supplied = (token or "").strip()
-    if not expected or not supplied or not hmac.compare_digest(expected, supplied):
-        return fail("邀请令牌无效或已失效，请使用管理员发送的最新邀请链接", status_code=403)
+    bound = bool(row.user_id) and row.user_id == user.id
+    if not bound:
+        expected = getattr(row, "invite_token", "") or ""
+        supplied = (token or "").strip()
+        if not expected or not supplied or not hmac.compare_digest(expected, supplied):
+            return fail("邀请令牌无效或已失效，请使用管理员发送的最新邀请链接", status_code=403)
     if row.status == "active":
         # 已激活的行不再需要邀请令牌，先作废。
         if getattr(row, "invite_token", ""):

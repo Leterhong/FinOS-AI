@@ -10,7 +10,6 @@ import { type BackendAccount, backendAuthedFetch, bindWorkspaceToAccount, fetchA
 import { useEnterpriseStore } from "@/store/enterprise-store";
 
 const titles: Record<string, string> = { "/": "企业经营决策台", "/cases": "项目中心", "/documents": "资料研判", "/risk": "风险中心", "/research": "投研中心", "/rules": "规则库", "/models": "AI 模型中心", "/agents": "Agent 中心", "/skills": "专属技能中心", "/notifications": "通知中心", "/workflows": "流程中心", "/assistant": "智能研判助手", "/governance": "治理与复核中心", "/deployment": "部署与合规准备", "/guide": "使用指引" };
-const modules = Object.entries(titles).map(([href,label]) => ({ href,label }));
 
 export default function DashboardHeader({ onMenuToggle }: { onMenuToggle?: () => void }) {
   const pathname = usePathname();
@@ -27,15 +26,16 @@ export default function DashboardHeader({ onMenuToggle }: { onMenuToggle?: () =>
       const current = await fetchAccount();
       setAccount(current);
       if (current && !current.guest) await bindWorkspaceToAccount();
-    })();
-    // 邀请链接：?invite=<memberId>&email=<invitedEmail> → 打开账号对话框并预填被邀请邮箱
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get("invite")) {
-        setInviteEmail(params.get("email") ?? "");
-        setAccountOpen(true);
+      // 邀请链接（/governance?invite=<memberId>&token=<token>）：未登录时弹出账号对话框
+      // 引导注册/登录；已登录则直接停留在治理页接受，不打断流程。
+      if (typeof window !== "undefined") {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get("invite") && (!current || current.guest)) {
+          setInviteEmail(params.get("email") ?? "");
+          setAccountOpen(true);
+        }
       }
-    }
+    })();
   }, []);
   const accountLabel = account && !account.guest ? (account.email.split("@")[0] || account.email) : "登录 / 注册";
   const pending = risks.filter(risk => risk.status === "待核验");
