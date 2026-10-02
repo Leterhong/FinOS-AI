@@ -20,7 +20,10 @@ import {
 } from "lucide-react";
 import { PageIntro, Panel, PanelHeader } from "@/components/enterprise/EnterpriseUI";
 import { Button } from "@/components/ui/Button";
-import ModelFormDialog from "@/components/models/ModelFormDialog";
+import dynamic from "next/dynamic";
+
+// 弹窗内含 framer-motion 动效：懒加载，避免进入工作区首屏 bundle。
+const ModelFormDialog = dynamic(() => import("@/components/models/ModelFormDialog"), { ssr: false });
 import { PROVIDER_PRESETS } from "@/ai/model-center/providers/presets";
 import type { PublicProviderConfig } from "@/ai/model-center/types";
 import { useModelStore } from "@/store/model-store";

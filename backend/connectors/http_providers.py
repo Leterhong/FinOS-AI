@@ -47,10 +47,13 @@ def _throttle(host: str) -> None:
 
 
 def _get_json(url: str, timeout: int = 15) -> Any:
+    from backend.core.cache import cache_get, cache_set
+
     use_cache = _CACHE_ENABLED and _TTL_SECONDS > 0
-    cached = _CACHE.get(url)
-    if use_cache and cached and time.time() - cached[0] < _TTL_SECONDS:
-        return cached[1]
+    if use_cache:
+        cached = cache_get(f"ext:http:{url}")
+        if cached is not None:
+            return cached
     _throttle(urllib.parse.urlparse(url).netloc)
     request = urllib.request.Request(url, headers={"User-Agent": _UA, "Accept": "application/json"})
     try:
@@ -59,7 +62,8 @@ def _get_json(url: str, timeout: int = 15) -> Any:
     except Exception as exc:  # noqa: BLE001
         raise ExternalDataError(f"外部数据请求失败：{type(exc).__name__}") from exc
     if use_cache:
-        _CACHE[url] = (time.time(), data)
+        # 走统一缓存层：生产为 Redis，多实例共享一致；不可用时回退进程内。
+        cache_set(f"ext:http:{url}", data, ttl_seconds=_TTL_SECONDS)
     return data
 
 

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MotionConfig } from "framer-motion";
 import { usePathname } from "next/navigation";
 import Sidebar from "@/components/dashboard/Sidebar";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
@@ -58,13 +57,7 @@ export default function DashboardLayout({
   }, [mobileNavOpen]);
 
   return (
-    <MotionConfig
-      reducedMotion="user"
-      transition={{
-        ease: [0.22, 1, 0.36, 1],
-        duration: 0.2,
-      }}
-    >
+    <>
       <div className="relative h-screen overflow-hidden">
         <Sidebar open={mobileNavOpen} onClose={() => setMobileNavOpen(false)} />
         {/* Phase 7.5 #359：左边距与 Sidebar 宽度严格联动（折叠 4.25rem / 展开 16rem），
@@ -82,7 +75,7 @@ export default function DashboardLayout({
           </div>
         </main>
       </div>
-    <ToastViewport />
-    </MotionConfig>
+      <ToastViewport />
+    </>
   );
 }

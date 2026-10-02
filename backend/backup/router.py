@@ -28,6 +28,17 @@ from backend.core.logging_config import get_logger, log_event
 from backend.core.response import fail
 from backend.database import engine, get_db
 from backend.financial.models import Asset, FinancialProfile, Transaction
+from backend.enterprise.models import (
+    EnterpriseBrief,
+    EnterpriseCase,
+    EnterpriseDocument,
+    EnterpriseRisk,
+    EnterpriseRule,
+    EnterpriseTask,
+)
+from backend.intelligence.models import LongTermMemory
+from backend.notification.models import Notification
+from backend.report.models import WealthReport
 from backend.security.audit import client_ip, write_audit
 from backend.user.models import User
 
@@ -127,6 +138,66 @@ def _collect_user_data(db: Session, user: User) -> dict:
             }
             for m in models
         ],
+        "enterpriseCases": [_case_export(row) for row in db.scalars(select(EnterpriseCase).where(EnterpriseCase.user_id == user.id))],
+        "enterpriseDocuments": [_document_export(row) for row in db.scalars(select(EnterpriseDocument).where(EnterpriseDocument.user_id == user.id))],
+        "enterpriseRisks": [_risk_export(row) for row in db.scalars(select(EnterpriseRisk).where(EnterpriseRisk.user_id == user.id))],
+        "enterpriseRules": [_rule_export(row) for row in db.scalars(select(EnterpriseRule).where(EnterpriseRule.user_id == user.id))],
+        "enterpriseTasks": [
+            {"id": t.id, "caseId": t.case_id, "title": t.title, "assignee": t.assignee, "due": t.due, "priority": t.priority, "stage": t.stage, "note": t.note, "updatedAt": _dt(t.updated_at)}
+            for t in db.scalars(select(EnterpriseTask).where(EnterpriseTask.user_id == user.id))
+        ],
+        "enterpriseBriefs": [
+            {"id": b.id, "caseId": b.case_id, "title": b.title, "summary": b.summary, "topic": b.topic, "model": b.model, "updatedAt": _dt(b.updated_at)}
+            for b in db.scalars(select(EnterpriseBrief).where(EnterpriseBrief.user_id == user.id))
+        ],
+        "notifications": [
+            {"id": n.id, "source": n.source, "category": n.category, "severity": n.severity, "title": n.title, "body": n.body, "read": n.read, "archived": n.archived, "createdAt": _dt(n.created_at)}
+            for n in db.scalars(select(Notification).where(Notification.user_id == user.id))
+        ],
+        "longTermMemories": [
+            {"id": m.id, "kind": m.kind, "key": m.key, "content": m.content, "importance": m.importance, "createdAt": _dt(m.created_at)}
+            for m in db.scalars(select(LongTermMemory).where(LongTermMemory.user_id == user.id))
+        ],
+        "reports": [
+            {"id": r.id, "kind": r.kind, "title": r.title, "period": r.period, "content": r.content, "createdAt": _dt(r.created_at)}
+            for r in db.scalars(select(WealthReport).where(WealthReport.user_id == user.id))
+        ],
+    }
+
+
+def _case_export(row: EnterpriseCase) -> dict:
+    return {
+        "id": row.id, "company": row.company, "title": row.title, "industry": row.industry,
+        "classification": row.classification, "status": row.status, "risk": row.risk,
+        "amount": row.amount, "owner": row.owner, "nextAction": row.next_action,
+        "progress": row.progress, "createdAt": _dt(row.created_at), "updatedAt": _dt(row.updated_at),
+    }
+
+
+def _document_export(row: EnterpriseDocument) -> dict:
+    return {
+        "id": row.id, "caseId": row.case_id, "name": row.name, "kind": row.kind,
+        "classification": row.classification, "status": row.status, "analysis": row.analysis,
+        "model": row.model, "facts": row.facts, "ruleHits": row.rule_hits,
+        "evidence": _safe_json(row.evidence_json), "updatedAt": _dt(row.updated_at),
+    }
+
+
+def _risk_export(row: EnterpriseRisk) -> dict:
+    return {
+        "id": row.id, "caseId": row.case_id, "company": row.company, "title": row.title,
+        "level": row.level, "evidence": row.evidence, "rule": row.rule, "impact": row.impact,
+        "status": row.status, "review": _safe_json(row.review_json), "updatedAt": _dt(row.updated_at),
+    }
+
+
+def _rule_export(row: EnterpriseRule) -> dict:
+    return {
+        "id": row.id, "code": row.code, "name": row.name, "domain": row.domain,
+        "version": row.version, "coverage": row.coverage, "coverageRate": row.coverage_rate,
+        "conditions": _safe_json(row.conditions), "tests": _safe_json(row.tests_json),
+        "enabled": getattr(row, "enabled", True), "industries": _safe_json(getattr(row, "industries_json", "[]")),
+        "updatedAt": _dt(row.updated_at),
     }
 
 

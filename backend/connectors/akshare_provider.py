@@ -86,9 +86,12 @@ def fetch_dataset(dataset: str, limit: int = 12, mc: Any = None) -> list[dict[st
     limit = max(1, min(int(limit), 60))
 
     use_cache = _CACHE_ENABLED and _CACHE_TTL_SECONDS > 0
-    cached = _CACHE.get(dataset)
-    if use_cache and cached and time.time() - cached[0] < _CACHE_TTL_SECONDS:
-        return cached[1][-limit:][::-1]
+    if use_cache:
+        from backend.core.cache import cache_get
+
+        cached_rows = cache_get(f"ext:ak:{dataset}")
+        if isinstance(cached_rows, list) and cached_rows:
+            return cached_rows[-limit:][::-1]
 
     akshare = mc
     if akshare is None:
@@ -113,6 +116,8 @@ def fetch_dataset(dataset: str, limit: int = 12, mc: Any = None) -> list[dict[st
         raise AkshareError(f"数据源解析失败：{type(exc).__name__}") from exc
 
     if use_cache:
-        _CACHE[dataset] = (time.time(), rows)
+        from backend.core.cache import cache_set
+
+        cache_set(f"ext:ak:{dataset}", rows, ttl_seconds=_CACHE_TTL_SECONDS)
     # 时间序列多为升序，取最近 limit 条并以最新在前返回。
     return rows[-limit:][::-1]
