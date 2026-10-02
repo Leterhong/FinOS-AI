@@ -114,6 +114,7 @@ interface PendingOp {
   method: "POST" | "DELETE";
   payload?: Record<string, unknown>;
   ts: number;
+  attempts?: number;
 }
 
 const PENDING_KEY = "finos-pending-sync";
@@ -161,11 +162,12 @@ function scheduleFlush(): void {
   flushTimer = setInterval(() => { void flushPendingSync(); }, 15_000);
 }
 
-/** 重发待同步队列（离线/重启导致失败的写入）。成功或目标已不存在（404）即出队。 */
+/** 重发待同步队列（离线/重启导致失败的写入）。 */
 export async function flushPendingSync(): Promise<void> {
   if (typeof window === "undefined") return;
   const queue = loadPending();
   if (queue.length === 0) return;
+  const remaining: PendingOp[] = [];
   for (const op of queue) {
     try {
       const path = `/api/enterprise/${op.kind}${op.method === "DELETE" ? `/${encodeURIComponent(op.id)}` : ""}`;
@@ -173,11 +175,22 @@ export async function flushPendingSync(): Promise<void> {
         method: op.method,
         ...(op.method === "POST" ? { body: JSON.stringify(op.payload ?? {}) } : {}),
       });
-      if (resp.ok || resp.status === 404) removePending(op.kind, op.id);
+      // 成功；或删除时目标已不存在 → 出队。
+      if (resp.ok || (op.method === "DELETE" && resp.status === 404)) continue;
+      // 认证/限流/服务端错误：保留，等待恢复后重试。
+      if (resp.status === 401 || resp.status === 403 || resp.status === 429 || resp.status >= 500) {
+        remaining.push(op);
+        continue;
+      }
+      // 其它 4xx（参数/校验类）：累计尝试，超过 5 次才丢弃，避免永久滞留。
+      const attempts = (op.attempts ?? 0) + 1;
+      if (attempts < 5) remaining.push({ ...op, attempts });
     } catch {
-      // 仍失败：保留在队列，等待下次重试。
+      // 网络/后端不可达：保留重试。
+      remaining.push(op);
     }
   }
+  savePending(remaining);
 }
 
 /** 页面挂载时调用：恢复上次未完成的写入并尝试重发。 */
