@@ -24,14 +24,15 @@ ALLOWED_KINDS = set(KIND_LABELS.keys())
 
 def list_memories(user: User, db, kind: str | None = None) -> dict:
     if kind and kind in ALLOWED_KINDS:
-        groups = {kind: recall(db, user, kinds=(kind,), limit=50, mark_hit=False)}
+        items = recall(db, user, kinds=(kind,), limit=50, mark_hit=False)
+        groups = {kind: items} if items else {}
     else:
         groups = {}
         for k in KIND_LABELS:
             items = recall(db, user, kinds=(k,), limit=50, mark_hit=False)
             if items:
                 groups[k] = items
-    return {"hasData": bool(groups), "groups": groups, "labels": KIND_LABELS}
+    return {"hasData": any(groups.values()), "groups": groups, "labels": KIND_LABELS}
 
 
 def add_memory(

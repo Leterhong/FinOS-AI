@@ -66,7 +66,7 @@ def build_avatar(user: User, db) -> dict:
     financial_status = (
         f"净资产：¥{twin['netWorth']:,.0f}\n"
         f"财富健康分：{twin['healthScore']}\n"
-        f"月度结余：¥{twin.get('momentsurplus', twin.get('surplus', 0.0)):,.0f}\n"
+        f"月度结余：¥{twin.get('monthlySurplus', twin.get('surplus', 0.0)):,.0f}\n"
         f"储蓄率：{twin['savingsRate']:.1%}"
     )
 

@@ -125,8 +125,16 @@ def evaluate_condition(cond: dict, metrics: dict) -> bool:
     actual = metrics.get(metric)
 
     if op == "eq":
-        return str(actual) == str(expected)
+        a, e = _as_float(actual), _as_float(expected)
+        if a is not None and e is not None:
+            return abs(a - e) < 1e-9
+        return actual is not None and str(actual) == str(expected)
     if op == "ne":
+        if actual is None and expected is None:
+            return False
+        a, e = _as_float(actual), _as_float(expected)
+        if a is not None and e is not None:
+            return abs(a - e) >= 1e-9
         return str(actual) != str(expected)
     if op == "in":
         return actual in (expected if isinstance(expected, (list, tuple, set)) else [expected])
@@ -231,7 +239,7 @@ def run_rule(
     llm_called = any(
         bool((r.get("result") or {}).get("llmCalled")) for r in results if isinstance(r.get("result"), dict)
     )
-    status = "success" if not failed else ("failed" if len(failed) == len(results) else "success")
+    status = "success" if not failed else ("failed" if len(failed) == len(results) else "partial")
 
     rule.last_triggered_at = now
     rule.trigger_count = (rule.trigger_count or 0) + 1

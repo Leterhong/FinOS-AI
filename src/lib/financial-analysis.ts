@@ -117,12 +117,15 @@ export function calculateFinancialTrends(facts: EvidenceFact[]): FinancialTrend[
     const previous = ordered[ordered.length - 2];
     const latest = ordered[ordered.length - 1];
     const base = normalized(previous);
-    if (!base) continue;
+    const latestValue = normalized(latest);
+    if (!base || !Number.isFinite(base) || !Number.isFinite(latestValue)) continue;
+    const changeRate = ((latestValue - base) / Math.abs(base)) * 100;
+    if (!Number.isFinite(changeRate)) continue;
     trends.push({
       topic,
       fromPeriod: previous.period!,
       toPeriod: latest.period!,
-      changeRate: ((normalized(latest) - base) / Math.abs(base)) * 100,
+      changeRate,
       sourceFactIds: [previous.id, latest.id],
     });
   }

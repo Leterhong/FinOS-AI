@@ -326,14 +326,20 @@ _scheduler_stop = threading.Event()
 
 
 def _scheduler_loop() -> None:
+    from backend.autonomous.planner import service as planner_service
     from backend.database import SessionLocal
 
     while not _scheduler_stop.wait(_SCHEDULER_INTERVAL_SECONDS):
-        try:
-            with SessionLocal() as db:
+        with SessionLocal() as db:
+            try:
                 tick(db)
-        except Exception:  # noqa: BLE001
-            logger.exception("scheduler_loop_failed")
+            except Exception:  # noqa: BLE001
+                logger.exception("scheduler_loop_failed")
+            # 长期运行计划（AutomationPlan）此前从未被调度，这里一并巡检。
+            try:
+                planner_service.tick(db)
+            except Exception:  # noqa: BLE001
+                logger.exception("planner_loop_failed")
 
 
 def start_scheduler() -> None:

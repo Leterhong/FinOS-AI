@@ -10,10 +10,10 @@ import { scoreProject, scoreRisk } from "@/lib/risk-score";
 import type { RiskLevel } from "@/types/enterprise";
 
 const LEVEL_META: Record<RiskLevel, { label: string; color: string }> = {
-  critical: { label: "重大", color: "#ff4d6d" },
-  high: { label: "高", color: "#ff8a4c" },
-  medium: { label: "中", color: "#f6c344" },
-  low: { label: "低", color: "#4c8dff" },
+  critical: { label: "重大", color: "#FF4D4F" },
+  high: { label: "高", color: "#FF7A45" },
+  medium: { label: "中", color: "#F6C344" },
+  low: { label: "低", color: "#4C8DFF" },
 };
 const LEVEL_ORDER: RiskLevel[] = ["critical", "high", "medium", "low"];
 const STAGES = ["待处理", "处理中", "待复核", "已完成"] as const;
@@ -62,7 +62,7 @@ function BarList({ items, max, empty }: { items: Array<{ label: string; value: n
             <span className="numeric shrink-0 text-slate-400">{item.value}{item.sub ? <span className="ml-1 text-slate-600">{item.sub}</span> : null}</span>
           </div>
           <div className="mt-1 h-2 overflow-hidden rounded-full bg-white/[0.05]">
-            <div className="h-full rounded-full transition-all" style={{ width: `${max > 0 ? Math.max(2, (item.value / max) * 100) : 0}%`, backgroundColor: item.color ?? "#22d3ee" }} />
+            <div className="h-full rounded-full transition-all" style={{ width: `${max > 0 && item.value > 0 ? Math.max(2, (item.value / max) * 100) : 0}%`, backgroundColor: item.color ?? "#22d3ee" }} />
           </div>
         </div>
       ))}

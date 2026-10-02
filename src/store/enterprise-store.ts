@@ -222,9 +222,8 @@ function deriveCaseProgress(state: {
             : taskRatio < 1
               ? "推进流程任务"
               : "提交人工复核";
-    // 仅在进度满格时提升为「待复核」；用户在编辑弹窗里显式设置的
-    // 状态（已完成/资料补充等）不再被推导覆盖。
-    const status: EnterpriseCase["status"] = progress >= 100 && item.status !== "已完成" ? "待复核" : item.status;
+    // 仅在进度满格时提升为「待复核」；用户显式设置的状态（已完成/资料补充）不被推导覆盖。
+    const status: EnterpriseCase["status"] = progress >= 100 && item.status !== "已完成" && item.status !== "资料补充" ? "待复核" : item.status;
     return { ...item, progress, nextAction, status };
   });
   // 同步清理：文档不再关联已删除项目时保留原样（不静默丢数据）。
@@ -432,7 +431,7 @@ export const useEnterpriseStore = create<EnterpriseState>()(
         pushDelete("rules", id);
       },
       deleteDocument: (id) => {
-        set((state) => ({ documents: state.documents.filter((d) => d.id !== id) }));
+        withProgress(set, (state) => ({ documents: state.documents.filter((d) => d.id !== id) }));
         pushDelete("documents", id);
       },
       rerunRulesForDocument: (id) => {
@@ -466,7 +465,7 @@ export const useEnterpriseStore = create<EnterpriseState>()(
         pushEntity("tasks", syncMap.tasks.payload(task));
       },
       updateTask: (id, patch, actor, note) => {
-        set((state) => ({
+        withProgress(set, (state) => ({
           tasks: state.tasks.map((task) => {
             if (task.id !== id) return task;
             const stageChanged = patch.stage !== undefined && patch.stage !== task.stage;

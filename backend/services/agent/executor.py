@@ -95,19 +95,24 @@ def _run_monitor(step: Step, holder: _ContextHolder) -> dict:
             "score": None,
         }
     score = ctx.score() or {}
-    total = score.get("total") or score.get("score")
-    dimensions = score.get("dimensions") or {}
+    total = score.get("totalScore") or score.get("total")
+    dimensions = score.get("dimensions") or []
+    weakest = score.get("weakest") or {}
 
-    weakest_key, weakest_value = "", None
-    for key, value in dimensions.items():
-        numeric = value.get("score") if isinstance(value, dict) else value
-        if not isinstance(numeric, (int, float)):
-            continue
-        if weakest_value is None or numeric < weakest_value:
-            weakest_key, weakest_value = key, numeric
+    weakest_key = weakest.get("key") or ""
+    weakest_label = weakest.get("label") or ""
+    weakest_value = weakest.get("score")
+    if weakest_value is None:
+        # dimensions 为列表（每项含 key/label/score），兜底自行挑最小值。
+        for item in dimensions:
+            if not isinstance(item, dict):
+                continue
+            numeric = item.get("score")
+            if isinstance(numeric, (int, float)) and (weakest_value is None or numeric < weakest_value):
+                weakest_key, weakest_label, weakest_value = item.get("key", ""), item.get("label", ""), numeric
 
     if weakest_value is not None:
-        label = SCORE_DIMENSION_LABELS.get(weakest_key, weakest_key)
+        label = weakest_label or SCORE_DIMENSION_LABELS.get(weakest_key, weakest_key)
         summary = (
             f"财富健康度 {total:.0f} 分，最薄弱维度为{label}（{weakest_value:.0f} 分）。"
             if isinstance(total, (int, float))

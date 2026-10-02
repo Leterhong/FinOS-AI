@@ -34,14 +34,16 @@ def compute_twin(profile: FinancialProfile | None, assets: list[Asset]) -> dict:
     total_liabilities = round(sum(a.amount for a in assets if a.type in LIABILITY_TYPES), 2)
     net_worth = round(total_assets - total_liabilities, 2)
 
-    # 资产配置占比（以净值为分母，负债为负贡献）
+    # 资产配置占比：仅统计非负债类型，且以总资产为分母，避免负债计入正向占比、
+    # 或占比之和超过 100%（负债单列在 total_liabilities）。
     allocation: dict[str, float] = {}
     for a in assets:
         allocation[a.type] = allocation.get(a.type, 0.0) + a.amount
+    asset_allocation = {k: v for k, v in allocation.items() if k not in LIABILITY_TYPES}
     allocation_pct = (
-        {k: round(v / net_worth, 4) for k, v in allocation.items()}
-        if net_worth > 0
-        else {k: 0.0 for k in allocation}
+        {k: round(v / total_assets, 4) for k, v in asset_allocation.items()}
+        if total_assets > 0
+        else {k: 0.0 for k in asset_allocation}
     )
 
     # 现金流与储蓄率

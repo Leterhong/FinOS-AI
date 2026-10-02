@@ -126,7 +126,7 @@ export default function RulesPage() {
           <div
             key={rule.id}
             onClick={() => setExpandedId(expandedId === rule.id ? null : rule.id)}
-            className="cursor-pointer grid gap-3 px-5 py-5 text-left transition hover:bg-white/[0.025] sm:grid-cols-[.55fr_1.5fr_.7fr_.5fr_.9fr] sm:items-center"
+            className="cursor-pointer grid gap-3 px-5 py-5 text-left transition hover:bg-white/[0.025] sm:grid-cols-[.55fr_1.5fr_.7fr_.5fr_.9fr_auto] sm:items-center"
           >
             <div><span className="rounded-md border border-cyan-400/15 bg-cyan-400/[0.06] px-2 py-1 text-[10px] font-semibold text-cyan-300">{rule.code}</span></div>
             <div>

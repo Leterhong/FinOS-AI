@@ -29,7 +29,10 @@ export default function ResearchPage() {
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState("");
   const mountedRef = useRef(true);
-  useEffect(() => () => { mountedRef.current = false; }, []);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
   const caseDocuments = useMemo(() => documents.filter((item) => item.caseId === activeCaseId && item.status === "已解析" && !item.error), [activeCaseId, documents]);
   const caseRisks = useMemo(() => risks.filter((item) => item.caseId === activeCaseId), [activeCaseId, risks]);
   const caseBriefs = useMemo(() => briefs.filter((item) =>

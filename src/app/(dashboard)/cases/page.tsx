@@ -50,7 +50,7 @@ export default function CasesPage() {
           </div>
         </section>;
       })}
-      {cases.filter((item) => !item.archivedAt && item.status === "资料补充").length > 0 && <section className="rounded-xl border border-white/[0.07] bg-white/[0.015] p-3"><div className="flex items-center justify-between px-1 pb-2"><h2 className="text-xs font-semibold text-slate-300">资料补充</h2><span className="rounded-md bg-white/[0.06] px-1.5 text-[10px] text-slate-500">{cases.filter((item) => !item.archivedAt && item.status === "资料补充").length}</span></div>{cases.filter((item) => !item.archivedAt && item.status === "资料补充").map((item) => <Link key={item.id} href={`/cases/${encodeURIComponent(item.id)}`} className="block rounded-lg border border-white/[0.06] bg-[#0a111c] p-3 text-xs text-slate-300">{item.company}</Link>)}</section>}
+      {cases.filter((item) => !item.archivedAt && item.status === "资料补充").length > 0 && <section className="rounded-xl border border-white/[0.07] bg-white/[0.015] p-3"><div className="flex items-center justify-between px-1 pb-2"><h2 className="text-xs font-semibold text-slate-300">资料补充</h2><span className="rounded-md bg-white/[0.06] px-1.5 text-[10px] text-slate-500">{cases.filter((item) => !item.archivedAt && item.status === "资料补充").length}</span></div><div className="space-y-2">{cases.filter((item) => !item.archivedAt && item.status === "资料补充").map((item) => <Link key={item.id} href={`/cases/${encodeURIComponent(item.id)}`} className="block rounded-lg border border-white/[0.06] bg-[#0a111c] p-3 text-xs text-slate-300">{item.company}</Link>)}</div></section>}
     </div>}
 
     {view === "table" && <Panel>
@@ -85,7 +85,10 @@ export default function CasesPage() {
           {
             key: "amount",
             header: "融资金额",
-            sortValue: (row) => row.amount,
+            sortValue: (row) => {
+              const numeric = Number(String(row.amount).replace(/[^\d.-]/g, ""));
+              return Number.isFinite(numeric) ? numeric : 0;
+            },
             render: (row) => (
               <div>
                 <p className="numeric text-sm text-slate-200">{row.amount}</p>

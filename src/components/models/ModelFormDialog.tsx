@@ -486,7 +486,7 @@ export default function ModelFormDialog({ open, onClose, editing }: Props) {
                   type="button"
                   onClick={() => setStep((s) => s + 1)}
                   disabled={!canNext}
-                  className="flex-1 rounded-xl bg-gradient-brand px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
+                  className="flex-1 rounded-xl bg-gradient-brand px-4 py-2.5 text-sm font-semibold text-[#041018] disabled:opacity-40"
                 >
                   下一步
                 </button>
@@ -494,7 +494,7 @@ export default function ModelFormDialog({ open, onClose, editing }: Props) {
                 <button
                   onClick={handleSave}
                   disabled={!canSave || isSaving}
-                  className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-gradient-brand px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
+                  className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-gradient-brand px-4 py-2.5 text-sm font-semibold text-[#041018] disabled:opacity-40"
                 >
                   {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
                   {editing ? "保存修改" : "保存并启用"}

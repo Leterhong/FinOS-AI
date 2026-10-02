@@ -39,6 +39,7 @@ from backend.governance.models import (
     RuleRevision,
 )
 from backend.governance.service import (
+    CLASSIFICATION_ORDER,
     can_access_case,
     ensure_default_organization,
     has_org_role,
@@ -478,9 +479,9 @@ def classify_resource(body: ClassificationIn, request: Request, user: User = Dep
         row = db.get(EnterpriseCase, body.resourceId)
         if row is None or not can_access_case(db, user, row, "editor"):
             return fail("项目不存在", status_code=404)
-        # 降级到 public 会扩大可见面，必须 admin 审批；上调维持 editor 即可。
-        if body.classification == "public" and row.classification != "public" and not can_access_case(db, user, row, "admin"):
-            return fail("降级为 public 需要 admin 权限", status_code=403)
+        # 任何密级下降都会扩大可见面，统一要求 admin；上调维持 editor 即可。
+        if CLASSIFICATION_ORDER.get(body.classification, 1) < CLASSIFICATION_ORDER.get(row.classification, 1) and not can_access_case(db, user, row, "admin"):
+            return fail("降级数据密级需要 admin 权限", status_code=403)
         row.classification = body.classification
         case, org_id = row, row.organization_id
     elif body.resourceType == "document":
@@ -488,6 +489,8 @@ def classify_resource(body: ClassificationIn, request: Request, user: User = Dep
         case = db.get(EnterpriseCase, row.case_id) if row else None
         if row is None or case is None or not can_access_case(db, user, case, "editor"):
             return fail("资料不存在", status_code=404)
+        if CLASSIFICATION_ORDER.get(body.classification, 1) < CLASSIFICATION_ORDER.get(row.classification, 1) and not can_access_case(db, user, case, "admin"):
+            return fail("降级数据密级需要 admin 权限", status_code=403)
         row.classification = body.classification
         org_id = case.organization_id
     else:

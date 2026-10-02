@@ -16,7 +16,7 @@ export default function NotFound() {
         <p className="mb-1 text-4xl font-bold tracking-tight text-white/90">404</p>
         <h1 className="mb-2 text-lg font-semibold text-white">这个页面不存在</h1>
         <p className="mb-7 text-sm leading-relaxed text-white/50">
-          链接可能已经失效，或者地址输入有误。你的财富数据不受影响。
+          链接可能已经失效，或者地址输入有误。当前工作区数据不受影响。
         </p>
 
         <div className="flex justify-center gap-3">
@@ -25,7 +25,7 @@ export default function NotFound() {
             className="inline-flex items-center gap-2 rounded-[10px] bg-[#00D68F] px-5 py-2.5 text-sm font-semibold text-[#04140e] transition-opacity hover:opacity-90"
           >
             <ArrowLeft className="h-4 w-4" />
-            返回财富总览
+            返回决策台
           </Link>
           <Link
             href="/assistant"

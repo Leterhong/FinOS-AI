@@ -7,7 +7,7 @@
  * 分页、自定义行渲染；不依赖第三方表格库。
  * 列可见性与批量操作由调用方按需扩展，本组件预留 rows 全量数据。
  */
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronUp, Search, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -97,6 +97,11 @@ export function EnterpriseDataTable<Row extends { id: string }>({
 
   const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize));
   const safePage = Math.min(page, pageCount - 1);
+
+  // 数据/排序变化后回到第一页，避免页码越界导致“翻页没反应”。
+  useEffect(() => {
+    setPage(0);
+  }, [rows, sortKey, sortDir, query]);
   const pageRows = sorted.slice(safePage * pageSize, safePage * pageSize + pageSize);
 
   const toggleSort = (key: string) => {

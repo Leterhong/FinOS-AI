@@ -261,6 +261,7 @@ def run_workflow(
             message=f"执行 {len(trace)} 个节点，命中 {sum(1 for t in trace if t['matched'])} 个，动作失败 {failed_actions} 个",
         )
         db.add(run)
+        db.flush()  # 主键在 flush 时生成，先取再 commit，避免返回 runId=null
         run_id = run.id
     db.commit()
 

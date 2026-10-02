@@ -322,21 +322,28 @@ class MarketDataManager:
 
 
 def _extract_symbol(name: str | None) -> str | None:
-    """从资产名称中提取 6 位 A 股代码或 sh/sz 前缀代码。"""
+    """从资产名称中提取恰好 6 位的 A 股代码，或 sh/sz/bj 前缀代码。"""
     if not name:
         return None
-    token = ""
-    for ch in name:
-        if ch.isdigit():
-            token += ch
-            if len(token) == 6:
-                return token
+    # 按连续数字段匹配，只有整段恰为 6 位才算代码，避免从金额/账号里截取前 6 位。
+    index = 0
+    while index < len(name):
+        if name[index].isdigit():
+            end = index
+            while end < len(name) and name[end].isdigit():
+                end += 1
+            run = name[index:end]
+            if len(run) == 6:
+                return run
+            index = end
         else:
-            token = ""
+            index += 1
     lower = name.lower()
     for prefix in ("sh", "sz", "bj"):
         idx = lower.find(prefix)
-        if idx >= 0 and lower[idx + 2 : idx + 8].isdigit():
+        if idx >= 0 and lower[idx + 2 : idx + 8].isdigit() and (
+            idx + 8 >= len(lower) or not lower[idx + 8].isdigit()
+        ):
             return lower[idx : idx + 8]
     return None
 

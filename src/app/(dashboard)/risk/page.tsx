@@ -5,7 +5,6 @@ import { Download, CheckCircle2, Plus, ShieldAlert, ShieldCheck } from "lucide-r
 import EnterpriseDialog from "@/components/enterprise/EnterpriseDialog";
 import DetailDrawer, { DrawerSection } from "@/components/workspace/DetailDrawer";
 import { Tooltip } from "@/components/ui/Tooltip";
-import { EvidenceReference } from "@/components/evidence/EvidenceReference";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { EmptyStateCard, PageIntro, Panel, RiskBadge, riskMeta } from "@/components/enterprise/EnterpriseUI";
@@ -142,13 +141,7 @@ export default function RiskPage() {
         </DrawerSection>
         <DrawerSection label="Evidence · 证据">
           <p>「{drawerRisk.evidence}」</p>
-          <div className="mt-2">
-            <EvidenceReference
-              documentName={drawerRisk.company}
-              location={drawerRisk.rule || undefined}
-              onLocate={undefined}
-            />
-          </div>
+          <p className="mt-2 text-[10px] text-slate-500">规则依据：{drawerRisk.rule || "未关联规则"}</p>
           {drawerRisk.factIds?.length ? <p className="mt-1 text-[10px] text-slate-600">关联事实：{drawerRisk.factIds.join("、")}</p> : null}
         </DrawerSection>
         <DrawerSection label="Matched Rule · 命中规则">

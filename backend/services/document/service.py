@@ -273,4 +273,12 @@ def confirm_document(db: Session, user: User, document_id: str, records: list[di
         saved.append({"type": asset.type, "name": asset.name, "amount": asset.amount})
     doc.status = "parsed"
     db.commit()
+    # 资产写入后失效 Twin 缓存，避免净值/健康分在缓存有效期内仍是旧值。
+    try:
+        from backend.core.cache import cache_delete
+
+        cache_delete(f"twin:{user.id}")
+        cache_delete(f"twin:status:{user.id}")
+    except Exception:  # noqa: BLE001
+        pass
     return {"documentId": doc.id, "saved": saved, "count": len(saved), "skipped": skipped}

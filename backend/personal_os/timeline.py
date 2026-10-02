@@ -69,7 +69,7 @@ def build_timeline(user: User, db) -> dict:
             "title": f"当前财富健康分 {twin['healthScore']}",
             "eventDate": str(now_year),
             "description": (
-                f"净资产 ¥{twin['netWorth']:,.0f}；月度结余 ¥{twin.get('momentsurplus', 0):,.0f}；"
+                f"净资产 ¥{twin['netWorth']:,.0f}；月度结余 ¥{twin.get('monthlySurplus', 0):,.0f}；"
                 f"储蓄率 {twin['savingsRate']:.1%}"
             ),
             "source": "system",

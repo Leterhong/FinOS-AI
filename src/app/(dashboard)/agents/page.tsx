@@ -42,7 +42,10 @@ export default function AgentsPage() {
   const streamBufRef = useRef("");
   const lastRenderRef = useRef(0);
   const mountedRef = useRef(true);
-  useEffect(() => () => { mountedRef.current = false; abortRef.current?.abort(); }, []);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; abortRef.current?.abort(); };
+  }, []);
   const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
 
   const caseDocuments = useMemo(() => documents.filter((item) => item.caseId === activeCaseId && item.status === "已解析" && !item.error), [activeCaseId, documents]);

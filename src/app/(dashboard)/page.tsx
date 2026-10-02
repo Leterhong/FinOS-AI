@@ -42,7 +42,7 @@ export default function EnterpriseCommandCenter() {
     }
     for (const document of documents.filter((item) => item.status === "分析失败")) {
       items.push({
-        key: document.id, href: "/documents", level: "high",
+        key: document.id, href: document.caseId ? `/documents?caseId=${encodeURIComponent(document.caseId)}` : "/documents", level: "high",
         title: `资料分析失败：${document.name}`,
         detail: document.error || "分析在会话结束前未完成，可删除后重新上传",
         when: document.uploadedAt, cta: "去处理",
@@ -75,7 +75,7 @@ export default function EnterpriseCommandCenter() {
     }
     for (const document of documents.filter((item) => item.status === "已解析")) {
       entries.push({
-        key: document.id, href: "/documents",
+        key: document.id, href: document.caseId ? `/documents?caseId=${encodeURIComponent(document.caseId)}` : "/documents",
         title: `AI 解析资料：${document.name}`,
         detail: `抽取 ${document.facts || 0} 条事实 · 规则命中 ${document.ruleHits || 0} 条 · ${document.model || ""}`,
         when: document.uploadedAt,

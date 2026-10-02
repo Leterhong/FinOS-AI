@@ -392,11 +392,13 @@ def reject_extractions(db: Session, user: User, ids: list[str]) -> dict:
             )
         )
     )
+    changed = 0
     for x in rows:
         if x.status == STATUS_NEEDS_CONFIRM:
             x.status = STATUS_REJECTED
+            changed += 1
     db.commit()
-    return {"rejectedCount": len(rows), "message": f"已忽略 {len(rows)} 条识别结果。"}
+    return {"rejectedCount": changed, "message": f"已忽略 {changed} 条识别结果。"}
 
 
 def delete_input(db: Session, user: User, input_id: str) -> bool:

@@ -114,7 +114,7 @@ def retirement_section(ctx: AgentContext) -> Section:
     pred = ctx.prediction()
     r = (pred or {}).get("retirement") or {}
     w = ctx.wealth
-    required = r.get("requiredCorpus") or r.get("required") or 0.0
+    required = r.get("requiredCapital") or r.get("requiredCorpus") or r.get("required") or 0.0
     gap = r.get("gap") or 0.0
     bullets = []
     if gap and gap > 0:

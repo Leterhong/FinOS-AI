@@ -87,6 +87,7 @@ def run(db: Session, user: User) -> dict:
             body=json.dumps(ch, ensure_ascii=False, default=str),
         )
         db.add(n)
+        db.flush()  # 主键在 flush 时生成，先取再 commit
         notifications.append({"id": n.id, "title": n.title, "severity": n.severity})
 
     # 无变化也写一条例行体检通知（同样去重）

@@ -61,8 +61,8 @@ export default function CaseWorkspacePage() {
     { label: "存在结构化事实", done: facts.length > 0, href: `/documents?caseId=${encodeURIComponent(caseId)}` },
     { label: "事实已人工复核", done: facts.length > 0 && facts.every((item) => item.reviewStatus !== "待复核"), href: `/documents?caseId=${encodeURIComponent(caseId)}` },
     { label: "业务规则已验证并执行", done: executedRuleCodes.length > 0 && executedRuleCodes.every((code) => rules.some((item) => item.code === code && item.coverage === "已测试")), href: "/rules" },
-    { label: "风险线索已处理", done: hasAnalyzedDocument && projectRisks.every((item) => item.status !== "待核验"), href: "/risk" },
-    { label: "人工流程已闭环", done: hasAnalyzedDocument && projectTasks.every((item) => item.stage === "已完成"), href: "/workflows" },
+    { label: "风险线索已处理", done: hasAnalyzedDocument && projectRisks.length > 0 && projectRisks.every((item) => item.status !== "待核验"), href: "/risk" },
+    { label: "人工流程已闭环", done: hasAnalyzedDocument && projectTasks.length > 0 && projectTasks.every((item) => item.stage === "已完成"), href: "/workflows" },
   ];
   const completeCount = checks.filter((item) => item.done).length;
 

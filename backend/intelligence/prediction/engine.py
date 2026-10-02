@@ -53,10 +53,10 @@ def predict_net_worth(
     rows: list[dict] = []
     for year in range(1, max(1, years) + 1):
         saving = income - expense
-        assets = assets * (1 + rate) + saving
-        # 负债按年递减（假设以结余的 20% 优先偿还，最低不为负）
-        if liabilities > 0 and saving > 0:
-            repay = min(liabilities, saving * 0.2)
+        # 先按结余的一部分偿债，再把剩余结余计入资产，避免同一笔钱既增资产又减负债。
+        repay = min(liabilities, saving * 0.2) if liabilities > 0 and saving > 0 else 0.0
+        assets = assets * (1 + rate) + (saving - repay)
+        if repay:
             liabilities = round(liabilities - repay, 2)
         rows.append(
             {

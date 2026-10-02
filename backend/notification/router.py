@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Body, Depends
 from pydantic import BaseModel
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from backend.core import get_current_user, ok
@@ -61,10 +61,19 @@ def list_notifications(
     if unread is not None:
         stmt = stmt.where(Notification.read == (not unread))
     rows = list(db.scalars(stmt.order_by(Notification.created_at.desc()).limit(100)).all())
+    # 未读数单独 COUNT，避免被 100 条上限截断。
+    unread_total = int(
+        db.scalar(
+            select(func.count()).select_from(Notification).where(
+                Notification.user_id == user.id, Notification.read == False  # noqa: E712
+            )
+        )
+        or 0
+    )
     return ok(
         {
             "notifications": [_serialize(n) for n in rows],
-            "unread": sum(1 for n in rows if not n.read),
+            "unread": unread_total,
         }
     )
 

@@ -69,7 +69,7 @@ export function ToastViewport() {
   const dismiss = useToastStore((state) => state.dismiss);
   if (!toasts.length) return null;
   return (
-    <div className="pointer-events-none fixed bottom-6 right-6 z-[200] flex w-full max-w-sm flex-col gap-2" role="status" aria-live="polite">
+    <div className="pointer-events-none fixed bottom-6 left-4 right-4 z-[200] flex flex-col gap-2 sm:left-auto sm:right-6 sm:w-full sm:max-w-sm" role="status" aria-live="polite">
       {toasts.map((item) => {
         const meta = toneMeta[item.tone];
         const Icon = meta.icon;
