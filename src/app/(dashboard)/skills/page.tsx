@@ -5,6 +5,7 @@ import { AlertTriangle, BookOpenCheck, FileArchive, Loader2, Power, ShieldAlert,
 import { EmptyStateCard, PageIntro, Panel, PanelHeader } from "@/components/enterprise/EnterpriseUI";
 import EnterpriseDialog from "@/components/enterprise/EnterpriseDialog";
 import { Skeleton } from "@/components/feedback/Skeleton";
+import { Tooltip } from "@/components/ui/Tooltip";
 import { toast } from "@/components/feedback/toast";
 import { ensureWorkspaceSession } from "@/lib/workspace-session";
 
@@ -210,7 +211,7 @@ export default function SkillsPage() {
             title={skill.name}
             description={skill.summary}
             action={<div className="flex shrink-0 items-center gap-2">
-              {skill.custom && <button type="button" onClick={() => void remove(skill)} disabled={busy === `del-${skill.id}`} title="删除自定义技能" className="grid h-8 w-8 place-items-center rounded-lg border border-white/10 text-slate-500 hover:border-rose-400/30 hover:text-rose-300 disabled:opacity-40"><Trash2 className="h-3.5 w-3.5" /></button>}
+              {skill.custom && <Tooltip label="删除自定义技能"><button type="button" onClick={() => void remove(skill)} disabled={busy === `del-${skill.id}`} className="grid h-8 w-8 place-items-center rounded-lg border border-white/10 text-slate-500 hover:border-rose-400/30 hover:text-rose-300 disabled:opacity-40"><Trash2 className="h-3.5 w-3.5" /></button></Tooltip>}
               <button type="button" onClick={() => void toggle(skill)} disabled={Boolean(busy)} className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-[11px] disabled:opacity-40 ${skill.enabled ? "border-emerald-400/25 text-emerald-200" : "border-white/10 text-slate-400"}`}><Power className="h-3.5 w-3.5" />{busy === skill.id ? "保存中…" : skill.enabled ? "已启用" : "已停用"}</button>
             </div>}
           />

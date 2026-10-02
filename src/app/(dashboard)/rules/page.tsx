@@ -5,6 +5,7 @@ import { formatWhen } from "@/lib/relative-time";
 import { CheckCircle2, FileDiff, Library, Plus, Search, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
 import EnterpriseDialog from "@/components/enterprise/EnterpriseDialog";
 import { Select } from "@/components/ui/Select";
+import { Tooltip } from "@/components/ui/Tooltip";
 import { EmptyStateCard, PageIntro, Panel } from "@/components/enterprise/EnterpriseUI";
 import { useActiveEnterpriseCase } from "@/hooks/use-active-enterprise-case";
 import { useEnterpriseStore } from "@/store/enterprise-store";
@@ -155,14 +156,15 @@ export default function RulesPage() {
                 <div className={`h-full rounded-full transition-all ${rule.coverage === "测试未通过" ? "bg-rose-400" : "bg-emerald-400"}`} style={{ width: `${rule.coverageRate}%` }} />
               </div>
             </div>
-            <button
-              onClick={(event) => { event.stopPropagation(); setDeletingRule(rule); }}
-              title="删除规则"
-              aria-label={`删除规则 ${rule.code}`}
-              className="justify-self-end rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-400/10 hover:text-rose-300"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
+            <Tooltip label="删除规则" className="justify-self-end">
+              <button
+                onClick={(event) => { event.stopPropagation(); setDeletingRule(rule); }}
+                aria-label={`删除规则 ${rule.code}`}
+                className="rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-400/10 hover:text-rose-300"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </Tooltip>
             {expandedId === rule.id && (rule.conditions?.length ?? 0) > 0 && (
               <div className="col-span-full rounded-xl border border-white/[0.07] bg-black/20 p-4">
                 <p className="text-[10px] font-semibold uppercase tracking-[.15em] text-slate-400">决策逻辑（Visual View）</p>

@@ -6,6 +6,7 @@ import { EmptyStateCard, PageIntro, Panel } from "@/components/enterprise/Enterp
 import { Select } from "@/components/ui/Select";
 import { backendAuthedFetch } from "@/lib/enterprise-sync";
 import { Skeleton } from "@/components/feedback/Skeleton";
+import { Tooltip } from "@/components/ui/Tooltip";
 import { toast } from "@/components/feedback/toast";
 import { ensureWorkspaceSession } from "@/lib/workspace-session";
 
@@ -118,8 +119,8 @@ export default function NotificationsPage() {
           </div>
           <div className="flex shrink-0 gap-1.5">
             {!item.read && <button type="button" onClick={() => void act(item.id, "read")} className="rounded-lg border border-white/10 px-2.5 py-1.5 text-[10px] text-slate-400 hover:text-cyan-200">已读</button>}
-            <button type="button" onClick={() => void act(item.id, "archive")} title={item.archived ? "取消归档" : "归档"} className="grid h-7 w-7 place-items-center rounded-lg border border-white/10 text-slate-500 hover:text-cyan-200"><Archive className="h-3.5 w-3.5" /></button>
-            <button type="button" onClick={() => void act(item.id, "delete")} title="删除" className="grid h-7 w-7 place-items-center rounded-lg border border-white/10 text-slate-500 hover:text-rose-300"><Trash2 className="h-3.5 w-3.5" /></button>
+            <Tooltip label={item.archived ? "取消归档" : "归档"}><button type="button" onClick={() => void act(item.id, "archive")} className="grid h-7 w-7 place-items-center rounded-lg border border-white/10 text-slate-500 hover:text-cyan-200"><Archive className="h-3.5 w-3.5" /></button></Tooltip>
+            <Tooltip label="删除"><button type="button" onClick={() => void act(item.id, "delete")} className="grid h-7 w-7 place-items-center rounded-lg border border-white/10 text-slate-500 hover:text-rose-300"><Trash2 className="h-3.5 w-3.5" /></button></Tooltip>
           </div>
         </article>)}</div>}
     </Panel>

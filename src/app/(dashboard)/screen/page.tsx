@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Activity, AlertTriangle, ArrowLeft, Building2, FileText, Gauge, ListChecks, Maximize2, Pause, Play, RefreshCw, ShieldAlert, TrendingUp } from "lucide-react";
 import { useEnterpriseStore } from "@/store/enterprise-store";
+import { Tooltip } from "@/components/ui/Tooltip";
 import { useModelStore } from "@/store/model-store";
 import { backendAuthedFetch } from "@/lib/enterprise-sync";
 import { scoreProject, scoreRisk } from "@/lib/risk-score";
@@ -248,7 +249,7 @@ export default function ScreenPage() {
         </div>
         <div className="ml-auto flex items-center gap-2">
           <span className="numeric rounded-lg border border-white/[0.08] px-3 py-1.5 text-xs text-cyan-200">{clock}</span>
-          <button type="button" onClick={() => { setMonitor((value) => !value); }} title="监看模式：定时换页" className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs ${monitor ? "border-cyan-400/30 bg-cyan-400/[0.08] text-cyan-200" : "border-white/10 text-slate-300 hover:border-cyan-400/25"}`}>{monitor ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}{monitor ? "监看中" : "监看模式"}</button>
+          <Tooltip label="监看模式：定时换页"><button type="button" onClick={() => { setMonitor((value) => !value); }} className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs ${monitor ? "border-cyan-400/30 bg-cyan-400/[0.08] text-cyan-200" : "border-white/10 text-slate-300 hover:border-cyan-400/25"}`}>{monitor ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}{monitor ? "监看中" : "监看模式"}</button></Tooltip>
           <button type="button" onClick={() => void loadExternal()} className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-slate-300 hover:border-cyan-400/25 hover:text-cyan-200"><RefreshCw className="h-3.5 w-3.5" />刷新</button>
           <button type="button" onClick={goFullscreen} className="inline-flex items-center gap-1.5 rounded-lg bg-cyan-300 px-3 py-1.5 text-xs font-semibold text-[#041018]"><Maximize2 className="h-3.5 w-3.5" />全屏</button>
         </div>
