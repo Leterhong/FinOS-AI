@@ -216,7 +216,7 @@ export default function ScreenPage() {
       if (!fact.period) continue;
       periodMap.set(String(fact.period), (periodMap.get(String(fact.period)) ?? 0) + 1);
     }
-    const trend = [...periodMap.entries()].sort((a, b) => a[0].localeCompare(b[0])).slice(-8);
+    const trend = [...periodMap.entries()].sort((a, b) => a[0].localeCompare(b[0], "zh-CN", { numeric: true })).slice(-8);
     // 风险热力图：项目 × 等级。
     const heat = activeCases.slice(0, 6).map((item) => ({
       label: item.company || item.title,
@@ -266,12 +266,12 @@ export default function ScreenPage() {
       </div>
 
       {tab === "总览" && <>
-        <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-12">
+        <div className="grid min-h-[420px] flex-1 gap-3 xl:min-h-0 xl:grid-cols-12">
           <Section title="风险等级分布" hint="全部风险线索" className="xl:col-span-3"><Donut segments={donutSegments} center={String(risks.length)} caption="风险线索总数" /></Section>
           <Section title="项目风险评分排行" hint="0–100" className="xl:col-span-4"><BarList items={stats.projectScores.map((item) => levelBars(item.label, item.score, `进度 ${item.progress}%`, item.score >= 80 ? "#ff4d6d" : item.score >= 60 ? "#ff8a4c" : item.score >= 35 ? "#f6c344" : "#4c8dff"))} max={scoreMax} empty="尚无风险数据" /></Section>
           <Section title="多期事实趋势" hint="按期间聚合" className="xl:col-span-5"><LineChart points={stats.trend.map(([, count]) => count)} labels={stats.trend.map(([period]) => period)} /></Section>
         </div>
-        <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-12">
+        <div className="grid min-h-[420px] flex-1 gap-3 xl:min-h-0 xl:grid-cols-12">
           <Section title="风险热力图" hint="项目 × 等级" className="xl:col-span-4"><Heatmap rows={stats.heat} cols={LEVEL_ORDER.map((level) => LEVEL_META[level].label)} empty="尚无项目风险数据" /></Section>
           <Section title="流程任务阶段" hint={`已完成 ${stats.doneTasks}/${tasks.length}`} className="xl:col-span-3"><BarList items={STAGES.map((stage, index) => ({ label: stage, value: stats.stageCounts[index], color: ["#64748b", "#22d3ee", "#f6c344", "#34d399"][index] }))} max={stageMax} empty="尚无任务" /></Section>
           <Section title="规则与事实质量" hint="覆盖率" className="xl:col-span-2">
@@ -296,11 +296,11 @@ export default function ScreenPage() {
       </>}
 
       {tab === "风险聚焦" && <>
-        <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-12">
+        <div className="grid min-h-[420px] flex-1 gap-3 xl:min-h-0 xl:grid-cols-12">
           <Section title="风险热力图" hint="项目 × 等级" className="xl:col-span-7"><Heatmap rows={stats.heat} cols={LEVEL_ORDER.map((level) => LEVEL_META[level].label)} empty="尚无项目风险数据" /></Section>
           <Section title="风险等级分布" className="xl:col-span-5"><Donut segments={donutSegments} center={String(risks.length)} caption="风险线索总数" /></Section>
         </div>
-        <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-12">
+        <div className="grid min-h-[420px] flex-1 gap-3 xl:min-h-0 xl:grid-cols-12">
           <Section title="项目风险评分排行" hint="0–100" className="xl:col-span-6"><BarList items={stats.projectScores.map((item) => levelBars(item.label, item.score, `进度 ${item.progress}%`, item.score >= 80 ? "#ff4d6d" : item.score >= 60 ? "#ff8a4c" : item.score >= 35 ? "#f6c344" : "#4c8dff"))} max={scoreMax} empty="尚无风险数据" /></Section>
           <Section title="最近更新风险" className="xl:col-span-6">
             {stats.recentRisks.length === 0 ? <p className="py-8 text-center text-xs text-slate-600">尚无风险数据</p> : (
@@ -320,11 +320,11 @@ export default function ScreenPage() {
       </>}
 
       {tab === "流程与规则" && <>
-        <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-12">
+        <div className="grid min-h-[420px] flex-1 gap-3 xl:min-h-0 xl:grid-cols-12">
           <Section title="流程任务阶段" hint={`已完成 ${stats.doneTasks}/${tasks.length}`} className="xl:col-span-5"><BarList items={STAGES.map((stage, index) => ({ label: stage, value: stats.stageCounts[index], color: ["#64748b", "#22d3ee", "#f6c344", "#34d399"][index] }))} max={stageMax} empty="尚无任务" /></Section>
           <Section title="多期事实趋势" hint="按期间聚合" className="xl:col-span-7"><LineChart points={stats.trend.map(([, count]) => count)} labels={stats.trend.map(([period]) => period)} /></Section>
         </div>
-        <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-12">
+        <div className="grid min-h-[420px] flex-1 gap-3 xl:min-h-0 xl:grid-cols-12">
           <Section title="规则与事实质量" className="xl:col-span-4">
             <div className="space-y-4">
               <div>
