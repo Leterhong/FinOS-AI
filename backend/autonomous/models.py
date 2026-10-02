@@ -279,6 +279,8 @@ class AutomationMarketCache(Base):
     market_type: Mapped[str] = mapped_column(String(20), default="stock")  # stock/fund/index/fx
     # 最新价 / 历史（JSON list of {date,close}）
     price: Mapped[float | None] = mapped_column(default=None)
+    # 当日涨跌幅（%），缓存命中时也要返回，避免组合涨跌恒为 0
+    change_pct: Mapped[float | None] = mapped_column(default=None)
     history: Mapped[str] = mapped_column(Text, default="[]")  # JSON list
     currency: Mapped[str] = mapped_column(String(10), default="CNY")
     # 缓存过期时间（秒级时间戳判定）

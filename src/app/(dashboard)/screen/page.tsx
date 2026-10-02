@@ -52,14 +52,14 @@ function Donut({ segments, center, caption }: { segments: Array<{ label: string;
 }
 
 function BarList({ items, max, empty }: { items: Array<{ label: string; value: number; sub?: string; color?: string }>; max: number; empty: string }) {
-  if (items.length === 0) return <p className="py-8 text-center text-xs text-slate-600">{empty}</p>;
+  if (items.length === 0) return <p className="py-8 text-center text-xs text-slate-400">{empty}</p>;
   return (
     <div className="scrollbar-thin max-h-full space-y-2.5 overflow-y-auto pr-1">
       {items.map((item) => (
         <div key={item.label}>
           <div className="flex items-center justify-between text-[11px]">
             <span className="truncate text-slate-300">{item.label}</span>
-            <span className="numeric shrink-0 text-slate-400">{item.value}{item.sub ? <span className="ml-1 text-slate-600">{item.sub}</span> : null}</span>
+            <span className="numeric shrink-0 text-slate-400">{item.value}{item.sub ? <span className="ml-1 text-slate-400">{item.sub}</span> : null}</span>
           </div>
           <div className="mt-1 h-2 overflow-hidden rounded-full bg-white/[0.05]">
             <div className="h-full rounded-full transition-all" style={{ width: `${max > 0 && item.value > 0 ? Math.max(2, (item.value / max) * 100) : 0}%`, backgroundColor: item.color ?? "#22d3ee" }} />
@@ -71,7 +71,7 @@ function BarList({ items, max, empty }: { items: Array<{ label: string; value: n
 }
 
 function LineChart({ points, labels, color = "#22d3ee" }: { points: number[]; labels: string[]; color?: string }) {
-  if (points.length === 0) return <p className="py-8 text-center text-xs text-slate-600">尚无期间化事实数据</p>;
+  if (points.length === 0) return <p className="py-8 text-center text-xs text-slate-400">尚无期间化事实数据</p>;
   const max = Math.max(1, ...points);
   const w = 100;
   const h = 40;
@@ -86,7 +86,7 @@ function LineChart({ points, labels, color = "#22d3ee" }: { points: number[]; la
         <polyline points={line} fill="none" stroke={color} strokeWidth="0.7" vectorEffect="non-scaling-stroke" />
         {coords.map(([x, y], index) => <circle key={index} cx={x} cy={y} r="1" fill={color} />)}
       </svg>
-      <div className="mt-1.5 flex justify-between text-[9px] text-slate-600">
+      <div className="mt-1.5 flex justify-between text-[9px] text-slate-400">
         {(labels.length <= 5 ? labels : [0, Math.floor((labels.length - 1) / 4), Math.floor((labels.length - 1) / 2), Math.floor(((labels.length - 1) * 3) / 4), labels.length - 1].map((index) => labels[index])).map((label, index) => <span key={`${label}-${index}`} className="min-w-0 flex-1 truncate text-center">{label}</span>)}
       </div>
     </div>
@@ -94,7 +94,7 @@ function LineChart({ points, labels, color = "#22d3ee" }: { points: number[]; la
 }
 
 function Heatmap({ rows, cols, empty }: { rows: Array<{ label: string; counts: number[] }>; cols: string[]; empty: string }) {
-  if (rows.length === 0) return <p className="py-8 text-center text-xs text-slate-600">{empty}</p>;
+  if (rows.length === 0) return <p className="py-8 text-center text-xs text-slate-400">{empty}</p>;
   const max = Math.max(1, ...rows.flatMap((row) => row.counts));
   return (
     <div className="scrollbar-thin h-full overflow-y-auto pr-1">
@@ -125,7 +125,7 @@ function Section({ title, hint, children, className }: { title: string; hint?: s
     <section className={`flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.02] p-4 ${className ?? ""}`}>
       <div className="flex items-center justify-between">
         <p className="text-xs font-semibold text-slate-200">{title}</p>
-        {hint && <span className="text-[10px] text-slate-600">{hint}</span>}
+        {hint && <span className="text-[10px] text-slate-400">{hint}</span>}
       </div>
       <div className="mt-3 min-h-0 flex-1">{children}</div>
     </section>
@@ -289,7 +289,7 @@ export default function ScreenPage() {
           <Section title="外部市场数据" hint="公开数据" className="xl:col-span-3">
             <div className="grid h-full grid-cols-1 gap-2">
               <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3"><p className="text-[10px] text-slate-500">USD / CNY 汇率</p><p className="numeric mt-1 text-xl text-white">{external?.fx ?? "—"}</p></div>
-              <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3"><p className="text-[10px] text-slate-500">最新 LPR</p><p className="mt-1 text-[11px] text-slate-200">{external?.lpr ?? "—"}</p><p className="mt-1 text-[9px] text-slate-600">模型：{active?.configured ? "已连接" : "未配置"}</p></div>
+              <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3"><p className="text-[10px] text-slate-500">最新 LPR</p><p className="mt-1 text-[11px] text-slate-200">{external?.lpr ?? "—"}</p><p className="mt-1 text-[9px] text-slate-400">模型：{active?.configured ? "已连接" : "未配置"}</p></div>
             </div>
           </Section>
         </div>
@@ -303,14 +303,14 @@ export default function ScreenPage() {
         <div className="grid min-h-[420px] flex-1 gap-3 xl:min-h-0 xl:grid-cols-12">
           <Section title="项目风险评分排行" hint="0–100" className="xl:col-span-6"><BarList items={stats.projectScores.map((item) => levelBars(item.label, item.score, `进度 ${item.progress}%`, item.score >= 80 ? "#ff4d6d" : item.score >= 60 ? "#ff8a4c" : item.score >= 35 ? "#f6c344" : "#4c8dff"))} max={scoreMax} empty="尚无风险数据" /></Section>
           <Section title="最近更新风险" className="xl:col-span-6">
-            {stats.recentRisks.length === 0 ? <p className="py-8 text-center text-xs text-slate-600">尚无风险数据</p> : (
+            {stats.recentRisks.length === 0 ? <p className="py-8 text-center text-xs text-slate-400">尚无风险数据</p> : (
               <div className="scrollbar-thin max-h-full space-y-2 overflow-y-auto pr-1">
                 {stats.recentRisks.map((risk) => (
                   <div key={risk.id} className="flex items-center gap-3 rounded-xl border border-white/[0.07] p-2.5">
                     <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: LEVEL_META[risk.level].color }} />
                     <span className="min-w-0 flex-1 truncate text-xs text-slate-200">{risk.title}</span>
                     <span className="numeric shrink-0 text-[10px] text-slate-500">{scoreRisk(risk)}</span>
-                    <span className="shrink-0 text-[10px] text-slate-600">{risk.status}</span>
+                    <span className="shrink-0 text-[10px] text-slate-400">{risk.status}</span>
                   </div>
                 ))}
               </div>
@@ -335,7 +335,7 @@ export default function ScreenPage() {
                 <div className="flex justify-between text-[11px]"><span className="text-slate-400">事实已确认</span><span className="numeric text-slate-200">{stats.facts ? Math.round((stats.confirmedFacts / stats.facts) * 100) : 0}%</span></div>
                 <div className="mt-1 h-2 overflow-hidden rounded-full bg-white/[0.05]"><div className="h-full rounded-full bg-cyan-300" style={{ width: `${stats.facts ? (stats.confirmedFacts / stats.facts) * 100 : 0}%` }} /></div>
               </div>
-              <p className="text-[10px] text-slate-600">规则命中 {stats.ruleHits} 次 · 规则共 {rules.length} 条</p>
+              <p className="text-[10px] text-slate-400">规则命中 {stats.ruleHits} 次 · 规则共 {rules.length} 条</p>
             </div>
           </Section>
           <Section title="外部市场数据" hint="公开数据" className="xl:col-span-3">
@@ -345,13 +345,13 @@ export default function ScreenPage() {
             </div>
           </Section>
           <Section title="最近更新风险" className="xl:col-span-5">
-            {stats.recentRisks.length === 0 ? <p className="py-8 text-center text-xs text-slate-600">尚无风险数据</p> : (
+            {stats.recentRisks.length === 0 ? <p className="py-8 text-center text-xs text-slate-400">尚无风险数据</p> : (
               <div className="scrollbar-thin max-h-full space-y-2 overflow-y-auto pr-1">
                 {stats.recentRisks.slice(0, 5).map((risk) => (
                   <div key={risk.id} className="flex items-center gap-3 rounded-xl border border-white/[0.07] p-2.5">
                     <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: LEVEL_META[risk.level].color }} />
                     <span className="min-w-0 flex-1 truncate text-xs text-slate-200">{risk.title}</span>
-                    <span className="shrink-0 text-[10px] text-slate-600">{risk.status}</span>
+                    <span className="shrink-0 text-[10px] text-slate-400">{risk.status}</span>
                   </div>
                 ))}
               </div>

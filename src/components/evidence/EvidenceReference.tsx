@@ -42,7 +42,7 @@ export function EvidenceReference({ documentName, location, page, line, cell, sh
       <FileSearch className="h-3 w-3 shrink-0 text-cyan-300/70" />
       <span className="min-w-0 truncate">
         <span className="text-slate-300">{documentName}</span>
-        {locators.length > 0 && <span className="text-slate-600"> · {locators.join(" · ")}</span>}
+        {locators.length > 0 && <span className="text-slate-400"> · {locators.join(" · ")}</span>}
       </span>
     </button>
   );
@@ -65,7 +65,7 @@ export function EvidenceChain({ steps, className }: { steps: EvidenceChainStep[]
               {index + 1}
             </span>
             <div className="min-w-0">
-              <p className="text-[9px] font-semibold uppercase tracking-[.14em] text-slate-600">{step.label}</p>
+              <p className="text-[9px] font-semibold uppercase tracking-[.14em] text-slate-400">{step.label}</p>
               <p className="mt-0.5 break-words text-xs leading-5 text-slate-300">{step.value}</p>
             </div>
           </div>

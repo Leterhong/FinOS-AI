@@ -284,13 +284,19 @@ class ModelConfigStore {
       c.baseUrl = nextBaseUrl;
     }
     if (input.roles !== undefined) c.roles = input.roles;
-    // 采样参数服务端兜底校验（不信任上游 UI）。
+    // 采样参数服务端兜底校验（不信任上游 UI）。null 表示显式清除该项配置。
     const temperature = coerceTemperature(input.temperature);
     if (temperature !== undefined) c.temperature = temperature;
+    else if (input.temperature === null) c.temperature = undefined;
     const maxTokens = coerceMaxTokens(input.maxTokens);
     if (maxTokens !== undefined) c.maxTokens = maxTokens;
-    if (input.inputPricePerMillion !== undefined) c.inputPricePerMillion = coercePrice(input.inputPricePerMillion);
-    if (input.outputPricePerMillion !== undefined) c.outputPricePerMillion = coercePrice(input.outputPricePerMillion);
+    else if (input.maxTokens === null) c.maxTokens = undefined;
+    const inputPrice = coercePrice(input.inputPricePerMillion);
+    if (inputPrice !== undefined) c.inputPricePerMillion = inputPrice;
+    else if (input.inputPricePerMillion === null) c.inputPricePerMillion = undefined;
+    const outputPrice = coercePrice(input.outputPricePerMillion);
+    if (outputPrice !== undefined) c.outputPricePerMillion = outputPrice;
+    else if (input.outputPricePerMillion === null) c.outputPricePerMillion = undefined;
     // apiKey 留空表示不修改；提供则重新加密。
     if (typeof input.apiKey === "string" && input.apiKey.trim()) c.encryptedApiKey = encryptApiKey(input.apiKey.trim());
     c.status = "untested"; // 配置变更后需重新测试

@@ -100,10 +100,11 @@ export default function ModelFormDialog({ open, onClose, editing }: Props) {
     setTestState(null);
   }
 
-  function parseNum(v: string, fallback?: number): number | undefined {
-    if (v.trim() === "") return fallback;
+  /** 空串 → null（显式清除），否则数值；用于可清空的采样/单价字段。 */
+  function parseNumOrNull(v: string): number | null {
+    if (v.trim() === "") return null;
     const n = Number(v);
-    return Number.isFinite(n) ? n : fallback;
+    return Number.isFinite(n) ? n : null;
   }
 
   function draft() {
@@ -115,10 +116,10 @@ export default function ModelFormDialog({ open, onClose, editing }: Props) {
       baseUrl,
       apiKey: apiKey || undefined,
       roles,
-      temperature: parseNum(temperature),
-      maxTokens: parseNum(maxTokens),
-      inputPricePerMillion: parseNum(inputPrice),
-      outputPricePerMillion: parseNum(outputPrice),
+      temperature: parseNumOrNull(temperature),
+      maxTokens: parseNumOrNull(maxTokens),
+      inputPricePerMillion: parseNumOrNull(inputPrice),
+      outputPricePerMillion: parseNumOrNull(outputPrice),
     };
   }
 

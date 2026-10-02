@@ -84,6 +84,8 @@ chmod 600 "$SECRETS_FILE"
 source "$SECRETS_FILE"
 export FINOS_AUTH_SECRET FINOS_DATA_KEY JWT_SECRET ENCRYPTION_MASTER_KEY
 export NODE_ENV=production
+# 统一时区，避免容器默认 UTC 导致「每日 8 点」等调度按 UTC 执行。
+export TZ="${TZ:-Asia/Shanghai}"
 export FINOS_ALLOW_PRIVATE_AI_ENDPOINTS="${FINOS_ALLOW_PRIVATE_AI_ENDPOINTS:-false}"
 export AI_ALLOW_PRIVATE_ENDPOINTS="${AI_ALLOW_PRIVATE_ENDPOINTS:-false}"
 export MODE=online

@@ -114,14 +114,14 @@ export interface ProviderConfigInput {
   baseUrl?: string;
   apiKey?: string;
   roles?: ModelRole[];
-  /** 采样温度（0–1）。 */
-  temperature?: number;
-  /** 单次回复最大 Token 数。 */
-  maxTokens?: number;
-  /** 输入单价（美元 / 百万 Token）。 */
-  inputPricePerMillion?: number;
-  /** 输出单价（美元 / 百万 Token）。 */
-  outputPricePerMillion?: number;
+  /** 采样温度（0–1）。null 表示清除该配置；省略表示不修改。 */
+  temperature?: number | null;
+  /** 单次回复最大 Token 数。null 表示清除该配置。 */
+  maxTokens?: number | null;
+  /** 输入单价（美元 / 百万 Token）。null 表示清除该配置。 */
+  inputPricePerMillion?: number | null;
+  /** 输出单价（美元 / 百万 Token）。null 表示清除该配置。 */
+  outputPricePerMillion?: number | null;
 }
 
 /** Provider 预设（前端下拉与默认值来源）。 */

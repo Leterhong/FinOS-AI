@@ -34,7 +34,7 @@ export default function CasesPage() {
   return <div className="page-shell">
     <PageIntro eyebrow="Case management" title="企业项目中心" description="围绕一个融资、尽调或经营分析任务集中管理资料、规则、风险、结论和流程。" actions={<button onClick={() => setCreateOpen(true)} className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]"><Plus className="h-3.5 w-3.5" />新建项目</button>} />
     <div className="flex flex-col gap-3 sm:flex-row">
-      <div className="flex flex-1 items-center gap-1 overflow-x-auto rounded-xl border border-white/[0.08] bg-white/[0.025] p-1"><Filter className="ml-2 h-3.5 w-3.5 shrink-0 text-slate-600" />{[["全部", "全部"], ["重大", "critical"], ["高风险", "high"], ["中风险", "medium"], ["低风险", "low"]].map(([label, value]) => <button key={value} onClick={() => setRisk(value)} className={`whitespace-nowrap rounded-lg px-3 py-2 text-[11px] ${risk === value ? "bg-white/[0.09] text-white" : "text-slate-500 hover:text-slate-300"}`}>{label}</button>)}</div>
+      <div className="flex flex-1 items-center gap-1 overflow-x-auto rounded-xl border border-white/[0.08] bg-white/[0.025] p-1"><Filter className="ml-2 h-3.5 w-3.5 shrink-0 text-slate-400" />{[["全部", "全部"], ["重大", "critical"], ["高风险", "high"], ["中风险", "medium"], ["低风险", "low"]].map(([label, value]) => <button key={value} onClick={() => setRisk(value)} className={`whitespace-nowrap rounded-lg px-3 py-2 text-[11px] ${risk === value ? "bg-white/[0.09] text-white" : "text-slate-500 hover:text-slate-300"}`}>{label}</button>)}</div>
       <div className="flex items-center gap-1 rounded-xl border border-white/[0.08] bg-white/[0.025] p-1">
         <button type="button" onClick={() => setView("table")} aria-label="表格视图" className={cn("flex h-8 w-8 items-center justify-center rounded-lg transition", view === "table" ? "bg-white/[0.09] text-white" : "text-slate-500 hover:text-slate-300")}><Table2 className="h-3.5 w-3.5" /></button>
         <button type="button" onClick={() => setView("board")} aria-label="看板视图" className={cn("flex h-8 w-8 items-center justify-center rounded-lg transition", view === "board" ? "bg-white/[0.09] text-white" : "text-slate-500 hover:text-slate-300")}><LayoutGrid className="h-3.5 w-3.5" /></button>
@@ -45,8 +45,8 @@ export default function CasesPage() {
         const columnCases = cases.filter((item) => !item.archivedAt && item.status === status);
         return <section key={status} className="rounded-xl border border-white/[0.07] bg-white/[0.015] p-3">
           <div className="flex items-center justify-between px-1 pb-2"><h2 className="text-xs font-semibold text-slate-300">{status}</h2><span className="rounded-md bg-white/[0.06] px-1.5 text-[10px] text-slate-500">{columnCases.length}</span></div>
-          <div className="space-y-2">{columnCases.map((item) => <Link key={item.id} href={`/cases/${encodeURIComponent(item.id)}`} className="block rounded-lg border border-white/[0.06] bg-[#0a111c] p-3 transition hover:border-cyan-400/25"><div className="flex items-center justify-between gap-2"><p className="truncate text-xs font-medium text-slate-200">{item.company}</p><RiskBadge level={item.risk} /></div><p className="mt-1.5 truncate text-[10px] text-slate-500">{item.title}</p><div className="mt-2.5 flex justify-between text-[10px] text-slate-600"><span>{item.owner || "待指派"}</span><span className="numeric">{item.progress}%</span></div><div className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/[0.07]"><div className="h-full rounded-full bg-wealth" style={{ width: `${item.progress}%` }} /></div></Link>)}
-          {columnCases.length === 0 && <p className="px-1 py-4 text-center text-[10px] text-slate-700">空</p>}
+          <div className="space-y-2">{columnCases.map((item) => <Link key={item.id} href={`/cases/${encodeURIComponent(item.id)}`} className="block rounded-lg border border-white/[0.06] bg-[#0a111c] p-3 transition hover:border-cyan-400/25"><div className="flex items-center justify-between gap-2"><p className="truncate text-xs font-medium text-slate-200">{item.company}</p><RiskBadge level={item.risk} /></div><p className="mt-1.5 truncate text-[10px] text-slate-500">{item.title}</p><div className="mt-2.5 flex justify-between text-[10px] text-slate-400"><span>{item.owner || "待指派"}</span><span className="numeric">{item.progress}%</span></div><div className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/[0.07]"><div className="h-full rounded-full bg-wealth" style={{ width: `${item.progress}%` }} /></div></Link>)}
+          {columnCases.length === 0 && <p className="px-1 py-4 text-center text-[10px] text-slate-500">空</p>}
           </div>
         </section>;
       })}
@@ -78,7 +78,7 @@ export default function CasesPage() {
                   <span className="rounded-md bg-white/[0.045] px-2 py-1 text-[10px] text-slate-500">{row.archivedAt ? "已归档" : row.status}</span>
                 </div>
                 <p className="mt-1.5 text-[11px] text-slate-500">{row.title} · {row.industry}</p>
-                <p className="mt-1 text-[10px] text-slate-600">下一步：{row.nextAction}</p>
+                <p className="mt-1 text-[10px] text-slate-400">下一步：{row.nextAction}</p>
               </div>
             ),
           },
@@ -92,7 +92,7 @@ export default function CasesPage() {
             render: (row) => (
               <div>
                 <p className="numeric text-sm text-slate-200">{row.amount}</p>
-                <p className="mt-1 text-[10px] text-slate-600">{row.id}</p>
+                <p className="mt-1 text-[10px] text-slate-400">{row.id}</p>
               </div>
             ),
           },

@@ -134,12 +134,12 @@ export default function CommandPalette() {
               if (event.key === "Enter" && !event.nativeEvent.isComposing && entries[cursor]) { go(entries[cursor].href); }
             }}
             placeholder="搜索或执行命令：项目、资料、风险、页面…"
-            className="h-12 flex-1 bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-600"
+            className="h-12 flex-1 bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-400"
           />
-          <kbd className="rounded border border-white/10 px-1.5 py-0.5 text-[9px] text-slate-600">ESC</kbd>
+          <kbd className="rounded border border-white/10 px-1.5 py-0.5 text-[9px] text-slate-400">ESC</kbd>
         </div>
         <div className="scrollbar-thin max-h-[52vh] overflow-y-auto py-2">
-          {entries.length === 0 && <p className="px-4 py-8 text-center text-xs text-slate-600">没有匹配的命令或内容</p>}
+          {entries.length === 0 && <p className="px-4 py-8 text-center text-xs text-slate-400">没有匹配的命令或内容</p>}
           {entries.map((entry, index) => {
             const Icon = entry.icon;
             return (
@@ -154,13 +154,13 @@ export default function CommandPalette() {
                   <Icon className="h-3.5 w-3.5" />
                 </span>
                 <span className="min-w-0 flex-1 truncate text-xs text-slate-200">{entry.label}</span>
-                {entry.hint && <span className="shrink-0 truncate text-[10px] text-slate-600">{entry.hint}</span>}
-                {entry.group === "Suggested" && <Command className="h-3 w-3 shrink-0 text-slate-700" />}
+                {entry.hint && <span className="shrink-0 truncate text-[10px] text-slate-400">{entry.hint}</span>}
+                {entry.group === "Suggested" && <Command className="h-3 w-3 shrink-0 text-slate-500" />}
               </button>
             );
           })}
         </div>
-        <div className="border-t border-white/[0.06] px-4 py-2 text-[10px] text-slate-600">↑↓ 选择 · Enter 跳转 · Esc 关闭</div>
+        <div className="border-t border-white/[0.06] px-4 py-2 text-[10px] text-slate-400">↑↓ 选择 · Enter 跳转 · Esc 关闭</div>
       </div>
     </div>
   );

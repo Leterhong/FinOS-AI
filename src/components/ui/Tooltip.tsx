@@ -3,10 +3,14 @@
 /**
  * FinOS UI 基础组件：Tooltip。
  *
- * 纻 CSS 实现（group-hover / group-focus-within），无第三方依赖。
- * showOn="lg-hover" 用于侧栏折叠态：小屏不显示（标签可见），折叠后悬停显示。
+ * 通过 Portal 渲染到 body 并使用 fixed 定位，避免被父级 overflow-hidden 或
+ * 折叠侧栏边界裁切。showOn="lg-hover" 用于侧栏折叠态：小屏不显示。
  */
+import { useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
+
+type Side = "right" | "top" | "bottom";
 
 export function Tooltip({
   label,
@@ -16,30 +20,53 @@ export function Tooltip({
   className,
 }: {
   label: string;
-  side?: "right" | "top" | "bottom";
+  side?: Side;
   showOn?: "hover" | "lg-hover";
-  children: React.ReactNode;
+  children: ReactNode;
   className?: string;
 }) {
-  const showClass =
-    showOn === "lg-hover"
-      ? "hidden lg:group-hover/tt:inline-flex lg:group-focus-within/tt:inline-flex"
-      : "group-hover/tt:inline-flex group-focus-within/tt:inline-flex";
+  const triggerRef = useRef<HTMLSpanElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; transform: string } | null>(null);
+
+  const compute = () => {
+    const el = triggerRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const gap = 8;
+    if (side === "top") {
+      setPos({ top: rect.top - gap, left: rect.left + rect.width / 2, transform: "translate(-50%,-100%)" });
+    } else if (side === "bottom") {
+      setPos({ top: rect.bottom + gap, left: rect.left + rect.width / 2, transform: "translate(-50%,0)" });
+    } else {
+      setPos({ top: rect.top + rect.height / 2, left: rect.right + gap, transform: "translateY(-50%)" });
+    }
+  };
+  const hide = () => setPos(null);
+  const isLg = () => typeof window !== "undefined" && window.matchMedia("(min-width:1024px)").matches;
+  const onEnter = () => { if (showOn !== "lg-hover" || isLg()) compute(); };
+
   return (
-    <span className={cn("group/tt relative inline-flex", className)}>
-      {children}
+    <>
       <span
-        role="tooltip"
-        className={cn(
-          "pointer-events-none absolute z-[130] whitespace-nowrap rounded-md border border-white/10 bg-elevated px-2 py-1 text-[10px] text-slate-200 shadow-xl",
-          showClass,
-          side === "right" && "left-full top-1/2 ml-2 -translate-y-1/2",
-          side === "top" && "bottom-full left-1/2 mb-1.5 -translate-x-1/2",
-          side === "bottom" && "top-full left-1/2 mt-1.5 -translate-x-1/2"
-        )}
+        ref={triggerRef}
+        className={cn("inline-flex", className)}
+        onMouseEnter={onEnter}
+        onMouseLeave={hide}
+        onFocus={onEnter}
+        onBlur={hide}
       >
-        {label}
+        {children}
       </span>
-    </span>
+      {pos && typeof document !== "undefined" && createPortal(
+        <span
+          role="tooltip"
+          style={{ position: "fixed", top: pos.top, left: pos.left, transform: pos.transform }}
+          className="pointer-events-none z-[130] whitespace-nowrap rounded-md border border-white/10 bg-elevated px-2 py-1 text-[10px] text-slate-200 shadow-xl"
+        >
+          {label}
+        </span>,
+        document.body,
+      )}
+    </>
   );
 }

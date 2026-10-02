@@ -220,7 +220,7 @@ export default function SkillsPage() {
               <span className="rounded-md border border-white/10 px-2 py-0.5 text-[9px] text-slate-500">来源：{skill.source}</span>
             </div>
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[.15em] text-slate-600">触发关键词</p>
+              <p className="text-[10px] font-semibold uppercase tracking-[.15em] text-slate-400">触发关键词</p>
               <p className="mt-1.5 text-[10px] leading-5 text-slate-500">{skill.triggers.length ? skill.triggers.slice(0, 30).join(" · ") : "未设置（仅可按指定方式使用）"}</p>
             </div>
             <details className="rounded-xl border border-white/[0.07] bg-black/20 p-3">

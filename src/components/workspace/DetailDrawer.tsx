@@ -69,7 +69,7 @@ export default function DetailDrawer({
 export function DrawerSection({ label, children }: { label: string; children: ReactNode }) {
   return (
     <section className="border-b border-white/[0.05] py-4 first:pt-0 last:border-0">
-      <p className="text-[10px] font-semibold uppercase tracking-[.15em] text-slate-600">{label}</p>
+      <p className="text-[10px] font-semibold uppercase tracking-[.15em] text-slate-400">{label}</p>
       <div className="mt-2 text-xs leading-6 text-slate-300">{children}</div>
     </section>
   );

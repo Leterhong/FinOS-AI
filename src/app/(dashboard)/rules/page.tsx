@@ -120,7 +120,7 @@ export default function RulesPage() {
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{metrics.map(([Icon, value, label]) => <div key={label} className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-4"><Icon className="h-4 w-4 text-cyan-300" /><p className="numeric mt-3 text-2xl font-semibold text-white">{value}</p><p className="mt-1 text-[11px] text-slate-500">{label}</p></div>)}</div>
     {activeCase && <Panel className="border-cyan-400/20 bg-cyan-400/[0.04]"><div className="flex flex-wrap items-center gap-3 p-4"><Sparkles className="h-4 w-4 shrink-0 text-cyan-300" /><p className="min-w-0 flex-1 text-xs text-cyan-100">当前项目「{activeCase.company}」所属行业：<span className="text-white">{activeCase.industry || "未填写"}</span> → 匹配「{recommendation.profile.label}」分组，推荐 {recommendation.templates.length} 条规则模板{recommendedPending.length > 0 ? `（待加入 ${recommendedPending.length} 条）` : "（已全部加入）"}。</p><button type="button" onClick={() => { setTemplateGroup(recommendation.profile.label); setTemplateOpen(true); }} className="rounded-lg border border-cyan-400/25 px-3 py-1.5 text-[10px] text-cyan-200">查看推荐模板</button><button type="button" onClick={addRecommended} disabled={!recommendedPending.length} className="rounded-lg bg-cyan-300 px-3 py-1.5 text-[10px] font-semibold text-[#041018] disabled:opacity-40">一键加入推荐模板</button></div></Panel>}
     <Panel>
-      <div className="flex flex-col gap-3 border-b border-white/[0.07] p-4 sm:flex-row sm:items-center"><label className="flex flex-1 items-center gap-2 rounded-xl border border-white/[0.08] bg-black/10 px-3"><Search className="h-3.5 w-3.5 text-slate-600" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索规则编号、名称或业务域" className="h-10 flex-1 bg-transparent text-xs text-white outline-none placeholder:text-slate-600" /></label><div className="flex items-center gap-2"><span className="text-[10px] text-slate-500">适用行业</span><Select value={industryFilter} onChange={setIndustryFilter} className="min-w-36" options={[{ value: "", label: "全部行业" }, ...ruleTemplateGroups().map((group) => ({ value: group, label: group }))]} /></div><span className="text-[10px] text-slate-600">本地工作区自动保存</span></div>
+      <div className="flex flex-col gap-3 border-b border-white/[0.07] p-4 sm:flex-row sm:items-center"><label className="flex flex-1 items-center gap-2 rounded-xl border border-white/[0.08] bg-black/10 px-3"><Search className="h-3.5 w-3.5 text-slate-400" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索规则编号、名称或业务域" className="h-10 flex-1 bg-transparent text-xs text-white outline-none placeholder:text-slate-400" /></label><div className="flex items-center gap-2"><span className="text-[10px] text-slate-500">适用行业</span><Select value={industryFilter} onChange={setIndustryFilter} className="min-w-36" options={[{ value: "", label: "全部行业" }, ...ruleTemplateGroups().map((group) => ({ value: group, label: group }))]} /></div><span className="text-[10px] text-slate-400">本地工作区自动保存</span></div>
       <div className="divide-y divide-white/[0.06]">
         {rules.map((rule) => (
           <div
@@ -131,10 +131,10 @@ export default function RulesPage() {
             <div><span className="rounded-md border border-cyan-400/15 bg-cyan-400/[0.06] px-2 py-1 text-[10px] font-semibold text-cyan-300">{rule.code}</span></div>
             <div>
               <p className="text-xs font-medium text-slate-200">{rule.name}</p>
-              <p className="mt-1 text-[10px] text-slate-600">更新于 {formatWhen(rule.updated)} · {rule.coverage} · {rule.testRecords?.length ?? 0} 个测试样本</p>
+              <p className="mt-1 text-[10px] text-slate-400">更新于 {formatWhen(rule.updated)} · {rule.coverage} · {rule.testRecords?.length ?? 0} 个测试样本</p>
               <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                <span className={`rounded-md border px-1.5 py-0.5 text-[9px] ${rule.enabled === false ? "border-white/10 text-slate-600" : "border-emerald-400/20 text-emerald-300"}`}>{rule.enabled === false ? "已停用" : "已启用"}</span>
-                {(rule.industries ?? []).length === 0 ? <span className="rounded-md border border-white/10 px-1.5 py-0.5 text-[9px] text-slate-600">通用</span> : (rule.industries ?? []).map((tag) => <span key={tag} className="rounded-md border border-cyan-400/20 bg-cyan-400/[0.05] px-1.5 py-0.5 text-[9px] text-cyan-200">{tag}</span>)}
+                <span className={`rounded-md border px-1.5 py-0.5 text-[9px] ${rule.enabled === false ? "border-white/10 text-slate-400" : "border-emerald-400/20 text-emerald-300"}`}>{rule.enabled === false ? "已停用" : "已启用"}</span>
+                {(rule.industries ?? []).length === 0 ? <span className="rounded-md border border-white/10 px-1.5 py-0.5 text-[9px] text-slate-400">通用</span> : (rule.industries ?? []).map((tag) => <span key={tag} className="rounded-md border border-cyan-400/20 bg-cyan-400/[0.05] px-1.5 py-0.5 text-[9px] text-cyan-200">{tag}</span>)}
               </div>
             </div>
             <span className="text-xs text-slate-400">{rule.domain}</span>
@@ -148,9 +148,9 @@ export default function RulesPage() {
                   运行测试样本
                 </button>
               ) : (
-                <span className="text-[9px] text-slate-600">缺少结构化条件，不能自动测试</span>
+                <span className="text-[9px] text-slate-400">缺少结构化条件，不能自动测试</span>
               )}
-              <div className="mt-2 flex justify-between text-[10px] text-slate-600"><span>自测通过率</span><span>{rule.coverageRate}%</span></div>
+              <div className="mt-2 flex justify-between text-[10px] text-slate-400"><span>自测通过率</span><span>{rule.coverageRate}%</span></div>
               <div className="mt-1.5 h-1 rounded-full bg-white/[0.07]">
                 <div className={`h-full rounded-full transition-all ${rule.coverage === "测试未通过" ? "bg-rose-400" : "bg-emerald-400"}`} style={{ width: `${rule.coverageRate}%` }} />
               </div>
@@ -159,13 +159,13 @@ export default function RulesPage() {
               onClick={(event) => { event.stopPropagation(); setDeletingRule(rule); }}
               title="删除规则"
               aria-label={`删除规则 ${rule.code}`}
-              className="justify-self-end rounded-lg p-1.5 text-slate-600 transition hover:bg-rose-400/10 hover:text-rose-300"
+              className="justify-self-end rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-400/10 hover:text-rose-300"
             >
               <Trash2 className="h-3.5 w-3.5" />
             </button>
             {expandedId === rule.id && (rule.conditions?.length ?? 0) > 0 && (
               <div className="col-span-full rounded-xl border border-white/[0.07] bg-black/20 p-4">
-                <p className="text-[10px] font-semibold uppercase tracking-[.15em] text-slate-600">决策逻辑（Visual View）</p>
+                <p className="text-[10px] font-semibold uppercase tracking-[.15em] text-slate-400">决策逻辑（Visual View）</p>
                 <div className="mt-3 space-y-1.5 text-xs text-slate-300">
                   {rule.conditions!.map((condition, index) => (
                     <div key={index} className="flex flex-wrap items-center gap-2">
@@ -175,7 +175,7 @@ export default function RulesPage() {
                       <span className="numeric text-amber-200">{condition.value.toLocaleString()} {conditionUnit(condition.metric)}</span>
                     </div>
                   ))}
-                  <p className="pt-1 text-[10px] text-slate-600">THEN · 满足全部条件时生成风险信号，由规则引擎对已抽取事实确定性判定。</p>
+                  <p className="pt-1 text-[10px] text-slate-400">THEN · 满足全部条件时生成风险信号，由规则引擎对已抽取事实确定性判定。</p>
                 </div>
               </div>
             )}
@@ -183,7 +183,7 @@ export default function RulesPage() {
               <div className="col-span-full flex flex-wrap items-center gap-2">
                 <button type="button" onClick={(event) => { event.stopPropagation(); updateRule(rule.id, { enabled: rule.enabled === false }); }} className={`rounded-lg border px-3 py-1.5 text-[10px] ${rule.enabled === false ? "border-emerald-400/25 text-emerald-300" : "border-white/10 text-slate-400"}`}>{rule.enabled === false ? "启用规则" : "停用规则"}</button>
                 <button type="button" onClick={(event) => { event.stopPropagation(); setDeletingRule(rule); }} className="rounded-lg border border-rose-400/20 px-3 py-1.5 text-[10px] text-rose-300">删除规则</button>
-                <span className="text-[10px] text-slate-600">停用后该规则不参与资料研判的确定性判定。</span>
+                <span className="text-[10px] text-slate-400">停用后该规则不参与资料研判的确定性判定。</span>
               </div>
             )}
           </div>
@@ -201,7 +201,7 @@ export default function RulesPage() {
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-[11px] text-slate-400">分组</span>
           <Select value={templateGroup} onChange={setTemplateGroup} className="min-w-40" options={["全部", ...ruleTemplateGroups()].map((group) => ({ value: group, label: group }))} />
-          <span className="text-[10px] text-slate-600">共 {RULE_TEMPLATES.length} 条模板</span>
+          <span className="text-[10px] text-slate-400">共 {RULE_TEMPLATES.length} 条模板</span>
         </div>
         <div className="scrollbar-thin max-h-[55vh] space-y-2 overflow-y-auto">
           {RULE_TEMPLATES.filter((template) => templateGroup === "全部" || template.group === templateGroup).map((template) => {
@@ -210,7 +210,7 @@ export default function RulesPage() {
             return <div key={template.id} className="flex items-center gap-3 rounded-xl border border-white/[0.07] p-3">
               <div className="min-w-0 flex-1">
                 <p className="truncate text-xs text-slate-200">{template.code} · {template.name}</p>
-                <p className="mt-1 text-[10px] text-slate-600">{template.group} · {template.metric} {opLabel} {template.value}{conditionUnit(template.metric)} · {template.note}</p>
+                <p className="mt-1 text-[10px] text-slate-400">{template.group} · {template.metric} {opLabel} {template.value}{conditionUnit(template.metric)} · {template.note}</p>
               </div>
               <button type="button" onClick={() => addFromTemplate(template)} disabled={added} className="shrink-0 rounded-lg border border-cyan-400/25 px-3 py-1.5 text-[10px] text-cyan-200 disabled:opacity-40">{added ? "已加入" : "加入规则库"}</button>
             </div>;

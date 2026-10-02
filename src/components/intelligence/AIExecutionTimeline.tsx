@@ -35,7 +35,7 @@ export function AIExecutionTimeline({
             ) : stage.state === "failed" ? (
               <XCircle className="h-4 w-4 text-rose-400" />
             ) : (
-              <Circle className="h-4 w-4 text-slate-700" />
+              <Circle className="h-4 w-4 text-slate-500" />
             )}
           </span>
           <div className="min-w-0">
@@ -44,11 +44,11 @@ export function AIExecutionTimeline({
               stage.state === "done" && "text-slate-300",
               stage.state === "active" && "text-intel",
               stage.state === "failed" && "text-rose-300",
-              stage.state === "pending" && "text-slate-700"
+              stage.state === "pending" && "text-slate-500"
             )}>
               {stage.label}
             </p>
-            {stage.detail && <p className="mt-0.5 break-words text-[10px] leading-5 text-slate-600">{stage.detail}</p>}
+            {stage.detail && <p className="mt-0.5 break-words text-[10px] leading-5 text-slate-400">{stage.detail}</p>}
           </div>
         </li>
       ))}

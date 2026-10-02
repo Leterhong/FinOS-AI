@@ -102,15 +102,15 @@ export default function EnterpriseCommandCenter() {
     </div>
 
     {priorityItems.length > 0 && <Panel>
-      <PanelHeader eyebrow="Priority work" title="需要你处理" description="按风险等级排序的待办事项；全部来自当前工作区的真实状态。" action={<span className="text-[10px] text-slate-600">{priorityItems.length} 项</span>} />
+      <PanelHeader eyebrow="Priority work" title="需要你处理" description="按风险等级排序的待办事项；全部来自当前工作区的真实状态。" action={<span className="text-[10px] text-slate-400">{priorityItems.length} 项</span>} />
       <div className="divide-y divide-white/[0.06]">
         {priorityItems.map((item) => {
           const meta = riskMetaOf(item.level);
           const Icon = item.level === "medium" ? CalendarClock : item.href === "/documents" ? AlertTriangle : ShieldAlert;
           return <Link key={item.key} href={item.href} className="flex items-center gap-3 px-5 py-3.5 transition hover:bg-white/[0.025]">
             <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg border ${meta.className}`}><Icon className="h-4 w-4" /></span>
-            <span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium text-slate-200">{item.title}</span><span className="mt-0.5 block truncate text-[10px] text-slate-600">{item.detail}</span></span>
-            {item.when && <span className="hidden shrink-0 text-[10px] text-slate-600 sm:block">{formatWhen(item.when)}</span>}
+            <span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium text-slate-200">{item.title}</span><span className="mt-0.5 block truncate text-[10px] text-slate-400">{item.detail}</span></span>
+            {item.when && <span className="hidden shrink-0 text-[10px] text-slate-400 sm:block">{formatWhen(item.when)}</span>}
             <span className="shrink-0 text-[10px] text-cyan-300">{item.cta}<ArrowRight className="ml-1 inline h-3 w-3" /></span>
           </Link>;
         })}
@@ -122,8 +122,8 @@ export default function EnterpriseCommandCenter() {
       <div className="divide-y divide-white/[0.06]">
         {aiFeed.map((entry) => <Link key={entry.key} href={entry.href} className="flex items-start gap-3 px-5 py-3.5 transition hover:bg-white/[0.025]">
           <Sparkle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-wealth" />
-          <span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium text-slate-200">{entry.title}</span><span className="mt-0.5 block truncate text-[10px] text-slate-600">{entry.detail}</span></span>
-          {entry.when && <span className="shrink-0 text-[10px] text-slate-600">{formatWhen(entry.when)}</span>}
+          <span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium text-slate-200">{entry.title}</span><span className="mt-0.5 block truncate text-[10px] text-slate-400">{entry.detail}</span></span>
+          {entry.when && <span className="shrink-0 text-[10px] text-slate-400">{formatWhen(entry.when)}</span>}
         </Link>)}
       </div>
     </Panel>}
@@ -144,7 +144,7 @@ export default function EnterpriseCommandCenter() {
         <div className="rounded-xl border border-white/[0.07] bg-black/15 p-4">
           <div className="flex items-center justify-between"><p className="text-xs font-medium text-slate-300">启动进度</p><span className="numeric text-xs text-cyan-300">{completedSetup}/3</span></div>
           <div className="mt-4 space-y-3">
-            {[["创建企业项目", cases.length > 0], ["配置默认模型", Boolean(activeModel?.configured)], ["上传真实资料", documents.length > 0]].map(([label, done]) => <div key={String(label)} className="flex items-center gap-3 rounded-lg border border-white/[0.05] px-3 py-2.5">{done ? <CheckCircle2 className="h-4 w-4 text-emerald-400" /> : <span className="h-4 w-4 rounded-full border border-white/15" />}<span className={`text-xs ${done ? "text-slate-300" : "text-slate-600"}`}>{String(label)}</span></div>)}
+            {[["创建企业项目", cases.length > 0], ["配置默认模型", Boolean(activeModel?.configured)], ["上传真实资料", documents.length > 0]].map(([label, done]) => <div key={String(label)} className="flex items-center gap-3 rounded-lg border border-white/[0.05] px-3 py-2.5">{done ? <CheckCircle2 className="h-4 w-4 text-emerald-400" /> : <span className="h-4 w-4 rounded-full border border-white/15" />}<span className={`text-xs ${done ? "text-slate-300" : "text-slate-400"}`}>{String(label)}</span></div>)}
           </div>
         </div>
       </div>
@@ -157,7 +157,7 @@ export default function EnterpriseCommandCenter() {
           ? <EmptyStateCard icon={FolderPlus} title="还没有企业项目" description="创建第一个融资、尽调或经营分析项目，之后才能关联资料、规则和 AI 研判。" action={<Link href="/cases" className="rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]">新建项目</Link>} />
           : <div className="divide-y divide-white/[0.06]">{activeCases.slice(0, 4).map((item) => <Link href={`/cases/${encodeURIComponent(item.id)}`} key={item.id} className="grid gap-3 px-5 py-4 transition hover:bg-white/[0.025] sm:grid-cols-[1.4fr_.65fr_.6fr] sm:items-center">
             <div className="min-w-0"><div className="flex items-center gap-2"><p className="truncate text-sm font-medium text-slate-100">{item.company}</p><RiskBadge level={item.risk} /></div><p className="mt-1.5 truncate text-xs text-slate-500">{item.title} · {item.id}</p></div>
-            <div><p className="numeric text-sm text-slate-200">{item.amount}</p><p className="mt-1 text-[11px] text-slate-600">负责人 {item.owner}</p></div>
+            <div><p className="numeric text-sm text-slate-200">{item.amount}</p><p className="mt-1 text-[11px] text-slate-400">负责人 {item.owner}</p></div>
             <div><div className="flex justify-between text-[10px] text-slate-500"><span>{item.status}</span><span>{item.progress}%</span></div><div className="mt-2 h-1 overflow-hidden rounded-full bg-white/[0.07]"><div className="h-full rounded-full bg-cyan-300" style={{ width: `${item.progress}%` }} /></div></div>
           </Link>)}</div>}
       </Panel>
@@ -165,7 +165,7 @@ export default function EnterpriseCommandCenter() {
       <Panel>
         <PanelHeader eyebrow="AI infrastructure" title="模型连接" description="助手与 Agent 共用当前默认模型" />
         {activeModel?.configured
-          ? <div className="p-5"><div className="flex items-center gap-3"><div className="grid h-11 w-11 place-items-center rounded-xl border border-cyan-400/15 bg-cyan-400/[0.06]"><Cpu className="h-5 w-5 text-cyan-300" /></div><div><p className="text-sm font-semibold text-slate-100">{activeModel.displayName}</p><p className="mt-1 font-mono text-[10px] text-slate-600">{activeModel.modelName}</p></div></div><div className="mt-4 grid grid-cols-2 gap-2 text-[10px]"><div className="rounded-xl border border-white/[0.06] p-3 text-slate-500">连接状态<p className={`mt-1 text-xs ${activeModel.status === "online" ? "text-emerald-300" : "text-amber-300"}`}>{activeModel.status === "online" ? "已验证" : "待验证"}</p></div><div className="rounded-xl border border-white/[0.06] p-3 text-slate-500">Provider<p className="mt-1 text-xs text-slate-300">{activeModel.providerType}</p></div></div><Link href="/models" className="mt-4 flex items-center justify-center gap-2 rounded-xl border border-white/[0.08] py-2.5 text-xs text-slate-300">管理模型<ArrowRight className="h-3.5 w-3.5" /></Link></div>
+          ? <div className="p-5"><div className="flex items-center gap-3"><div className="grid h-11 w-11 place-items-center rounded-xl border border-cyan-400/15 bg-cyan-400/[0.06]"><Cpu className="h-5 w-5 text-cyan-300" /></div><div><p className="text-sm font-semibold text-slate-100">{activeModel.displayName}</p><p className="mt-1 font-mono text-[10px] text-slate-400">{activeModel.modelName}</p></div></div><div className="mt-4 grid grid-cols-2 gap-2 text-[10px]"><div className="rounded-xl border border-white/[0.06] p-3 text-slate-500">连接状态<p className={`mt-1 text-xs ${activeModel.status === "online" ? "text-emerald-300" : "text-amber-300"}`}>{activeModel.status === "online" ? "已验证" : "待验证"}</p></div><div className="rounded-xl border border-white/[0.06] p-3 text-slate-500">Provider<p className="mt-1 text-xs text-slate-300">{activeModel.providerType}</p></div></div><Link href="/models" className="mt-4 flex items-center justify-center gap-2 rounded-xl border border-white/[0.08] py-2.5 text-xs text-slate-300">管理模型<ArrowRight className="h-3.5 w-3.5" /></Link></div>
           : <EmptyStateCard icon={Cpu} title="AI 尚未接入" description="添加并测试一个大模型，解锁助手、Agent 和 AI 投研。" action={<Link href="/models" className="rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]">前往模型中心</Link>} />}
       </Panel>
     </div>
@@ -173,7 +173,7 @@ export default function EnterpriseCommandCenter() {
     <div className="grid gap-4 lg:grid-cols-2">
       <Panel>
         <PanelHeader eyebrow="Agent operations" title="Agent 运行记录" description="真实模型调用结果会记录在这里" action={<Link href="/agents" className="text-xs text-cyan-300">Agent 中心</Link>} />
-        {agents.filter((run) => run.caseId).length === 0 ? <EmptyStateCard icon={Bot} title="尚无已归属项目的 Agent 运行" description="完成项目、模型和资料配置后，从 Agent 中心发起研判；升级前未记录项目归属的历史运行不会参与当前项目判断。" /> : <div className="divide-y divide-white/[0.06]">{agents.filter((run) => run.caseId).slice(0, 3).map((run) => <div key={run.id} className="p-4"><div className="flex items-center justify-between"><p className="text-xs font-medium text-slate-200">{run.task}</p><span className={`text-[10px] ${run.status === "已完成" ? "text-emerald-300" : run.status === "失败" ? "text-rose-300" : "text-cyan-300"}`}>{run.status}</span></div><p className="mt-2 line-clamp-2 text-[10px] leading-5 text-slate-600">{run.output || run.error || "模型正在处理当前项目上下文"}</p></div>)}</div>}
+        {agents.filter((run) => run.caseId).length === 0 ? <EmptyStateCard icon={Bot} title="尚无已归属项目的 Agent 运行" description="完成项目、模型和资料配置后，从 Agent 中心发起研判；升级前未记录项目归属的历史运行不会参与当前项目判断。" /> : <div className="divide-y divide-white/[0.06]">{agents.filter((run) => run.caseId).slice(0, 3).map((run) => <div key={run.id} className="p-4"><div className="flex items-center justify-between"><p className="text-xs font-medium text-slate-200">{run.task}</p><span className={`text-[10px] ${run.status === "已完成" ? "text-emerald-300" : run.status === "失败" ? "text-rose-300" : "text-cyan-300"}`}>{run.status}</span></div><p className="mt-2 line-clamp-2 text-[10px] leading-5 text-slate-400">{run.output || run.error || "模型正在处理当前项目上下文"}</p></div>)}</div>}
       </Panel>
       <Panel>
         <PanelHeader eyebrow="Rule readiness" title="规则与证据" description="AI 不替代规则，也不把推断伪装成事实" />

@@ -94,9 +94,10 @@ services:
       AI_RATE_LIMIT_PER_MINUTE: ${AI_RATE_LIMIT_PER_MINUTE:-30}
       AI_MAX_TOKENS: ${AI_MAX_TOKENS:-8192}
       AI_MAX_INPUT_CHARS: ${AI_MAX_INPUT_CHARS:-100000}
-      # 经 nginx 反向代理时信任 nginx 容器（固定 IP，见下方 nginx.networks）；
-      # 覆写后的 X-Forwarded-For 最右段即真实客户端，登录限流才能按真实 IP 生效。
+      # 默认不信任任何代理；经 nginx 时可设为 nginx 容器 IP
       TRUSTED_PROXY_IPS: ${TRUSTED_PROXY_IPS:-172.28.0.10}
+      # 统一时区，避免容器 UTC 导致定时任务/日报时间偏移
+      TZ: ${TZ:-Asia/Shanghai}
       # 自托管 Ollama 等内网模型地址：默认禁止，需要时显式置 true
       AI_ALLOW_PRIVATE_ENDPOINTS: ${AI_ALLOW_PRIVATE_ENDPOINTS:-}
       BACKUP_API_KEY: ${BACKUP_API_KEY:-}

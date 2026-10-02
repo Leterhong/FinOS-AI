@@ -115,7 +115,7 @@ export default function AccountDialog({
             <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
               <p className="text-[10px] text-slate-500">当前登录账号</p>
               <p className="mt-1 truncate text-xs text-slate-200">{account?.email}</p>
-              <p className="mt-2 text-[10px] text-slate-600">企业数据与治理权限已归属该账号，被邀请的成员可用此邮箱确认加入。</p>
+              <p className="mt-2 text-[10px] text-slate-400">企业数据与治理权限已归属该账号，被邀请的成员可用此邮箱确认加入。</p>
             </div>
             <div className="flex justify-end gap-2">
               <button type="button" onClick={onClose} className="rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-400">关闭</button>
@@ -168,7 +168,7 @@ export default function AccountDialog({
                   {busy ? "处理中…" : mode === "login" ? "登录" : "注册并登录"}
                 </button>
               </div>
-              <p className="text-[10px] leading-5 text-slate-600">未登录时使用免登录访客工作区，仅本浏览器可见；登录后数据与权限绑定账号，可接受他人邀请并跨设备访问。</p>
+              <p className="text-[10px] leading-5 text-slate-400">未登录时使用免登录访客工作区，仅本浏览器可见；登录后数据与权限绑定账号，可接受他人邀请并跨设备访问。</p>
             </form>
           </>
         )}

@@ -48,7 +48,7 @@ export function AIProcessingState({
           <Loader2 className="h-4 w-4 animate-spin text-intel" />
           {title}
           {elapsedSeconds != null && elapsedSeconds > 0 && (
-            <span className="text-[10px] font-normal text-slate-600">已执行 {elapsedSeconds} 秒</span>
+            <span className="text-[10px] font-normal text-slate-400">已执行 {elapsedSeconds} 秒</span>
           )}
         </p>
       )}
@@ -66,7 +66,7 @@ export function AIProcessingState({
               className={cn(
                 stage.state === "done" && "text-slate-400",
                 stage.state === "active" && "text-intel",
-                stage.state === "pending" && "text-slate-700"
+                stage.state === "pending" && "text-slate-500"
               )}
             >
               {stage.label}

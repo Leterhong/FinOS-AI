@@ -117,7 +117,7 @@ export default function GuidePage() {
               <step.icon className={cn("h-4 w-4", step.color)} />
             </span>
             <span className="min-w-0 flex-1 text-sm font-semibold text-slate-100">{step.title}</span>
-            <ChevronDown className={cn("h-4 w-4 shrink-0 text-slate-600 transition-transform", openStep === index && "rotate-180")} />
+            <ChevronDown className={cn("h-4 w-4 shrink-0 text-slate-400 transition-transform", openStep === index && "rotate-180")} />
           </button>
           {openStep === index && (
             <div className="border-t border-white/[0.05] px-5 pb-4 pt-1">
@@ -151,17 +151,17 @@ export default function GuidePage() {
         <div className="rounded-xl border border-white/[0.06] p-4">
           <Database className="h-4 w-4 text-cyan-300" />
           <p className="mt-2 text-xs font-medium text-slate-200">本地即时持久化</p>
-          <p className="mt-1 text-[10px] leading-5 text-slate-600">数据首先保存在浏览器 localStorage，刷新不丢失。</p>
+          <p className="mt-1 text-[10px] leading-5 text-slate-400">数据首先保存在浏览器 localStorage，刷新不丢失。</p>
         </div>
         <div className="rounded-xl border border-white/[0.06] p-4">
           <CloudUpload className="h-4 w-4 text-wealth" />
           <p className="mt-2 text-xs font-medium text-slate-200">服务端自动同步</p>
-          <p className="mt-1 text-[10px] leading-5 text-slate-600">后端运行时自动同步，跨设备可恢复。侧栏底部显示同步状态。</p>
+          <p className="mt-1 text-[10px] leading-5 text-slate-400">后端运行时自动同步，跨设备可恢复。侧栏底部显示同步状态。</p>
         </div>
         <div className="rounded-xl border border-white/[0.06] p-4">
           <Users className="h-4 w-4 text-slate-400" />
           <p className="mt-2 text-xs font-medium text-slate-200">多角色协作</p>
-          <p className="mt-1 text-[10px] leading-5 text-slate-600">在治理中心邀请成员、分配权限，按最小权限原则控制项目访问。</p>
+          <p className="mt-1 text-[10px] leading-5 text-slate-400">在治理中心邀请成员、分配权限，按最小权限原则控制项目访问。</p>
         </div>
       </div>
     </Panel>
@@ -179,7 +179,7 @@ export default function GuidePage() {
             >
               <HelpCircle className="h-3.5 w-3.5 shrink-0 text-cyan-300/60" />
               <span className="min-w-0 flex-1 text-xs font-medium text-slate-300">{faq.q}</span>
-              <ChevronDown className={cn("h-3.5 w-3.5 shrink-0 text-slate-600 transition-transform", openFaq === index && "rotate-180")} />
+              <ChevronDown className={cn("h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform", openFaq === index && "rotate-180")} />
             </button>
             {openFaq === index && (
               <p className="px-5 pb-3 pl-10 text-xs leading-6 text-slate-500">{faq.a}</p>
@@ -196,7 +196,7 @@ export default function GuidePage() {
         {["项目", "资料", "事实", "证据", "规则", "风险", "AI 分析", "人工复核", "决策"].map((item, i) => (
           <span key={item} className="flex items-center gap-1.5">
             <span className={cn("rounded-lg border px-2.5 py-1", i === 3 ? "border-wealth/30 bg-wealth/10 text-wealth" : i === 6 ? "border-intel/25 bg-intel/10 text-intel" : "border-white/[0.08] bg-white/[0.03]")}>{item}</span>
-            {i < 8 && <span className="text-slate-700">→</span>}
+            {i < 8 && <span className="text-slate-500">→</span>}
           </span>
         ))}
       </div>

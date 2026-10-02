@@ -128,7 +128,7 @@ class MarketDataManager:
                 "name": row.symbol,
                 "marketType": row.market_type,
                 "price": row.price,
-                "changePct": None,
+                "changePct": row.change_pct,
                 "currency": row.currency,
                 "provider": row.provider,
                 "asOf": row.fetched_at.isoformat() if row.fetched_at else None,
@@ -172,6 +172,7 @@ class MarketDataManager:
             db.add(row)
         row.market_type = market_type
         row.price = quote.get("price")
+        row.change_pct = quote.get("changePct")
         row.currency = quote.get("currency", "CNY")
         row.provider = quote.get("provider", "unknown")
         row.fetched_at = now

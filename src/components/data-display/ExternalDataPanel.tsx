@@ -115,13 +115,13 @@ export default function ExternalDataPanel() {
 
       {error && <p className="rounded-xl border border-amber-400/20 bg-amber-400/[0.05] px-3 py-2 text-[11px] text-amber-200">{error}</p>}
       {loading ? <div className="flex items-center gap-2 text-xs text-slate-400"><Loader2 className="h-4 w-4 animate-spin text-cyan-300" />正在获取外部数据…</div>
-        : rows.length === 0 ? <div className="flex items-center gap-2 text-xs text-slate-600"><DatabaseZap className="h-4 w-4" />暂无数据{provider === "gleif" ? "（请输入企业名称后查询）" : ""}</div>
+        : rows.length === 0 ? <div className="flex items-center gap-2 text-xs text-slate-400"><DatabaseZap className="h-4 w-4" />暂无数据{provider === "gleif" ? "（请输入企业名称后查询）" : ""}</div>
         : <div className="scrollbar-thin overflow-x-auto">
           <table className="w-full border-collapse text-left text-[11px]">
             <thead><tr>{columns.map((column) => <th key={column} className="border-b border-white/10 px-3 py-2 font-medium text-cyan-200/80">{column}</th>)}</tr></thead>
             <tbody>{rows.map((row, index) => <tr key={index} className="odd:bg-white/[0.02]">{columns.map((column) => <td key={column} className="border-b border-white/[0.06] px-3 py-2 text-slate-300">{row[column] === null || row[column] === undefined ? "—" : String(row[column])}</td>)}</tr>)}</tbody>
           </table>
-          <p className="mt-2 text-[10px] text-slate-600">外部来源 · 最近 {rows.length} 条 · 需人工复核</p>
+          <p className="mt-2 text-[10px] text-slate-400">外部来源 · 最近 {rows.length} 条 · 需人工复核</p>
         </div>}
     </div>
   </Panel>;

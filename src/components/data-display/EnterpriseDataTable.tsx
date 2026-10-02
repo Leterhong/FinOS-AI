@@ -120,17 +120,17 @@ export function EnterpriseDataTable<Row extends { id: string }>({
     <div>
       <div className="flex flex-wrap items-center gap-2 px-5 py-3">
         <label className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] px-2.5 sm:max-w-xs">
-          <Search className="h-3 w-3 shrink-0 text-slate-600" />
+          <Search className="h-3 w-3 shrink-0 text-slate-400" />
           <input
             value={query}
             onChange={(event) => { setQuery(event.target.value); setPage(0); }}
             placeholder="搜索…"
             aria-label="表格搜索"
-            className="min-w-0 flex-1 bg-transparent text-[11px] text-slate-200 outline-none placeholder:text-slate-700"
+            className="min-w-0 flex-1 bg-transparent text-[11px] text-slate-200 outline-none placeholder:text-slate-500"
           />
         </label>
         {toolbar}
-        <span className="ml-auto shrink-0 text-[10px] text-slate-600">{sorted.length} 条</span>
+        <span className="ml-auto shrink-0 text-[10px] text-slate-400">{sorted.length} 条</span>
       </div>
 
       {loading ? (
@@ -142,7 +142,7 @@ export function EnterpriseDataTable<Row extends { id: string }>({
       ) : pageRows.length === 0 ? (
         <div className="p-12 text-center">
           <p className="text-sm text-slate-300">{emptyTitle}</p>
-          {emptyDescription && <p className="mx-auto mt-2 max-w-md text-xs leading-5 text-slate-600">{emptyDescription}</p>}
+          {emptyDescription && <p className="mx-auto mt-2 max-w-md text-xs leading-5 text-slate-400">{emptyDescription}</p>}
         </div>
       ) : (
         <div className="overflow-x-auto">
@@ -212,7 +212,7 @@ export function EnterpriseDataTable<Row extends { id: string }>({
       )}
 
       {pageCount > 1 && (
-        <div className="flex items-center justify-between border-t border-white/[0.05] px-5 py-2.5 text-[10px] text-slate-600">
+        <div className="flex items-center justify-between border-t border-white/[0.05] px-5 py-2.5 text-[10px] text-slate-400">
           <span>第 {safePage + 1} / {pageCount} 页</span>
           <div className="flex gap-1.5">
             <button type="button" onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={safePage === 0} className="rounded-md border border-white/[0.08] px-2.5 py-1 transition hover:text-slate-300 disabled:opacity-30">上一页</button>

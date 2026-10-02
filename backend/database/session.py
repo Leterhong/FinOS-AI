@@ -77,6 +77,27 @@ def init_db() -> None:
     _ensure_enterprise_scope_columns(engine)
     _ensure_organization_settings_columns(engine)
     _ensure_organization_member_columns(engine)
+    _ensure_market_cache_columns(engine)
+
+
+def _ensure_market_cache_columns(engine) -> None:
+    """开发库自愈：automation_market_cache 补充 change_pct 列。"""
+    from sqlalchemy import inspect, text
+
+    insp = inspect(engine)
+    if not insp.has_table("automation_market_cache"):
+        return
+    existing = {column["name"] for column in insp.get_columns("automation_market_cache")}
+    if "change_pct" in existing:
+        return
+    is_sqlite = engine.dialect.name == "sqlite"
+    statement = (
+        "ALTER TABLE automation_market_cache ADD COLUMN change_pct FLOAT"
+        if is_sqlite
+        else "ALTER TABLE automation_market_cache ADD COLUMN IF NOT EXISTS change_pct DOUBLE PRECISION"
+    )
+    with engine.begin() as conn:
+        conn.execute(text(statement))
 
 
 def _ensure_organization_settings_columns(engine) -> None:
