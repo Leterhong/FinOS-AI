@@ -16,6 +16,8 @@ export interface DataTableColumn<Row> {
   header: string;
   /** 排序取值（缺省按渲染值排序）。 */
   sortValue?: (row: Row) => string | number;
+  /** 搜索取值（缺省回退 sortValue，再回退 row[key]）。 */
+  searchValue?: (row: Row) => string | number;
   /** 是否参与关键词搜索（默认 true）。 */
   searchable?: boolean;
   className?: string;
@@ -71,7 +73,9 @@ export function EnterpriseDataTable<Row extends { id: string }>({
     return rows.filter((row) =>
       columns.some((column) => {
         if (column.searchable === false) return false;
-        const sample = column.sortValue?.(row);
+        const sample = column.searchValue?.(row)
+          ?? column.sortValue?.(row)
+          ?? (row as Record<string, unknown>)[column.key];
         const text = sample != null ? String(sample) : "";
         return text.toLowerCase().includes(q);
       })

@@ -8,6 +8,7 @@ import { AlignmentType, Document, HeadingLevel, Packer, Paragraph, Table, TableC
 import type { RiskSignal } from "@/types/enterprise";
 import type { ExportContext, ExportGroup } from "@/lib/risk-export";
 import { HIGHLIGHT_COLOR, LABEL_COLOR, LEVEL_COLOR, LEVEL_LABEL, MUTED_COLOR, buildExportGroups, highlightSegments } from "@/lib/risk-export";
+import { triggerDownload } from "@/lib/download";
 
 function field(label: string, value: string): Paragraph {
   return new Paragraph({
@@ -118,15 +119,4 @@ export async function downloadRiskChecklist(risks: RiskSignal[], context: Export
   const doc = buildRiskDocument(groups, { generatedAt: meta.generatedAt || new Date().toLocaleString("zh-CN") });
   const blob = await Packer.toBlob(doc);
   triggerDownload(blob, `企业风险清单-${new Date().toISOString().slice(0, 10)}.docx`);
-}
-
-export function triggerDownload(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

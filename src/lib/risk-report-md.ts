@@ -4,7 +4,7 @@
 import type { RiskSignal } from "@/types/enterprise";
 import type { ExportContext } from "@/lib/risk-export";
 import { LEVEL_LABEL, buildExportGroups, highlightSegments } from "@/lib/risk-export";
-import { triggerDownload } from "@/lib/risk-report-docx";
+import { triggerDownload } from "@/lib/download";
 
 function mdHighlight(text: string, quotes: string[]): string {
   return highlightSegments(text, quotes)

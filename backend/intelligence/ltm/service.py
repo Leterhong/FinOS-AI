@@ -106,8 +106,11 @@ def recall(
 
 
 def build_memory_context(db: Session, user: User, limit: int = 10) -> str:
-    """把记忆拼成给分析/LLM 用的文本上下文。空则返回空串。"""
-    items = recall(db, user, limit=limit)
+    """把记忆拼成给分析/LLM 用的文本上下文。空则返回空串。
+
+    只读路径：不累加 hit_count、不产生写事务（hit_count 由交互式召回路径负责）。
+    """
+    items = recall(db, user, limit=limit, mark_hit=False)
     if not items:
         return ""
     lines = [f"- [{i['kindLabel']}] {i['content']}" for i in items]

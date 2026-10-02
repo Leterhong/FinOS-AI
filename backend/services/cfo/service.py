@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from backend.ai.gateway import GatewayError, generate_sync as gw_generate_sync
@@ -62,10 +62,7 @@ def analyze(db: Session, user: User, question: str = "") -> dict:
             "disclaimer": DISCLAIMER,
         }
 
-    memory_count = db.scalar(
-        select(Memory).where(Memory.user_id == user.id).order_by(Memory.created_at.desc())
-    )
-    mc = len(list(db.scalars(select(Memory).where(Memory.user_id == user.id)).all())) if memory_count is not None else 0
+    mc = int(db.scalar(select(func.count()).select_from(Memory).where(Memory.user_id == user.id)) or 0)
 
     rag_ctx = ""
     if question:

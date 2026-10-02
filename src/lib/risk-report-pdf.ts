@@ -5,7 +5,7 @@ import type { RiskSignal } from "@/types/enterprise";
 import { backendAuthedFetch } from "@/lib/enterprise-sync";
 import type { ExportContext } from "@/lib/risk-export";
 import { buildExportGroups } from "@/lib/risk-export";
-import { triggerDownload } from "@/lib/risk-report-docx";
+import { triggerDownload } from "@/lib/download";
 
 export async function downloadRiskPdf(risks: RiskSignal[], context: ExportContext): Promise<void> {
   const groups = buildExportGroups(risks, context);

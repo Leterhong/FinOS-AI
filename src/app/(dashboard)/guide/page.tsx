@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import {
-  Bot, BriefcaseBusiness, ChevronDown, Files, MessageSquareText, Scale,
-  ShieldAlert, Workflow, BookOpenCheck, Cpu, ShieldCheck, Users,
-  Keyboard, CloudUpload, Database, HelpCircle,
+  BriefcaseBusiness, ChevronDown, Files, MessageSquareText, Scale,
+  ShieldAlert, Workflow, Cpu, ShieldCheck, Users,
+  CloudUpload, Database, HelpCircle,
 } from "lucide-react";
 import { PageIntro, Panel, PanelHeader } from "@/components/enterprise/EnterpriseUI";
 import { cn } from "@/lib/utils";

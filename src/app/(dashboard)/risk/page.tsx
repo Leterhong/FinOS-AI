@@ -9,9 +9,6 @@ import { EvidenceReference } from "@/components/evidence/EvidenceReference";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { EmptyStateCard, PageIntro, Panel, RiskBadge, riskMeta } from "@/components/enterprise/EnterpriseUI";
-import { downloadRiskChecklist } from "@/lib/risk-report-docx";
-import { downloadRiskMarkdown } from "@/lib/risk-report-md";
-import { downloadRiskPdf } from "@/lib/risk-report-pdf";
 import { scoreProject, scoreRisk } from "@/lib/risk-score";
 import { toast } from "@/components/feedback/toast";
 import { useEnterpriseStore } from "@/store/enterprise-store";
@@ -78,9 +75,17 @@ export default function RiskPage() {
     setExporting(true);
     try {
       const context = { cases, rules, documents };
-      if (exportFormat === "pdf") await downloadRiskPdf(filtered, context);
-      else if (exportFormat === "md") downloadRiskMarkdown(filtered, context);
-      else await downloadRiskChecklist(filtered, context);
+      // 动态加载导出器：docx/pdf 体积大，避免进入首屏 bundle。
+      if (exportFormat === "pdf") {
+        const { downloadRiskPdf } = await import("@/lib/risk-report-pdf");
+        await downloadRiskPdf(filtered, context);
+      } else if (exportFormat === "md") {
+        const { downloadRiskMarkdown } = await import("@/lib/risk-report-md");
+        downloadRiskMarkdown(filtered, context);
+      } else {
+        const { downloadRiskChecklist } = await import("@/lib/risk-report-docx");
+        await downloadRiskChecklist(filtered, context);
+      }
       setExported(true);
       window.setTimeout(() => setExported(false), 2000);
     } catch {

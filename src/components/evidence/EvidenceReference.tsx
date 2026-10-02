@@ -37,7 +37,7 @@ export function EvidenceReference({ documentName, location, page, line, cell, sh
       className={cn(
         "inline-flex items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] px-2.5 py-1.5 text-left text-[10px] text-slate-400 transition",
         onLocate ? "hover:border-cyan-400/25 hover:text-cyan-200" : "cursor-default"
-      )}
+      , className)}
     >
       <FileSearch className="h-3 w-3 shrink-0 text-cyan-300/70" />
       <span className="min-w-0 truncate">

@@ -63,6 +63,7 @@ export default function CommandPalette() {
   }, []);
 
   const entries = useMemo<Entry[]>(() => {
+    if (!open) return [];
     const trimmed = query.trim();
     const suggested: Entry[] = [
       { href: "/assistant", label: "Ask FinOS AI", hint: "基于当前工作区上下文研判", group: "Suggested", icon: Bot },
@@ -98,7 +99,7 @@ export default function CommandPalette() {
       ...documents.filter((item) => match(item.name)).slice(0, 4).map((item) => ({ href: "/documents", label: item.name, hint: item.status, group: "Documents" as const, icon: Files })),
       ...risks.filter((item) => match(`${item.title}${item.company}`)).slice(0, 4).map((item) => ({ href: "/risk", label: item.title, hint: item.company, group: "Risks" as const, icon: ShieldAlert })),
     ];
-  }, [query, pending.length, active?.configured, cases, documents, risks]);
+  }, [open, query, pending.length, active?.configured, cases, documents, risks]);
 
   useEffect(() => { setCursor(0); }, [query]);
 

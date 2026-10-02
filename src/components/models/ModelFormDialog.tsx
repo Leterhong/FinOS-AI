@@ -47,6 +47,7 @@ export default function ModelFormDialog({ open, onClose, editing }: Props) {
     latency?: number;
   } | null>(null);
   const [step, setStep] = useState(0); // 0 连接 · 1 模型 · 2 验证
+  const [formError, setFormError] = useState("");
 
   const preset = PROVIDER_PRESETS[providerType];
 
@@ -123,6 +124,7 @@ export default function ModelFormDialog({ open, onClose, editing }: Props) {
 
   async function handleTest() {
     setTestState(null);
+    setFormError("");
     // 编辑态未重新输入密钥时，直接测试已保存的配置（服务端使用已存密钥），
     // 避免因草稿缺少 API Key 而误报「缺少 API Key」。
     if (editing && !apiKey.trim()) {
@@ -135,6 +137,8 @@ export default function ModelFormDialog({ open, onClose, editing }: Props) {
             : saved.error ?? "连接失败",
           latency: saved.latencyMs,
         });
+      } else {
+        setFormError(useModelStore.getState().error ?? "连接测试失败，请稍后重试");
       }
       return;
     }
@@ -147,18 +151,25 @@ export default function ModelFormDialog({ open, onClose, editing }: Props) {
           : r.error ?? "连接失败",
         latency: r.latencyMs,
       });
+    } else {
+      setFormError(useModelStore.getState().error ?? "连接测试失败，请稍后重试");
     }
   }
 
   async function handleSave() {
+    setFormError("");
     let savedId: string;
     if (editing) {
       await updateModel(editing.id, draft());
-      if (useModelStore.getState().error) return;
+      const err = useModelStore.getState().error;
+      if (err) { setFormError(err); return; }
       savedId = editing.id;
     } else {
       const created = await addModel(draft());
-      if (!created) return;
+      if (!created) {
+        setFormError(useModelStore.getState().error ?? "保存失败，请稍后重试");
+        return;
+      }
       savedId = created.id;
     }
     // 草稿连接已验证时，把验证状态同步到最终配置，避免保存后又显示“尚未测试”。
@@ -459,6 +470,7 @@ export default function ModelFormDialog({ open, onClose, editing }: Props) {
               </div>
             )}
 
+            {formError && <p className="mt-4 rounded-xl border border-rose-400/20 bg-rose-400/[0.06] px-3 py-2 text-[11px] text-rose-200">{formError}</p>}
             <div className="mt-5 flex items-center gap-3">
               {step > 0 && (
                 <button

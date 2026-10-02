@@ -4,12 +4,12 @@ import { type FormEvent, useMemo, useState } from "react";
 import { Filter, Plus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { EmptyStateCard, PageIntro, Panel, RiskBadge } from "@/components/enterprise/EnterpriseUI";
+import { PageIntro, Panel, RiskBadge } from "@/components/enterprise/EnterpriseUI";
 import EnterpriseDialog from "@/components/enterprise/EnterpriseDialog";
 import { LayoutGrid, Table2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useEnterpriseStore } from "@/store/enterprise-store";
-import { EnterpriseDataTable, type DataTableColumn } from "@/components/data-display/EnterpriseDataTable";
+import { EnterpriseDataTable } from "@/components/data-display/EnterpriseDataTable";
 
 export default function CasesPage() {
   const router = useRouter();

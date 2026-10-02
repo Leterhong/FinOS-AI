@@ -4,7 +4,7 @@ import { ChangeEvent, type FormEvent, useEffect, useMemo, useRef, useState } fro
 import { formatWhen } from "@/lib/relative-time";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { AlertTriangle, CheckCircle2, ClipboardCopy, Cpu, Download, FileSpreadsheet, FileText, Loader2, RefreshCcw, ScanSearch, ShieldAlert, Trash2, Upload } from "lucide-react";
+import { CheckCircle2, ClipboardCopy, Cpu, Download, FileSpreadsheet, FileText, Loader2, RefreshCcw, ScanSearch, Trash2, Upload } from "lucide-react";
 import { EmptyStateCard, PageIntro, Panel } from "@/components/enterprise/EnterpriseUI";
 import CaseContextSelector from "@/components/enterprise/CaseContextSelector";
 import EnterpriseDialog from "@/components/enterprise/EnterpriseDialog";
@@ -12,7 +12,7 @@ import { Select } from "@/components/ui/Select";
 import { useActiveEnterpriseCase } from "@/hooks/use-active-enterprise-case";
 import { analyzeEnterpriseDocument } from "@/lib/enterprise-ai";
 import { canonicalMetricName } from "@/lib/metric-aliases";
-import { triggerDownload } from "@/lib/risk-report-docx";
+import { triggerDownload } from "@/lib/download";
 import { csvCell } from "@/lib/csv";
 import { AIProcessingState } from "@/components/intelligence/AIProcessingState";
 import { toast } from "@/components/feedback/toast";
@@ -175,7 +175,7 @@ export default function DocumentsPage() {
   const promoteFactToRisk = (fact: EvidenceFact) => {
     if (!fact.caseId) return;
     const company = cases.find((item) => item.id === fact.caseId)?.company ?? "";
-    const risk = addRisk({
+    addRisk({
       caseId: fact.caseId,
       company,
       title: `事实关注：${fact.topic} ${fact.value}${fact.unit}`.slice(0, 80),

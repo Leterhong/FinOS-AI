@@ -62,7 +62,7 @@ class EnterpriseDocument(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
 
-    __table_args__ = (Index("ix_enterprise_documents_user", "user_id"),)
+    __table_args__ = (Index("ix_enterprise_documents_user", "user_id"), Index("ix_enterprise_documents_case", "case_id"),)
 
 
 class EnterpriseRisk(Base):
@@ -82,7 +82,7 @@ class EnterpriseRisk(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
 
-    __table_args__ = (Index("ix_enterprise_risks_user", "user_id"),)
+    __table_args__ = (Index("ix_enterprise_risks_user", "user_id"), Index("ix_enterprise_risks_case", "case_id"),)
 
 
 class EnterpriseRule(Base):
@@ -129,7 +129,7 @@ class EnterpriseTask(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
 
-    __table_args__ = (Index("ix_enterprise_tasks_user", "user_id"),)
+    __table_args__ = (Index("ix_enterprise_tasks_user", "user_id"), Index("ix_enterprise_tasks_case", "case_id"),)
 
 
 class EnterpriseBrief(Base):
@@ -145,4 +145,4 @@ class EnterpriseBrief(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
 
-    __table_args__ = (Index("ix_enterprise_briefs_user", "user_id"),)
+    __table_args__ = (Index("ix_enterprise_briefs_user", "user_id"), Index("ix_enterprise_briefs_case", "case_id"),)

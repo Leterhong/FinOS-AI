@@ -40,18 +40,18 @@ export default function CaseWorkspacePage() {
   const [fromCurrency, setFromCurrency] = useState("USD");
   const [toCurrency, setToCurrency] = useState("CNY");
 
-  const project = cases.find((item) => item.id === caseId);
-  const projectDocuments = documents.filter((item) => item.caseId === caseId);
-  const projectRisks = risks.filter((item) => item.caseId === caseId);
-  const projectTasks = tasks.filter((item) => item.caseId === caseId);
-  const projectBriefs = briefs.filter((item) => item.caseId === caseId);
-  const projectRuns = runs.filter((item) => item.caseId === caseId);
-  const facts = projectDocuments.flatMap((item) => item.factItems ?? []);
-  const hasAnalyzedDocument = projectDocuments.some((item) => item.status === "已解析" || item.status === "待复核");
-  const executedRuleCodes = [...new Set(projectDocuments.flatMap((item) => item.ruleOutcomes ?? []).map((outcome) => outcome.code))];
+  const project = useMemo(() => cases.find((item) => item.id === caseId), [cases, caseId]);
+  const projectDocuments = useMemo(() => documents.filter((item) => item.caseId === caseId), [documents, caseId]);
+  const projectRisks = useMemo(() => risks.filter((item) => item.caseId === caseId), [risks, caseId]);
+  const projectTasks = useMemo(() => tasks.filter((item) => item.caseId === caseId), [tasks, caseId]);
+  const projectBriefs = useMemo(() => briefs.filter((item) => item.caseId === caseId), [briefs, caseId]);
+  const projectRuns = useMemo(() => runs.filter((item) => item.caseId === caseId), [runs, caseId]);
+  const facts = useMemo(() => projectDocuments.flatMap((item) => item.factItems ?? []), [projectDocuments]);
+  const hasAnalyzedDocument = useMemo(() => projectDocuments.some((item) => item.status === "已解析" || item.status === "待复核"), [projectDocuments]);
+  const executedRuleCodes = useMemo(() => [...new Set(projectDocuments.flatMap((item) => item.ruleOutcomes ?? []).map((outcome) => outcome.code))], [projectDocuments]);
   const metrics = useMemo(() => calculateFinancialMetrics(facts), [facts]);
   const trends = useMemo(() => calculateFinancialTrends(facts), [facts]);
-  const riskScore = scoreProject(projectRisks);
+  const riskScore = useMemo(() => scoreProject(projectRisks), [projectRisks]);
 
   if (!project) return <div className="page-shell"><Panel><EmptyStateCard title="项目不存在或已被移除" description="请返回项目中心选择一个仍然存在的企业项目。" action={<Link href="/cases" className="rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]">返回项目中心</Link>} /></Panel></div>;
 
@@ -119,16 +119,17 @@ export default function CaseWorkspacePage() {
       const base = fromCurrency.toUpperCase();
       const target = toCurrency.toUpperCase();
       const fxResp = await backendAuthedFetch(`/api/data-sources/fx/latest?base=${base}&symbols=${target}`);
-      const fxPayload = await fxResp.json() as { data?: { rows?: Array<Record<string, unknown>> } };
-      const rows = fxPayload.data?.rows ?? [];
+      const fxPayload = await fxResp.json().catch(() => null) as { data?: { rows?: Array<Record<string, unknown>> }; error?: string } | null;
+      if (!fxResp.ok) throw new Error(fxPayload?.error || `汇率获取失败（HTTP ${fxResp.status}）`);
+      const rows = fxPayload?.data?.rows ?? [];
       const rates = rows.map((row) => ({ symbol: String(row["目标货币"] ?? ""), rate: Number(row["汇率"] ?? 0) })).filter((item) => item.symbol && Number.isFinite(item.rate));
       const date = String(rows[0]?.["日期"] ?? "");
       const rate = rates.find((item) => item.symbol === target)?.rate ?? 0;
       let lpr: Array<Record<string, unknown>> = [];
       try {
         const lprResp = await backendAuthedFetch("/api/data-sources/akshare/lpr?limit=6");
-        const lprPayload = await lprResp.json() as { data?: { rows?: Array<Record<string, unknown>> } };
-        lpr = lprPayload.data?.rows ?? [];
+        const lprPayload = await lprResp.json().catch(() => null) as { data?: { rows?: Array<Record<string, unknown>> } } | null;
+        if (lprResp.ok) lpr = lprPayload?.data?.rows ?? [];
       } catch { /* LPR 失败不阻塞汇率 */ }
       const value = Number(amount);
       setExternal({

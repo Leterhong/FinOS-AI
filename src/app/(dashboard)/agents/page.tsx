@@ -127,7 +127,7 @@ export default function AgentsPage() {
       const rule = rules.find((item) => item.code === outcome.code);
       return rule ? `${rule.code}@${rule.version}` : outcome.code;
     });
-    const risk = addRisk({
+    addRisk({
       caseId: relatedCase.id,
       company: relatedCase.company,
       title,

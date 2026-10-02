@@ -7,7 +7,11 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   // 构建期限制 worker 数量，降低容器内构建内存峰值（避免被 OOM Killer 终止）。
-  experimental: { cpus: 1 },
+  // optimizePackageImports 让 barrel 包按需引入，减少打包/解析体积。
+  experimental: {
+    cpus: 1,
+    optimizePackageImports: ["lucide-react", "@radix-ui/react-dropdown-menu", "@tanstack/react-query"],
+  },
   async headers() {
     return [
       {

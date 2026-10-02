@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Body, Depends
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from backend.core import get_current_user, ok
@@ -87,14 +87,12 @@ def create_notification(body: CreateNotification, user: User = Depends(get_curre
 
 @router.post("/read-all")
 def mark_all_read(category: str | None = None, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    stmt = select(Notification).where(Notification.user_id == user.id, Notification.read == False)  # noqa: E712
+    stmt = update(Notification).where(Notification.user_id == user.id, Notification.read == False)  # noqa: E712
     if category:
         stmt = stmt.where(Notification.category == category)
-    rows = list(db.scalars(stmt))
-    for n in rows:
-        n.read = True
+    result = db.execute(stmt.values(read=True))
     db.commit()
-    return ok({"updated": len(rows)}, "已全部标记为已读")
+    return ok({"updated": int(result.rowcount or 0)}, "已全部标记为已读")
 
 
 @router.post("/{notification_id}/read")
