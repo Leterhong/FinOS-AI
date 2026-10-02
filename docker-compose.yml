@@ -144,6 +144,8 @@ services:
       NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:-}
       # 服务端渲染时容器内直连后端（Next 代码读取 BACKEND_PROXY_URL）
       BACKEND_PROXY_URL: http://api:8300
+      # 多实例幂等/缓存共享（未配置时回退进程内）
+      REDIS_URL: redis://:${REDIS_PASSWORD:-finos_dev_redis}@redis:6379/0
       # 前端侧加密密钥。NODE_ENV=production 下缺失会直接抛错拒绝服务
       # （开源仓库的开发兜底密钥人人可见，用于生产等同未加密）。
       FINOS_DATA_KEY: ${FINOS_DATA_KEY:?FINOS_DATA_KEY 未设置，请先执行 bash deploy.sh 或复制 .env.example 为 .env}
@@ -152,6 +154,8 @@ services:
       FINOS_ALLOW_PRIVATE_AI_ENDPOINTS: ${AI_ALLOW_PRIVATE_ENDPOINTS:-}
     depends_on:
       api:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     expose:
       - "3000"

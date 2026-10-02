@@ -7,6 +7,7 @@ import { inspectPrompt, promptGuardInstruction, redactPromptSecrets, shouldBlock
 import { getSkill, selectSkill } from "@/ai/skills/registry";
 import { getCustomSkills, getEnabledSkillIds } from "@/ai/skills/store";
 import { recordUsage } from "@/ai/usage/usage-tracker";
+import { idemClaim, idemGet, idemRelease, idemStore, idemWait, type IdempotentResult } from "@/lib/idempotency";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,30 +28,8 @@ interface RequestBody {
   idempotencyKey?: unknown;
 }
 
-interface CachedAnswer {
-  answer: string;
-  model: string;
-  latencyMs: number;
-  skill?: { id: string; name: string };
-  at: number;
-}
-
-const IDEM_TTL_MS = 10 * 60 * 1000;
-const idemCache = new Map<string, CachedAnswer>();
-const idemPending = new Map<string, Promise<CachedAnswer | null>>();
-
-function idemGet(id: string): CachedAnswer | null {
-  const value = idemCache.get(id);
-  if (!value) return null;
-  if (Date.now() - value.at > IDEM_TTL_MS) {
-    idemCache.delete(id);
-    return null;
-  }
-  return value;
-}
-
 /** 回放已缓存结果：非流式直接返回 JSON，流式补发一次 delta + done。 */
-function replayResponse(cached: CachedAnswer, stream: boolean): Response {
+function replayResponse(cached: IdempotentResult, stream: boolean): Response {
   if (!stream) {
     return NextResponse.json({
       result: { answer: cached.answer, model: cached.model, provider: "user", latencyMs: cached.latencyMs, skill: cached.skill, cached: true },
@@ -173,13 +152,18 @@ export async function POST(req: NextRequest) {
   // 幂等键：同一逻辑请求（自动重试/重复提交）复用结果，避免重复调用模型与计费。
   const idemRaw = typeof body.idempotencyKey === "string" ? body.idempotencyKey.trim().slice(0, 100) : "";
   const cacheId = idemRaw ? `${userId}:${idemRaw}` : "";
+  let idemOwned = false;
   if (cacheId) {
-    const cached = idemGet(cacheId);
+    const cached = await idemGet(cacheId);
     if (cached) return replayResponse(cached, body.stream === true);
-    const inflight = idemPending.get(cacheId);
-    if (inflight) {
-      const done = await inflight;
-      if (done) return replayResponse(done, body.stream === true);
+    idemOwned = await idemClaim(cacheId);
+    if (!idemOwned) {
+      // 其它实例/请求在处理：等待其完成并回放结果。
+      const waited = await idemWait(cacheId, 10 * 60 * 1000);
+      if (waited) return replayResponse(waited, body.stream === true);
+      // 首次失败或无结果：重新认领，抢不到则提示稍后重试。
+      idemOwned = await idemClaim(cacheId);
+      if (!idemOwned) return NextResponse.json({ error: "相同请求正在处理，请稍后重试" }, { status: 429 });
     }
   }
 
@@ -196,10 +180,6 @@ export async function POST(req: NextRequest) {
     let streamedChars = 0;
     let fullAnswer = "";
     let streamError = false;
-    let settlePending: (value: CachedAnswer | null) => void = () => {};
-    if (cacheId) {
-      idemPending.set(cacheId, new Promise<CachedAnswer | null>((resolve) => { settlePending = resolve; }));
-    }
     const sse = new ReadableStream<Uint8Array>({
       async start(controller) {
         // 心跳注释行：推理模型长时间无输出时，避免反向代理按 idle 超时切断连接。
@@ -251,12 +231,13 @@ ${safeQuestion}` },
           clearTimeout(timeout);
           req.signal.removeEventListener("abort", onClientAbort);
           // 仅完整成功（有内容且非中途错误/取消）才写入幂等缓存，供重试直接回放。
-          if (!streamError && !abort.signal.aborted && fullAnswer.trim()) {
-            settlePending({ answer: fullAnswer, model: model.modelId, latencyMs: Date.now() - started, skill: skillInfo, at: Date.now() });
-          } else {
-            settlePending(null);
+          if (cacheId && idemOwned) {
+            if (!streamError && !abort.signal.aborted && fullAnswer.trim()) {
+              await idemStore(cacheId, { answer: fullAnswer, model: model.modelId, latencyMs: Date.now() - started, skill: skillInfo, at: Date.now() });
+            } else {
+              await idemRelease(cacheId);
+            }
           }
-          if (cacheId) idemPending.delete(cacheId);
           closed = true;
           // 记录用量（流式按字符估算 token），失败不影响主流程。
           const promptTokens = Math.ceil((safeQuestion.length + context.length) / 2);
@@ -317,8 +298,8 @@ ${safeQuestion}` },
       latencyMs: response.latencyMs ?? 0,
       success: true,
     });
-    if (cacheId && typeof response.content === "string" && response.content.trim()) {
-      idemCache.set(cacheId, {
+    if (cacheId && idemOwned && typeof response.content === "string" && response.content.trim()) {
+      await idemStore(cacheId, {
         answer: response.content,
         model: response.model ?? model.modelId,
         latencyMs: response.latencyMs ?? 0,
@@ -337,6 +318,7 @@ ${safeQuestion}` },
       },
     });
   } catch (error) {
+    if (cacheId && idemOwned) await idemRelease(cacheId);
     const message = friendlyModelError(error);
     return NextResponse.json({ error: message, code: "MODEL_CALL_FAILED" }, { status: 502 });
   }
