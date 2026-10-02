@@ -96,6 +96,13 @@ export interface DocumentRuleHit {
  * 流式研判：SSE 逐段回调 onDelta，结束后返回最终结果。
  * 协议：data: {"delta": "..."} → data: {"done": true, ...}；出错 data: {"error": "..."}。
  */
+export interface StreamAIOptions {
+  /** 幂等键：自动重试时复用，服务端命中缓存则不重复调用模型。 */
+  idempotencyKey?: string;
+  /** 重试前回调：让调用方清空已渲染的流式内容，避免重复拼接。 */
+  onRestart?: () => void;
+}
+
 export async function streamEnterpriseAI(
   input: {
     question: string;
@@ -104,14 +111,44 @@ export async function streamEnterpriseAI(
     skillId?: string;
   },
   onDelta: (text: string) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  options: StreamAIOptions = {}
+): Promise<EnterpriseAIResult> {
+  const idempotencyKey = options.idempotencyKey
+    ?? (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      return await streamOnce(input, onDelta, signal, idempotencyKey);
+    } catch (error) {
+      lastError = error;
+      const aborted = Boolean(signal?.aborted) || (error instanceof DOMException && error.name === "AbortError");
+      const retryable = error instanceof Error && error.message.includes("未正常结束");
+      if (aborted || !retryable || attempt === 1) throw error;
+      // 连接在服务端已完成、客户端未收到 done 时，用同一幂等键重试会命中缓存直接回放。
+      options.onRestart?.();
+    }
+  }
+  throw lastError;
+}
+
+async function streamOnce(
+  input: {
+    question: string;
+    mode?: "chat" | "agent" | "research";
+    context?: EnterpriseAIContext;
+    skillId?: string;
+  },
+  onDelta: (text: string) => void,
+  signal: AbortSignal | undefined,
+  idempotencyKey: string
 ): Promise<EnterpriseAIResult> {
   await ensureWorkspaceSession();
   const response = await fetch("/api/enterprise/ai", {
     method: "POST",
     credentials: "same-origin",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...input, stream: true }),
+    body: JSON.stringify({ ...input, stream: true, idempotencyKey }),
     signal,
   });
   if (!response.ok || !response.body) {

@@ -83,6 +83,12 @@ export default function AgentsPage() {
           }
         },
         controller.signal,
+        {
+          onRestart: () => {
+            streamBufRef.current = "";
+            if (mountedRef.current) setStreamText("");
+          },
+        }
       );
       if (!mountedRef.current) return;
       completeAgentRun(currentRun.id, result.answer, `${((performance.now() - startedAt) / 1000).toFixed(1)}s`);

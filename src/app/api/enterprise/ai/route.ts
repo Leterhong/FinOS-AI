@@ -23,6 +23,51 @@ interface RequestBody {
   stream?: unknown;
   /** 指定技能 id（须已启用）；留空则按问题自动选择。 */
   skillId?: unknown;
+  /** 幂等键：同一逻辑请求自动重试时复用，命中缓存则不重复调用模型。 */
+  idempotencyKey?: unknown;
+}
+
+interface CachedAnswer {
+  answer: string;
+  model: string;
+  latencyMs: number;
+  skill?: { id: string; name: string };
+  at: number;
+}
+
+const IDEM_TTL_MS = 10 * 60 * 1000;
+const idemCache = new Map<string, CachedAnswer>();
+const idemPending = new Map<string, Promise<CachedAnswer | null>>();
+
+function idemGet(id: string): CachedAnswer | null {
+  const value = idemCache.get(id);
+  if (!value) return null;
+  if (Date.now() - value.at > IDEM_TTL_MS) {
+    idemCache.delete(id);
+    return null;
+  }
+  return value;
+}
+
+/** 回放已缓存结果：非流式直接返回 JSON，流式补发一次 delta + done。 */
+function replayResponse(cached: CachedAnswer, stream: boolean): Response {
+  if (!stream) {
+    return NextResponse.json({
+      result: { answer: cached.answer, model: cached.model, provider: "user", latencyMs: cached.latencyMs, skill: cached.skill, cached: true },
+    });
+  }
+  const payload = [
+    `data: ${JSON.stringify({ delta: cached.answer })}\n\n`,
+    `data: ${JSON.stringify({ done: true, model: cached.model, latencyMs: cached.latencyMs, skill: cached.skill, cached: true })}\n\n`,
+  ].join("");
+  return new Response(payload, {
+    headers: {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-store",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    },
+  });
 }
 
 const BASE_SYSTEM_PROMPT = `你是 FinOS AI 的企业经营与风险研判助手。你的任务是辅助资料理解、规则匹配、风险提示、投研整理和流程规划。
@@ -125,6 +170,19 @@ export async function POST(req: NextRequest) {
     : "";
   const provider = new OpenAICompatibleProvider(model);
 
+  // 幂等键：同一逻辑请求（自动重试/重复提交）复用结果，避免重复调用模型与计费。
+  const idemRaw = typeof body.idempotencyKey === "string" ? body.idempotencyKey.trim().slice(0, 100) : "";
+  const cacheId = idemRaw ? `${userId}:${idemRaw}` : "";
+  if (cacheId) {
+    const cached = idemGet(cacheId);
+    if (cached) return replayResponse(cached, body.stream === true);
+    const inflight = idemPending.get(cacheId);
+    if (inflight) {
+      const done = await inflight;
+      if (done) return replayResponse(done, body.stream === true);
+    }
+  }
+
   // ── 流式模式：SSE 逐段转发（前端助手逐字渲染，等待感大幅下降）──
   if (body.stream === true) {
     const encoder = new TextEncoder();
@@ -136,7 +194,12 @@ export async function POST(req: NextRequest) {
     req.signal.addEventListener("abort", onClientAbort);
     let closed = false;
     let streamedChars = 0;
+    let fullAnswer = "";
     let streamError = false;
+    let settlePending: (value: CachedAnswer | null) => void = () => {};
+    if (cacheId) {
+      idemPending.set(cacheId, new Promise<CachedAnswer | null>((resolve) => { settlePending = resolve; }));
+    }
     const sse = new ReadableStream<Uint8Array>({
       async start(controller) {
         // 心跳注释行：推理模型长时间无输出时，避免反向代理按 idle 超时切断连接。
@@ -177,7 +240,7 @@ ${safeQuestion}` },
             signal: abort.signal,
           })) {
             if (closed) break;
-            if (chunk.content) { streamedChars += chunk.content.length; send({ delta: chunk.content }); }
+            if (chunk.content) { streamedChars += chunk.content.length; fullAnswer += chunk.content; send({ delta: chunk.content }); }
           }
           send({ done: true, model: model.modelId, latencyMs: Date.now() - started, skill: skillInfo });
         } catch (error) {
@@ -187,6 +250,13 @@ ${safeQuestion}` },
           clearInterval(heartbeat);
           clearTimeout(timeout);
           req.signal.removeEventListener("abort", onClientAbort);
+          // 仅完整成功（有内容且非中途错误/取消）才写入幂等缓存，供重试直接回放。
+          if (!streamError && !abort.signal.aborted && fullAnswer.trim()) {
+            settlePending({ answer: fullAnswer, model: model.modelId, latencyMs: Date.now() - started, skill: skillInfo, at: Date.now() });
+          } else {
+            settlePending(null);
+          }
+          if (cacheId) idemPending.delete(cacheId);
           closed = true;
           // 记录用量（流式按字符估算 token），失败不影响主流程。
           const promptTokens = Math.ceil((safeQuestion.length + context.length) / 2);
@@ -247,6 +317,15 @@ ${safeQuestion}` },
       latencyMs: response.latencyMs ?? 0,
       success: true,
     });
+    if (cacheId && typeof response.content === "string" && response.content.trim()) {
+      idemCache.set(cacheId, {
+        answer: response.content,
+        model: response.model ?? model.modelId,
+        latencyMs: response.latencyMs ?? 0,
+        skill: skillInfo,
+        at: Date.now(),
+      });
+    }
     return NextResponse.json({
       result: {
         answer: response.content,

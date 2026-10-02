@@ -108,6 +108,13 @@ export default function AssistantPage() {
             lastStreamRenderRef.current = now;
             setStreamText(streamTextRef.current);
           }
+        },
+        undefined,
+        {
+          onRestart: () => {
+            streamTextRef.current = "";
+            if (mountedRef.current) setStreamText("");
+          },
         }
       );
       if (!mountedRef.current) return;
