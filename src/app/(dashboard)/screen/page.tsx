@@ -54,7 +54,7 @@ function Donut({ segments, center, caption }: { segments: Array<{ label: string;
 function BarList({ items, max, empty }: { items: Array<{ label: string; value: number; sub?: string; color?: string }>; max: number; empty: string }) {
   if (items.length === 0) return <p className="py-8 text-center text-xs text-slate-600">{empty}</p>;
   return (
-    <div className="space-y-2.5">
+    <div className="scrollbar-thin max-h-full space-y-2.5 overflow-y-auto pr-1">
       {items.map((item) => (
         <div key={item.label}>
           <div className="flex items-center justify-between text-[11px]">
@@ -87,7 +87,7 @@ function LineChart({ points, labels, color = "#22d3ee" }: { points: number[]; la
         {coords.map(([x, y], index) => <circle key={index} cx={x} cy={y} r="1" fill={color} />)}
       </svg>
       <div className="mt-1.5 flex justify-between text-[9px] text-slate-600">
-        {labels.slice(0, 5).map((label) => <span key={label} className="min-w-0 flex-1 truncate">{label}</span>)}
+        {(labels.length <= 5 ? labels : [0, Math.floor((labels.length - 1) / 4), Math.floor((labels.length - 1) / 2), Math.floor(((labels.length - 1) * 3) / 4), labels.length - 1].map((index) => labels[index])).map((label, index) => <span key={`${label}-${index}`} className="min-w-0 flex-1 truncate text-center">{label}</span>)}
       </div>
     </div>
   );
@@ -97,7 +97,7 @@ function Heatmap({ rows, cols, empty }: { rows: Array<{ label: string; counts: n
   if (rows.length === 0) return <p className="py-8 text-center text-xs text-slate-600">{empty}</p>;
   const max = Math.max(1, ...rows.flatMap((row) => row.counts));
   return (
-    <div className="h-full overflow-hidden">
+    <div className="scrollbar-thin h-full overflow-y-auto pr-1">
       <div className="grid gap-1.5" style={{ gridTemplateColumns: `minmax(72px, 1.4fr) repeat(${cols.length}, 1fr)` }}>
         <span />
         {cols.map((col) => <span key={col} className="text-center text-[9px] text-slate-500">{col}</span>)}
@@ -266,12 +266,12 @@ export default function ScreenPage() {
       </div>
 
       {tab === "总览" && <>
-        <div className="grid min-h-[220px] flex-1 gap-3 xl:grid-cols-12">
+        <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-12">
           <Section title="风险等级分布" hint="全部风险线索" className="xl:col-span-3"><Donut segments={donutSegments} center={String(risks.length)} caption="风险线索总数" /></Section>
           <Section title="项目风险评分排行" hint="0–100" className="xl:col-span-4"><BarList items={stats.projectScores.map((item) => levelBars(item.label, item.score, `进度 ${item.progress}%`, item.score >= 80 ? "#ff4d6d" : item.score >= 60 ? "#ff8a4c" : item.score >= 35 ? "#f6c344" : "#4c8dff"))} max={scoreMax} empty="尚无风险数据" /></Section>
           <Section title="多期事实趋势" hint="按期间聚合" className="xl:col-span-5"><LineChart points={stats.trend.map(([, count]) => count)} labels={stats.trend.map(([period]) => period)} /></Section>
         </div>
-        <div className="grid min-h-[200px] flex-1 gap-3 xl:grid-cols-12">
+        <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-12">
           <Section title="风险热力图" hint="项目 × 等级" className="xl:col-span-4"><Heatmap rows={stats.heat} cols={LEVEL_ORDER.map((level) => LEVEL_META[level].label)} empty="尚无项目风险数据" /></Section>
           <Section title="流程任务阶段" hint={`已完成 ${stats.doneTasks}/${tasks.length}`} className="xl:col-span-3"><BarList items={STAGES.map((stage, index) => ({ label: stage, value: stats.stageCounts[index], color: ["#64748b", "#22d3ee", "#f6c344", "#34d399"][index] }))} max={stageMax} empty="尚无任务" /></Section>
           <Section title="规则与事实质量" hint="覆盖率" className="xl:col-span-2">
@@ -296,15 +296,15 @@ export default function ScreenPage() {
       </>}
 
       {tab === "风险聚焦" && <>
-        <div className="grid min-h-[240px] flex-1 gap-3 xl:grid-cols-12">
+        <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-12">
           <Section title="风险热力图" hint="项目 × 等级" className="xl:col-span-7"><Heatmap rows={stats.heat} cols={LEVEL_ORDER.map((level) => LEVEL_META[level].label)} empty="尚无项目风险数据" /></Section>
           <Section title="风险等级分布" className="xl:col-span-5"><Donut segments={donutSegments} center={String(risks.length)} caption="风险线索总数" /></Section>
         </div>
-        <div className="grid min-h-[200px] flex-1 gap-3 xl:grid-cols-12">
+        <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-12">
           <Section title="项目风险评分排行" hint="0–100" className="xl:col-span-6"><BarList items={stats.projectScores.map((item) => levelBars(item.label, item.score, `进度 ${item.progress}%`, item.score >= 80 ? "#ff4d6d" : item.score >= 60 ? "#ff8a4c" : item.score >= 35 ? "#f6c344" : "#4c8dff"))} max={scoreMax} empty="尚无风险数据" /></Section>
           <Section title="最近更新风险" className="xl:col-span-6">
             {stats.recentRisks.length === 0 ? <p className="py-8 text-center text-xs text-slate-600">尚无风险数据</p> : (
-              <div className="space-y-2">
+              <div className="scrollbar-thin max-h-full space-y-2 overflow-y-auto pr-1">
                 {stats.recentRisks.map((risk) => (
                   <div key={risk.id} className="flex items-center gap-3 rounded-xl border border-white/[0.07] p-2.5">
                     <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: LEVEL_META[risk.level].color }} />
@@ -320,11 +320,11 @@ export default function ScreenPage() {
       </>}
 
       {tab === "流程与规则" && <>
-        <div className="grid min-h-[240px] flex-1 gap-3 xl:grid-cols-12">
+        <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-12">
           <Section title="流程任务阶段" hint={`已完成 ${stats.doneTasks}/${tasks.length}`} className="xl:col-span-5"><BarList items={STAGES.map((stage, index) => ({ label: stage, value: stats.stageCounts[index], color: ["#64748b", "#22d3ee", "#f6c344", "#34d399"][index] }))} max={stageMax} empty="尚无任务" /></Section>
           <Section title="多期事实趋势" hint="按期间聚合" className="xl:col-span-7"><LineChart points={stats.trend.map(([, count]) => count)} labels={stats.trend.map(([period]) => period)} /></Section>
         </div>
-        <div className="grid min-h-[200px] flex-1 gap-3 xl:grid-cols-12">
+        <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-12">
           <Section title="规则与事实质量" className="xl:col-span-4">
             <div className="space-y-4">
               <div>
@@ -346,7 +346,7 @@ export default function ScreenPage() {
           </Section>
           <Section title="最近更新风险" className="xl:col-span-5">
             {stats.recentRisks.length === 0 ? <p className="py-8 text-center text-xs text-slate-600">尚无风险数据</p> : (
-              <div className="space-y-2">
+              <div className="scrollbar-thin max-h-full space-y-2 overflow-y-auto pr-1">
                 {stats.recentRisks.slice(0, 5).map((risk) => (
                   <div key={risk.id} className="flex items-center gap-3 rounded-xl border border-white/[0.07] p-2.5">
                     <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: LEVEL_META[risk.level].color }} />
