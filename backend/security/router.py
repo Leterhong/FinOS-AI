@@ -132,9 +132,35 @@ def delete_account(
 
     # 按元数据拓扑顺序「子表先删、父表后删」，避免 PostgreSQL 外键约束导致整单回滚
     # （例如 multimodal_extractions.input_id → multimodal_inputs.id）。
+    # 先取出该用户拥有的组织 id：随后的按 user_id 删除会先删掉 organizations 行。
+    org_ids = list(db.scalars(select(Organization.id).where(Organization.user_id == user.id)))
+
     for table in reversed(Base.metadata.sorted_tables):
         if "user_id" in table.c:
             db.execute(delete(table).where(table.c.user_id == user.id))
+
+    # 该用户拥有的组织：其他成员的数据仅按 user_id 删不到，会留下孤儿成员/授权/审计，
+    # 且被邀请邮箱重新注册后可能经邮箱匹配「复活」残留成员行。这里按 organization_id 整体清理。
+    if org_ids:
+        case_ids = list(db.scalars(
+            select(EnterpriseCase.id).where(EnterpriseCase.organization_id.in_(org_ids))
+        ))
+        if case_ids:
+            for model in (EnterpriseDocument, EnterpriseRisk, EnterpriseTask, EnterpriseBrief):
+                db.execute(delete(model).where(model.case_id.in_(case_ids)))
+            db.execute(delete(ProjectGrant).where(ProjectGrant.case_id.in_(case_ids)))
+        db.execute(delete(EnterpriseConnector).where(EnterpriseConnector.organization_id.in_(org_ids)))
+        db.execute(delete(GovernanceReview).where(GovernanceReview.organization_id.in_(org_ids)))
+        db.execute(delete(GovernanceAudit).where(GovernanceAudit.organization_id.in_(org_ids)))
+        db.execute(delete(RuleRevision).where(RuleRevision.organization_id.in_(org_ids)))
+        db.execute(delete(ModelEvalRun).where(ModelEvalRun.organization_id.in_(org_ids)))
+        db.execute(delete(ModelEvalCase).where(ModelEvalCase.organization_id.in_(org_ids)))
+        db.execute(delete(EnterpriseRule).where(EnterpriseRule.organization_id.in_(org_ids)))
+        db.execute(delete(ProjectGrant).where(ProjectGrant.organization_id.in_(org_ids)))
+        db.execute(delete(EnterpriseCase).where(EnterpriseCase.organization_id.in_(org_ids)))
+        db.execute(delete(OrganizationMember).where(OrganizationMember.organization_id.in_(org_ids)))
+        db.execute(delete(Organization).where(Organization.id.in_(org_ids)))
+
     db.delete(user)
     db.commit()
 

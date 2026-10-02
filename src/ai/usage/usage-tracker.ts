@@ -94,42 +94,56 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+/** 按用户串行化写入，避免并发读-改-写互相覆盖丢记录。 */
+const writeChains = new Map<string, Promise<void>>();
+
+function withUserLock<T>(userId: string, task: () => Promise<T>): Promise<T> {
+  const previous = writeChains.get(userId) ?? Promise.resolve();
+  const next = previous.then(task, task);
+  writeChains.set(userId, next.then(() => undefined, () => undefined));
+  return next;
+}
+
 /** 追加一条用量记录（异步、不阻塞主流程）。 */
 export async function recordUsage(
   rec: Omit<UsageRecord, "costUsd" | "timestamp"> & { timestamp?: number; error?: string }
 ): Promise<void> {
-  try {
-    await fs.mkdir(BASE_DIR, { recursive: true });
-    const file = fileFor(rec.userId);
-    let arr: UsageRecord[] = [];
+  await withUserLock(rec.userId, async () => {
     try {
-      const raw = await fs.readFile(file, "utf8");
-      arr = decodeAtRest<UsageRecord[]>(raw, []);
-    } catch {
-      arr = [];
-    }
-    const entry: UsageRecord = {
-      userId: rec.userId,
-      agentName: rec.agentName,
-      provider: rec.provider,
-      model: rec.model,
-      taskType: rec.taskType,
-      promptTokens: rec.promptTokens,
-      completionTokens: rec.completionTokens,
-      totalTokens: rec.totalTokens,
-      latencyMs: rec.latencyMs,
-      costUsd: round2(estimateCost(rec.model, rec.promptTokens, rec.completionTokens)),
-      success: rec.success,
-      error: rec.error,
-      timestamp: rec.timestamp ?? Date.now(),
-    };
+      await fs.mkdir(BASE_DIR, { recursive: true });
+      const file = fileFor(rec.userId);
+      let arr: UsageRecord[] = [];
+      try {
+        const raw = await fs.readFile(file, "utf8");
+        arr = decodeAtRest<UsageRecord[]>(raw, []);
+      } catch {
+        arr = [];
+      }
+      const entry: UsageRecord = {
+        userId: rec.userId,
+        agentName: rec.agentName,
+        provider: rec.provider,
+        model: rec.model,
+        taskType: rec.taskType,
+        promptTokens: rec.promptTokens,
+        completionTokens: rec.completionTokens,
+        totalTokens: rec.totalTokens,
+        latencyMs: rec.latencyMs,
+        costUsd: round2(estimateCost(rec.model, rec.promptTokens, rec.completionTokens)),
+        success: rec.success,
+        error: rec.error,
+        timestamp: rec.timestamp ?? Date.now(),
+      };
     arr.push(entry);
-    if (arr.length > MAX_RECORDS) arr = arr.slice(arr.length - MAX_RECORDS);
-    // 加密落盘：用量记录反映用户行为，避免明文留存。
-    await fs.writeFile(file, encodeAtRest(arr), "utf8");
-  } catch {
-    // 用量记录失败不影响主流程
-  }
+      if (arr.length > MAX_RECORDS) arr = arr.slice(arr.length - MAX_RECORDS);
+      // 加密 + 原子写（临时文件 rename）：避免写到一半被读到半截内容。
+      const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
+      await fs.writeFile(tmp, encodeAtRest(arr), "utf8");
+      await fs.rename(tmp, file);
+    } catch {
+      // 用量记录失败不影响主流程
+    }
+  });
 }
 
 /** 读取某用户的原始用量记录（用于按用户配置单价重算费用）。 */

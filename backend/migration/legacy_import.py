@@ -66,8 +66,12 @@ def _to_dt(value: Any, default: datetime | None = None) -> datetime | None:
     return default
 
 
-def _exists(db, model, id_: str) -> bool:
-    return db.scalar(select(model.id).where(model.id == id_)) is not None
+def _exists(db, model, id_: str, user_id: str | None = None) -> bool:
+    """按主键判重；传入 user_id 时限定该用户，避免跨用户同 ID 记录被误判为已存在而丢弃。"""
+    stmt = select(model.id).where(model.id == id_)
+    if user_id is not None and hasattr(model, "user_id"):
+        stmt = stmt.where(model.user_id == user_id)
+    return db.scalar(stmt) is not None
 
 
 def _read_json(path: Path) -> Any:
@@ -169,7 +173,7 @@ def _migrate_profile(db, user_id: str, stats: dict, errors: list) -> None:
         errors.append(f"financial_profiles/{user_id}: 读取失败 {exc}")
         return
     pid = rec.get("id") or user_id
-    if _exists(db, FinancialProfile, pid):
+    if _exists(db, FinancialProfile, pid, user_id):
         stats["skipped"] += 1
         return
     try:
@@ -212,7 +216,7 @@ def _migrate_financial(db, user_id: str, stats: dict, errors: list, secret: str)
         if not isinstance(tx, dict):
             continue
         tid = tx.get("id")
-        if not tid or _exists(db, Transaction, tid):
+        if not tid or _exists(db, Transaction, tid, user_id):
             stats["skipped"] += 1 if tid else 0
             continue
         try:
@@ -245,7 +249,7 @@ def _migrate_financial(db, user_id: str, stats: dict, errors: list, secret: str)
         if not isinstance(h, dict):
             continue
         hid = h.get("id")
-        if not hid or _exists(db, Asset, hid):
+        if not hid or _exists(db, Asset, hid, user_id):
             stats["skipped"] += 1 if hid else 0
             continue
         try:
@@ -268,7 +272,7 @@ def _migrate_financial(db, user_id: str, stats: dict, errors: list, secret: str)
         if not isinstance(p, dict):
             continue
         pid = p.get("id")
-        if not pid or _exists(db, Asset, pid):
+        if not pid or _exists(db, Asset, pid, user_id):
             stats["skipped"] += 1 if pid else 0
             continue
         try:
@@ -312,7 +316,7 @@ def _migrate_memory(db, user_id: str, stats: dict, errors: list) -> None:
             if not isinstance(entry, dict):
                 continue
             mid = entry.get("id") or f"{user_id}-{mtype}-{i}"
-            if _exists(db, Memory, mid):
+            if _exists(db, Memory, mid, user_id):
                 stats["skipped"] += 1
                 continue
             try:
@@ -333,7 +337,7 @@ def _migrate_memory(db, user_id: str, stats: dict, errors: list) -> None:
     prefs = rec.get("preferences")
     if isinstance(prefs, dict) and prefs:
         pid = f"{user_id}-preferences"
-        if not _exists(db, Memory, pid):
+        if not _exists(db, Memory, pid, user_id):
             try:
                 db.add(
                     Memory(
@@ -365,7 +369,7 @@ def _migrate_documents(db, user_id: str, stats: dict, errors: list) -> None:
         if not isinstance(doc, dict):
             continue
         did = doc.get("id")
-        if not did or _exists(db, Document, did):
+        if not did or _exists(db, Document, did, user_id):
             stats["skipped"] += 1 if did else 0
             continue
         try:
@@ -374,8 +378,10 @@ def _migrate_documents(db, user_id: str, stats: dict, errors: list) -> None:
                     id=did,
                     user_id=user_id,
                     filename=doc.get("fileName") or "unknown",
-                    storage_path=doc.get("storedName") or doc.get("fileName") or "",
-                    status=doc.get("ragStatus") or "uploaded",
+                    # 历史附件二进制只在前端浏览器，服务端无法搬运；这里不再写伪造路径，
+                    # 并标记 failed，避免前端误以为文件可用（分析结果为空）。
+                    storage_path="",
+                    status="failed",
                     created_at=_to_dt(doc.get("uploadedAt"), default=_now()),
                 )
             )
@@ -403,7 +409,7 @@ def _migrate_models(db, user_id: str, stats: dict, errors: list, secret: str) ->
         if not isinstance(cfg, dict):
             continue
         cid = cfg.get("id")
-        if not cid or _exists(db, AIModelConfig, cid):
+        if not cid or _exists(db, AIModelConfig, cid, user_id):
             stats["skipped"] += 1 if cid else 0
             continue
         try:

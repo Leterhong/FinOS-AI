@@ -257,6 +257,33 @@ def test_account_deletion_covers_enterprise_tables(client, user_a, db_session):
     assert leftover is None
 
 
+def test_account_deletion_purges_owned_organization(client, user_a, user_b, db_session):
+    """删除组织所有者账户时，应整体清理该组织的成员/成员数据，避免孤儿与复活路径。"""
+    from backend.enterprise.models import EnterpriseCase
+    from backend.governance.models import Organization, OrganizationMember
+
+    org_id = client.get("/api/governance/snapshot", headers=user_a["headers"]).json()["data"]["organization"]["id"]
+    client.post(
+        "/api/governance/members",
+        json={"organizationId": org_id, "email": user_b["email"], "role": "analyst", "clearance": "internal"},
+        headers=user_a["headers"],
+    )
+    case_id = f"CASE-{uuid.uuid4().hex[:8]}"
+    client.post("/api/enterprise/cases", json={"id": case_id, "company": "组织删除", "title": "t"}, headers=user_a["headers"])
+
+    resp = client.request(
+        "DELETE",
+        "/api/security/account",
+        json={"password": "Test1234!", "confirmation": "DELETE MY DATA"},
+        headers=user_a["headers"],
+    )
+    assert resp.status_code == 200, resp.text
+    db_session.expire_all()
+    assert db_session.scalar(select(Organization).where(Organization.id == org_id)) is None
+    assert db_session.scalar(select(OrganizationMember).where(OrganizationMember.organization_id == org_id)) is None
+    assert db_session.scalar(select(EnterpriseCase).where(EnterpriseCase.id == case_id)) is None
+
+
 def test_rule_flags_roundtrip(client, auth):
     """规则启用状态与适用行业标签需持久化并随快照返回。"""
     resp = client.post(
