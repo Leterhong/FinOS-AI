@@ -70,7 +70,7 @@ export default function AssistantPage() {
   const caseRisks = useMemo(() => risks.filter((item) => item.caseId === activeCaseId), [activeCaseId, risks]);
 
   // 对话历史持久化在工作区 store：刷新/关闭浏览器后仍可回溯 AI 研判记录。
-  const messages: Message[] = assistantMessages.filter((message) =>
+  const messages: Message[] = useMemo(() => assistantMessages.filter((message) =>
     message.caseId === activeCaseId || (!message.caseId && cases.length === 1),
   ).map((m) => ({
     id: m.id,
@@ -80,7 +80,7 @@ export default function AssistantPage() {
     error: m.error,
     skill: m.skill,
     references: m.references,
-  }));
+  })), [assistantMessages, activeCaseId, cases.length]);
 
   const submit = async () => {
     const question = query.trim();

@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
+import weakref
 from collections.abc import AsyncGenerator
 
 import httpx
@@ -18,6 +20,12 @@ DEFAULT_TIMEOUT = 60.0
 # 分层超时：连接 10s、读写 600s（与 nginx/Next 的 600s 对齐，避免慢推理模型
 # 首字节超 60s 被最内层先杀掉），连接池等待 10s。
 HTTP_TIMEOUT = httpx.Timeout(connect=10.0, read=600.0, write=60.0, pool=10.0)
+
+# 连接复用：按事件循环 + host 缓存 AsyncClient（复用 keep-alive，避免每次
+# 重新 DNS/TLS 握手）。loop 结束由 WeakKeyDictionary 回收。
+_CLIENTS: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, dict[str, httpx.AsyncClient]]" = weakref.WeakKeyDictionary()
+_RESOLVE_TTL = 60.0
+_RESOLVE_CACHE: dict[str, tuple[float, tuple[str, list[str]]]] = {}
 
 
 class GatewayError(Exception):
@@ -54,17 +62,32 @@ class _PinnedTransport(httpx.AsyncHTTPTransport):
 
 
 def _client(base_url: str) -> httpx.AsyncClient:
-    """构造出站客户端：先校验地址并固定 IP，再建连。"""
+    """构造/复用出站客户端：校验地址并固定 IP 连接，按事件循环 + host 复用。"""
     from backend.config.settings import get_settings
 
-    try:
-        hostname, ips = resolve_validated_ips(
-            base_url, allow_private=get_settings().ai_allow_private_endpoints
-        )
-    except UnsafeOutboundUrl as exc:
-        raise GatewayError(str(exc)) from exc
-    transport = _PinnedTransport(hostname, ips[0])
-    return httpx.AsyncClient(timeout=HTTP_TIMEOUT, follow_redirects=False, transport=transport)
+    cached = _RESOLVE_CACHE.get(base_url)
+    if cached and time.monotonic() - cached[0] < _RESOLVE_TTL:
+        hostname, ips = cached[1]
+    else:
+        try:
+            hostname, ips = resolve_validated_ips(
+                base_url, allow_private=get_settings().ai_allow_private_endpoints
+            )
+        except UnsafeOutboundUrl as exc:
+            raise GatewayError(str(exc)) from exc
+        _RESOLVE_CACHE[base_url] = (time.monotonic(), (hostname, ips))
+
+    loop = asyncio.get_running_loop()
+    cache = _CLIENTS.get(loop)
+    if cache is None:
+        cache = {}
+        _CLIENTS[loop] = cache
+    key = f"{hostname}|{ips[0]}"
+    client = cache.get(key)
+    if client is None:
+        client = httpx.AsyncClient(timeout=HTTP_TIMEOUT, follow_redirects=False, transport=_PinnedTransport(hostname, ips[0]))
+        cache[key] = client
+    return client
 
 
 def _parse_completion(data: dict) -> dict:
@@ -83,8 +106,8 @@ async def generate(
     """非流式生成。返回 {content, tokens}。"""
     url = base_url.rstrip("/") + "/chat/completions"
     payload = {"model": model, "messages": messages, "temperature": temperature, "max_tokens": max_tokens}
-    async with _client(base_url) as client:
-        resp = await client.post(url, headers=_headers(api_key), json=payload)
+    client = _client(base_url)
+    resp = await client.post(url, headers=_headers(api_key), json=payload)
     if resp.status_code != 200:
         raise GatewayError(f"模型调用失败（HTTP {resp.status_code}）")
     try:
@@ -119,31 +142,31 @@ async def stream(
         "model": model, "messages": messages,
         "temperature": temperature, "max_tokens": max_tokens, "stream": True,
     }
-    async with _client(base_url) as client:
-        async with client.stream("POST", url, headers=_headers(api_key), json=payload) as resp:
-            if resp.status_code != 200:
-                raise GatewayError(f"模型调用失败（HTTP {resp.status_code}）")
-            async for line in resp.aiter_lines():
-                if not line.startswith("data:"):
-                    continue
-                chunk = line.removeprefix("data:").strip()
-                if chunk == "[DONE]":
-                    break
-                try:
-                    delta = (json.loads(chunk).get("choices") or [{}])[0].get("delta", {})
-                    text = delta.get("content")
-                    if text:
-                        yield text
-                except json.JSONDecodeError:
-                    continue
+    client = _client(base_url)
+    async with client.stream("POST", url, headers=_headers(api_key), json=payload) as resp:
+        if resp.status_code != 200:
+            raise GatewayError(f"模型调用失败（HTTP {resp.status_code}）")
+        async for line in resp.aiter_lines():
+            if not line.startswith("data:"):
+                continue
+            chunk = line.removeprefix("data:").strip()
+            if chunk == "[DONE]":
+                break
+            try:
+                delta = (json.loads(chunk).get("choices") or [{}])[0].get("delta", {})
+                text = delta.get("content")
+                if text:
+                    yield text
+            except json.JSONDecodeError:
+                continue
 
 
 async def embed(base_url: str, api_key: str, model: str, texts: list[str]) -> dict:
     """向量化。返回 {embeddings, tokens}。"""
     url = base_url.rstrip("/") + "/embeddings"
     payload = {"model": model, "input": texts}
-    async with _client(base_url) as client:
-        resp = await client.post(url, headers=_headers(api_key), json=payload)
+    client = _client(base_url)
+    resp = await client.post(url, headers=_headers(api_key), json=payload)
     if resp.status_code != 200:
         raise GatewayError(f"Embedding 调用失败（HTTP {resp.status_code}）")
     try:

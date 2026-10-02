@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from backend.core import get_current_user, ok
 from backend.core.cache import cache_delete, cache_get, cache_invalidate_prefix, cache_set
 from backend.database import get_db
-from backend.intelligence.constants import DISCLAIMER, PREDICTION_HORIZONS
+from backend.intelligence.constants import DEFAULT_RETIREMENT_AGE, DISCLAIMER, PREDICTION_HORIZONS
 from backend.intelligence.context import build_context
 from backend.intelligence.ltm.service import (
     build_memory_context,
@@ -59,6 +59,39 @@ def _fingerprint(ctx) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:12]
 
 
+def _cached_prediction(
+    user: User,
+    ctx,
+    *,
+    horizons=None,
+    retirement_age: int = DEFAULT_RETIREMENT_AGE,
+    goal_amount: float | None = None,
+    goal_years: int | None = None,
+    refresh: bool = False,
+) -> tuple[dict, bool]:
+    """预测结果缓存：/predict、/timeline、/score 共用同一键，避免重复重算。
+
+    键内含数据指纹与参数，财富数据或参数变化即自动失效。
+    """
+    effective_horizons = tuple(horizons) if horizons else PREDICTION_HORIZONS
+    tag = f"{retirement_age}:{goal_amount or 0}:{goal_years or 0}:{','.join(str(h) for h in effective_horizons)}"
+    key = _pred_key(user.id, tag, _fingerprint(ctx))
+    if not refresh:
+        cached = cache_get(key)
+        if cached is not None:
+            return cached, True
+    result = predict_wealth(
+        ctx,
+        horizons=effective_horizons,
+        retirement_age=retirement_age,
+        goal_amount=goal_amount,
+        goal_years=goal_years,
+    )
+    if result.get("hasData"):
+        cache_set(key, result, ttl_seconds=PRED_TTL)
+    return result, False
+
+
 def _chat_key(user_id: str, session_id: str) -> str:
     return f"wi:chat:{user_id}:{session_id}"
 
@@ -72,33 +105,22 @@ def predict(
 ):
     """财富预测（1/3/5/10/20/30 年 + 现金流 + 退休 + 目标概率 + Timeline）。"""
     ctx = build_context(db, user)
-    tag = f"{body.retirementAge}:{body.goalAmount or 0}:{body.goalYears or 0}"
-    key = _pred_key(user.id, tag, _fingerprint(ctx))
-    if body.refresh:
-        cache_delete(key)
-    else:
-        cached = cache_get(key)
-        if cached is not None:
-            return ok({**cached, "cached": True}, "预测结果（缓存）")
-
-    horizons = tuple(body.horizons) if body.horizons else PREDICTION_HORIZONS
-    result = predict_wealth(
-        ctx,
-        horizons=horizons,
+    result, cached = _cached_prediction(
+        user, ctx,
+        horizons=body.horizons,
         retirement_age=body.retirementAge,
         goal_amount=body.goalAmount,
         goal_years=body.goalYears,
+        refresh=body.refresh,
     )
-    if result.get("hasData"):
-        cache_set(key, result, ttl_seconds=PRED_TTL)
-    return ok({**result, "cached": False}, "预测完成")
+    return ok({**result, "cached": cached}, "预测结果（缓存）" if cached else "预测完成")
 
 
 @router.get("/timeline")
 def timeline(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Wealth Timeline：现在 → 5 年 → 10 年 → 退休/目标年龄。"""
     ctx = build_context(db, user)
-    result = predict_wealth(ctx)
+    result, _ = _cached_prediction(user, ctx)
     if not result.get("hasData"):
         return ok(result, "尚未创建财富数字分身")
     return ok(
@@ -121,7 +143,7 @@ def get_score(
 ):
     """六维财富健康评分。"""
     ctx = build_context(db, user)
-    pred = predict_wealth(ctx) if ctx.has_data else {}
+    pred, _ = _cached_prediction(user, ctx) if ctx.has_data else ({}, False)
     result = score_wealth(ctx, pred.get("goal"))
     if persist and result.get("hasData"):
         save_score(db, user, result)

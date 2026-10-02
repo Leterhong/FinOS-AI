@@ -30,6 +30,7 @@ from backend.enterprise.models import (
 from backend.governance.models import (
     EnterpriseConnector,
     GovernanceReview,
+    OrganizationMember,
     ProjectGrant,
     RuleRevision,
 )
@@ -395,15 +396,17 @@ def _apply_brief(row: EnterpriseBrief, body: BriefIn) -> None:
 
 
 # ---------------------------------------------------------------- 快照
-def _document_visible(db: Session, user: User, document: EnterpriseDocument) -> bool:
+def _document_visible(db: Session, user: User, document: EnterpriseDocument, case: EnterpriseCase | None = None, member: OrganizationMember | None = None) -> bool:
     """文档级密级过滤：成员密级须不低于文档自身密级与所属项目密级。"""
     if document.user_id == user.id:
         return True
-    case_id = getattr(document, "case_id", "") or ""
-    case = db.get(EnterpriseCase, case_id) if case_id else None
+    if case is None:
+        case_id = getattr(document, "case_id", "") or ""
+        case = db.get(EnterpriseCase, case_id) if case_id else None
     if case is None:
         return False
-    member = member_for_organization(db, user, case.organization_id)
+    if member is None:
+        member = member_for_organization(db, user, case.organization_id)
     if member is None:
         return False
     clearance = CLASSIFICATION_ORDER.get(member.clearance, -1)
@@ -416,12 +419,22 @@ def _document_visible(db: Session, user: User, document: EnterpriseDocument) -> 
 def snapshot(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """一次性拉取本人及组织授权可见的企业对象。"""
     ensure_default_organization(db, user)
-    cases = accessible_cases(db, user)
+    memberships = memberships_for_user(db, user)
+    member_by_org = {m.organization_id: m for m in memberships}
+    cases = accessible_cases(db, user, memberships=memberships)
     case_ids = [item.id for item in cases]
-    org_ids = [item.organization_id for item in memberships_for_user(db, user)]
-    documents = [d for d in db.scalars(select(EnterpriseDocument).where(or_(EnterpriseDocument.user_id == user.id, EnterpriseDocument.case_id.in_(case_ids)))) if _document_visible(db, user, d)]
+    case_by_id = {item.id: item for item in cases}
+    org_ids = [m.organization_id for m in memberships]
+    documents = []
+    for d in db.scalars(select(EnterpriseDocument).where(or_(EnterpriseDocument.user_id == user.id, EnterpriseDocument.case_id.in_(case_ids)))):
+        doc_case = case_by_id.get(d.case_id or "")
+        if _document_visible(db, user, d, doc_case, member_by_org.get(doc_case.organization_id if doc_case else "")):
+            documents.append(d)
     risks = list(db.scalars(select(EnterpriseRisk).where(or_(EnterpriseRisk.user_id == user.id, EnterpriseRisk.case_id.in_(case_ids)))))
-    rules = [item for item in db.scalars(select(EnterpriseRule).where(or_(EnterpriseRule.user_id == user.id, EnterpriseRule.organization_id.in_(org_ids)))) if rule_accessible(db, user, item)]
+    rules = [
+        item for item in db.scalars(select(EnterpriseRule).where(or_(EnterpriseRule.user_id == user.id, EnterpriseRule.organization_id.in_(org_ids))))
+        if rule_accessible(db, user, item, member=member_by_org.get(item.organization_id or ""))
+    ]
     tasks = list(db.scalars(select(EnterpriseTask).where(or_(EnterpriseTask.user_id == user.id, EnterpriseTask.case_id.in_(case_ids)))))
     briefs = list(db.scalars(select(EnterpriseBrief).where(or_(EnterpriseBrief.user_id == user.id, EnterpriseBrief.case_id.in_(case_ids)))))
     db.commit()

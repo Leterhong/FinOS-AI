@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from backend.personal_os.models import KnowledgeItem
 from backend.user.models import User
@@ -37,21 +37,23 @@ def _serialize(k: KnowledgeItem) -> dict:
 
 
 def list_items(
-    user: User, db, category: str | None = None, favorite: bool | None = None, q: str | None = None
+    user: User, db, category: str | None = None, favorite: bool | None = None, q: str | None = None, limit: int = 200
 ) -> list[dict]:
     stmt = select(KnowledgeItem).where(KnowledgeItem.user_id == user.id)
     if category:
         stmt = stmt.where(KnowledgeItem.category == category)
     if favorite is not None:
         stmt = stmt.where(KnowledgeItem.favorite == favorite)
-    rows = list(db.scalars(stmt.order_by(KnowledgeItem.created_at.desc())).all())
-    if q:
-        ql = q.lower()
-        rows = [
-            r
-            for r in rows
-            if ql in (r.title or "").lower() or ql in (r.content or "").lower() or ql in (r.tags or "").lower()
-        ]
+    if q and q.strip():
+        pattern = f"%{q.strip().replace(chr(92), chr(92) * 2).replace('%', chr(92) + '%').replace('_', chr(92) + '_')}%"
+        stmt = stmt.where(
+            or_(
+                KnowledgeItem.title.ilike(pattern, escape="\\"),
+                KnowledgeItem.content.ilike(pattern, escape="\\"),
+                KnowledgeItem.tags.ilike(pattern, escape="\\"),
+            )
+        )
+    rows = list(db.scalars(stmt.order_by(KnowledgeItem.created_at.desc()).limit(max(1, min(limit, 500)))).all())
     return [_serialize(r) for r in rows]
 
 

@@ -98,11 +98,12 @@ def has_org_role(db: Session, user: User, organization_id: str, minimum: str) ->
     return bool(member and ROLE_ORDER.get(member.role, -1) >= ROLE_ORDER.get(minimum, 99))
 
 
-def can_access_case(db: Session, user: User, case: EnterpriseCase, required: str = "viewer") -> bool:
+def can_access_case(db: Session, user: User, case: EnterpriseCase, required: str = "viewer", member: OrganizationMember | None = None) -> bool:
     if case.user_id == user.id:
         return True
     organization_id = case.organization_id or ""
-    member = member_for_organization(db, user, organization_id) if organization_id else None
+    if member is None:
+        member = member_for_organization(db, user, organization_id) if organization_id else None
     if member is None:
         return False
     if CLASSIFICATION_ORDER.get(member.clearance, -1) < CLASSIFICATION_ORDER.get(case.classification, 1):
@@ -124,9 +125,10 @@ def can_access_case(db: Session, user: User, case: EnterpriseCase, required: str
     )
 
 
-def accessible_cases(db: Session, user: User, required: str = "viewer") -> list[EnterpriseCase]:
-    memberships = memberships_for_user(db, user)
+def accessible_cases(db: Session, user: User, required: str = "viewer", memberships: list[OrganizationMember] | None = None) -> list[EnterpriseCase]:
+    memberships = memberships if memberships is not None else memberships_for_user(db, user)
     org_ids = [m.organization_id for m in memberships]
+    member_by_org = {m.organization_id: m for m in memberships}
     candidates = list(
         db.scalars(
             select(EnterpriseCase).where(
@@ -134,13 +136,17 @@ def accessible_cases(db: Session, user: User, required: str = "viewer") -> list[
             )
         )
     )
-    return [case for case in candidates if can_access_case(db, user, case, required)]
+    return [case for case in candidates if can_access_case(db, user, case, required, member_by_org.get(case.organization_id or ""))]
 
 
-def rule_accessible(db: Session, user: User, rule: EnterpriseRule, required_role: str = "viewer") -> bool:
+def rule_accessible(db: Session, user: User, rule: EnterpriseRule, required_role: str = "viewer", member: OrganizationMember | None = None) -> bool:
     if rule.user_id == user.id:
         return True
-    return bool(rule.organization_id and has_org_role(db, user, rule.organization_id, required_role))
+    if not rule.organization_id:
+        return False
+    if member is None:
+        member = member_for_organization(db, user, rule.organization_id)
+    return bool(member and ROLE_ORDER.get(member.role, -1) >= ROLE_ORDER.get(required_role, 99))
 
 
 def record_governance_audit(

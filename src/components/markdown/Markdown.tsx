@@ -7,7 +7,7 @@
  * 加粗/斜体/行内代码、代码块、引用、分割线、表格、段落。
  * 目的：把研判输出渲染成结构化文档，而不是按行号堆叠的纯文本。
  */
-import { Fragment, type ReactNode } from "react";
+import { Fragment, memo, type ReactNode } from "react";
 
 function renderInline(text: string, key: string): ReactNode[] {
   const nodes: ReactNode[] = [];
@@ -47,7 +47,7 @@ function splitRow(line: string): string[] {
   return line.replace(/^\s*\|/, "").replace(/\|\s*$/, "").split("|").map((cell) => cell.trim());
 }
 
-export function Markdown({ content, className }: { content: string; className?: string }) {
+function MarkdownImpl({ content, className }: { content: string; className?: string }) {
   const lines = content.replace(/\r\n/g, "\n").split("\n");
   const blocks: ReactNode[] = [];
   let i = 0;
@@ -153,3 +153,6 @@ export function Markdown({ content, className }: { content: string; className?: 
 
   return <div className={className ?? "space-y-2.5"}>{blocks.map((block, bi) => <Fragment key={bi}>{block}</Fragment>)}</div>;
 }
+
+/** 记忆化：内容不变时不重复解析 Markdown（流式场景只重渲染当前气泡）。 */
+export const Markdown = memo(MarkdownImpl);
