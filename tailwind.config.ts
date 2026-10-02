@@ -91,6 +91,7 @@ const config: Config = {
         "gradient-shift": "gradientShift 8s ease infinite",
         "fade-up": "fadeUp 0.5s ease-out forwards",
         "ping-slow": "pingSlow 3s cubic-bezier(0, 0, 0.2, 1) infinite",
+        "fade-in": "fadeIn 0.4s ease-out",
       },
       keyframes: {
         shimmer: {
@@ -115,6 +116,10 @@ const config: Config = {
         },
         pingSlow: {
           "75%, 100%": { transform: "scale(2)", opacity: "0" },
+        },
+        fadeIn: {
+          from: { opacity: "0" },
+          to: { opacity: "1" },
         },
       },
       boxShadow: {

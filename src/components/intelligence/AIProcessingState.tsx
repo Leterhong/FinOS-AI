@@ -8,6 +8,7 @@
  */
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { RotatingTip } from "@/components/feedback/RotatingTip";
 
 export type ProcessingStageState = "pending" | "active" | "done";
 
@@ -44,14 +45,21 @@ export function AIProcessingState({
   return (
     <div className={cn("flex flex-col gap-3", className)}>
       {(title || elapsedSeconds != null) && (
-        <p className="flex items-center gap-2 font-medium text-slate-300">
-          <Loader2 className="h-4 w-4 animate-spin text-intel" />
-          {title}
-          {elapsedSeconds != null && elapsedSeconds > 0 && (
-            <span className="text-[10px] font-normal text-slate-400">已执行 {elapsedSeconds} 秒</span>
-          )}
-        </p>
+        <div>
+          <p className="flex items-center gap-2 font-medium text-slate-300">
+            <Loader2 className="h-4 w-4 animate-spin text-intel" />
+            {title}
+            {elapsedSeconds != null && elapsedSeconds > 0 && (
+              <span className="text-[10px] font-normal text-slate-400">已执行 {elapsedSeconds} 秒</span>
+            )}
+          </p>
+          <RotatingTip className="mt-1" />
+        </div>
       )}
+      {/* 不确定进度条：只表示“仍在进行”，不谎报百分比。 */}
+      <div className="h-1 w-full overflow-hidden rounded-full bg-white/[0.06]">
+        <div className="h-full w-1/3 animate-shimmer rounded-full bg-[linear-gradient(90deg,transparent,rgba(34,211,238,.7),transparent)] bg-[length:200%_100%]" />
+      </div>
       <ul className={cn("space-y-1.5", mode === "detailed" && "space-y-2")}>
         {stages.map((stage) => (
           <li key={stage.id} className="flex items-center gap-2">

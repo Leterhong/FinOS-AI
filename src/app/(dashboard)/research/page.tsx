@@ -14,6 +14,7 @@ import { buildExternalContext } from "@/lib/external-context";
 import { Markdown } from "@/components/markdown/Markdown";
 import ExternalDataPanel from "@/components/data-display/ExternalDataPanel";
 import { useEnterpriseStore } from "@/store/enterprise-store";
+import { RotatingTip } from "@/components/feedback/RotatingTip";
 import { useModelStore } from "@/store/model-store";
 
 export default function ResearchPage() {
@@ -86,7 +87,7 @@ ${brief.summary}
     </div>
     <ExternalDataPanel />
     <EnterpriseDialog open={open} onClose={() => !generating && setOpen(false)} title="生成 AI 专题研究" description="模型只使用当前企业项目上下文，不会自动联网搜索">
-      <form onSubmit={(event) => void submit(event)} className="space-y-4"><label className="block"><span className="mb-1.5 block text-[11px] text-slate-400">研究主题</span><input required name="topic" placeholder="例如：核心客户集中度对经营现金流的影响" className="field-control" /></label><label className="block"><span className="mb-1.5 block text-[11px] text-slate-400">研究范围</span><textarea name="scope" rows={3} placeholder="指定行业、政策、企业、风险传导或待验证假设" className="field-control resize-none" /></label><div className="rounded-xl border border-amber-400/10 bg-amber-400/[0.035] p-3 text-[10px] leading-5 text-amber-100/60">如需实时政策、市场或舆情，请后续接入可信外部数据源。当前模型不会把自身记忆冒充实时来源。</div><div className="flex justify-end gap-2"><button type="button" disabled={generating} onClick={() => setOpen(false)} className="rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-400">取消</button><button type="submit" disabled={generating} className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018] disabled:opacity-50">{generating && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{generating ? "模型生成中" : "生成研究底稿"}</button></div></form>
+      <form onSubmit={(event) => void submit(event)} className="space-y-4"><label className="block"><span className="mb-1.5 block text-[11px] text-slate-400">研究主题</span><input required name="topic" placeholder="例如：核心客户集中度对经营现金流的影响" className="field-control" /></label><label className="block"><span className="mb-1.5 block text-[11px] text-slate-400">研究范围</span><textarea name="scope" rows={3} placeholder="指定行业、政策、企业、风险传导或待验证假设" className="field-control resize-none" /></label><div className="rounded-xl border border-amber-400/10 bg-amber-400/[0.035] p-3 text-[10px] leading-5 text-amber-100/60">如需实时政策、市场或舆情，请后续接入可信外部数据源。当前模型不会把自身记忆冒充实时来源。</div><div className="flex justify-end gap-2"><button type="button" disabled={generating} onClick={() => setOpen(false)} className="rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-400">取消</button><button type="submit" disabled={generating} className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018] disabled:opacity-50">{generating && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{generating ? "模型生成中" : "生成研究底稿"}</button></div>{generating && <RotatingTip className="text-right" />}</form>
     </EnterpriseDialog>
   </div>;
 }
