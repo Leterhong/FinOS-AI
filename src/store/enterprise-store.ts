@@ -1,7 +1,8 @@
 "use client";
 
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist } from "zustand/middleware";
+import { debouncedStorage } from "@/lib/debounced-storage";
 import {
   pushDelete,
   pushEntity,
@@ -764,6 +765,8 @@ export const useEnterpriseStore = create<EnterpriseState>()(
     {
       name: "finos-enterprise-workspace-v2",
       version: 3,
+      // 防抖写入 localStorage：合并高频 set，页面隐藏/卸载前强制落盘。
+      storage: createJSONStorage(() => debouncedStorage),
       // 版本升级保留既有数据（此前任何 version+1 都会清空整个工作区）。
       migrate: (persisted) => persisted ?? emptyWorkspace(),
       // 会话中断恢复：刷新/崩溃后残留的「解析中」不可能再有回调来写终态，
