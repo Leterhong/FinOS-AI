@@ -568,6 +568,18 @@ html.light .field-control:hover {
 html.light .field-control:focus {
   background-color: rgba(15, 23, 42, 0.05);
 }
+/* ModelFormDialog 内 styled-jsx :global(.input) 的浅色适配。 */
+html.light .input {
+  background: rgba(15, 23, 42, 0.03);
+  border-color: rgba(15, 23, 42, 0.12);
+  color: #0F172A;
+}
+html.light .input::placeholder {
+  color: rgba(15, 23, 42, 0.35);
+}
+html.light .input:focus {
+  border-color: rgba(14, 159, 99, 0.5);
+}
 html.light .mesh-bg {
   background:
     radial-gradient(ellipse 70% 55% at 10% 0%, rgba(34, 230, 168, 0.16) 0%, transparent 62%),

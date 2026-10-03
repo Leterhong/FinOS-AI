@@ -18,11 +18,11 @@ export default function RootLayout({
   return (
     <html lang="zh-CN" className="dark" data-scroll-behavior="smooth" suppressHydrationWarning>
       <head>
-        {/* 首屏绘制前应用已保存的主题，避免深浅色闪烁（FOUC）。 */}
+        {/* 首屏绘制前应用主题，避免深浅色闪烁（FOUC）。未手动选择时跟随系统偏好。 */}
         <script
           dangerouslySetInnerHTML={{
             __html:
-              "(function(){try{var t=localStorage.getItem('finos-theme');if(t==='light'){var e=document.documentElement;e.classList.remove('dark');e.classList.add('light');e.style.colorScheme='light';}}catch(e){}})();",
+              "(function(){try{var t=localStorage.getItem('finos-theme');if(t!=='light'&&t!=='dark'){t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';}if(t==='light'){var e=document.documentElement;e.classList.remove('dark');e.classList.add('light');e.style.colorScheme='light';}}catch(e){}})();",
           }}
         />
       </head>

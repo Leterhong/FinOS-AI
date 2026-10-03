@@ -27,7 +27,7 @@ function Donut({ segments, center, caption }: { segments: Array<{ label: string;
   return (
     <div className="flex h-full items-center gap-4">
       <svg viewBox="0 0 42 42" className="h-32 w-32 shrink-0 -rotate-90">
-        <circle cx="21" cy="21" r="15.9155" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="4" />
+        <circle cx="21" cy="21" r="15.9155" fill="none" stroke="var(--finos-border)" strokeWidth="4" />
         {total > 0 && segments.map((item) => {
           const pct = (item.value / total) * 100;
           const el = <circle key={item.label} cx="21" cy="21" r="15.9155" fill="none" stroke={item.color} strokeWidth="4" strokeDasharray={`${pct} ${100 - pct}`} strokeDashoffset={-offset} />;
@@ -117,7 +117,7 @@ function Heatmap({ rows, cols, empty }: { rows: Array<{ label: string; counts: n
               const intensity = count / max;
               const color = LEVEL_META[LEVEL_ORDER[index]].color;
               return (
-                <div key={index} className="grid h-7 place-items-center rounded-md border border-white/[0.05] text-[10px]" style={{ backgroundColor: count ? `${color}${Math.round(20 + intensity * 60).toString(16).padStart(2, "0")}` : "rgba(255,255,255,0.02)", color: count ? "var(--finos-text-primary)" : "var(--finos-text-muted)" }}>
+                <div key={index} className="grid h-7 place-items-center rounded-md border border-white/[0.05] text-[10px]" style={{ backgroundColor: count ? `${color}${Math.round(20 + intensity * 60).toString(16).padStart(2, "0")}` : "var(--surface-1)", color: count ? "var(--finos-text-primary)" : "var(--finos-text-muted)" }}>
                   {count || "—"}
                 </div>
               );
