@@ -12,7 +12,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6.svg)](https://www.typescriptlang.org/)
 [![Security Policy](https://img.shields.io/badge/security-policy-f59e0b.svg)](./SECURITY.md)
 
-[图文详解](./docs/introduction.md) · [产品能力](#产品能力) · [快速开始](#快速开始) · [技术架构](#技术架构) · [安全边界](#安全与责任边界) · [路线图](#路线图)
+[图文详解](./docs/introduction.md) · [产品能力](#产品能力) · [界面预览](#界面预览) · [快速开始](#快速开始) · [技术架构](#技术架构) · [安全边界](#安全与责任边界)
 
 </div>
 
@@ -40,21 +40,9 @@ FinOS AI 是一个面向企业金融、产业金融、授信尽调、经营分�
 
 ## 当前版本状态
 
-FinOS AI 2.2 已完成企业金融信息架构、可配置模型中心、AI 研判主链路与组织治理控制。开源版本无需登录即可进入零数据工作区；系统不会自动创建企业、资产、风险、规则或研究结论，所有业务记录均由用户主动录入或基于真实资料生成。
+FinOS AI 2.2 已完成企业金融信息架构、可配置模型中心、AI 研判主链路与组织治理控制。开源版本无需登录即可进入零数据工作区，系统不自动创建企业、资产、风险、规则或研究结论，所有业务记录均由用户主动录入或基于真实资料生成。
 
-| 能力 | 当前状态 |
-| --- | --- |
-| 企业工作台、项目工作台、模型中心与业务模块 | 可用，支持完整页面交互 |
-| OpenAI、DeepSeek、通义千问、Claude、Gemini、智谱、Moonshot、Ollama 与自定义兼容接口 | 可配置、可测试、可切换默认模型及任务角色 |
-| 智能助手、资料研判、Agent 与投研生成 | 调用当前默认模型，返回实际模型、耗时与 Token 用量 |
-| 项目、资料、事实、风险、规则测试、任务审计与投研底稿 | 零预置数据；本地即时持久化 + 服务端同步，可一键清空 |
-| 资料研判 | 批量上传；文本/图片 OCR、表格结构与证据坐标 → 结构化事实 → 确定性规则命中 → 叙述生成 |
-| 项目交付 | 财务指标与跨期趋势、候选风险人工确认、流程留痕、Markdown 研判报告导出 |
-| FastAPI、数据库、认证、文件与模型基础设施 | 已提供并具有自动化测试 |
-| 真实企业对象与证据链服务端持久化 | 已提供；开发自愈补列，生产使用 Alembic 迁移 |
-| 企业组织、五级 RBAC、项目授权、数据分级与治理审计 | 已提供，并有跨用户/密级回归测试 |
-| 规则历史回放、模型评测集、提示词防护与人工复核 | 已提供统一治理工作台 |
-| 受控 JSON/CSV 企业数据源连接器与运行可观测性 | 已提供，连接器强制公网校验、限量与复核 |
+适用方向：企业经营质量分析与融资材料预审、授信尽调与贷前核验、产业链与供应链金融研究、并购与投融资资料整理、制度规则检索与人工复核、行业政策与企业舆情投研底稿。
 
 无登录模式使用浏览器隔离的访客身份，适合单机评估，不等同于企业身份源或共享设备隔离。组织、成员与项目权限在完整后端模式生效；生产环境仍应接入企业账户生命周期、HTTPS、密钥管理和留存策略。详见 [安全策略](./SECURITY.md) 和 [安全设计](./docs/security.md)。
 
@@ -92,47 +80,15 @@ FinOS AI 采用深色金融工作台设计，浅色主题达 WCAG AA，移动端
 
 > 📖 **首次使用？** 请查看内置 [使用指引](/guide)、[完整使用文档](./docs/user-guide.md) 或 [图文详解](./docs/introduction.md)，按 8 个步骤完成从"上传资料"到"输出风险清单"的完整研判。
 
-### 适用方向
-
-- 企业经营质量分析与融资材料预审
-- 授信尽调、贷前资料核验与风险排查
-- 产业链、供应链金融和核心企业研究
-- 并购、投融资项目资料整理与风险清单
-- 制度规则检索、匹配和人工复核辅助
-- 行业、政策、企业和舆情投研底稿整理
-
 ## 设计原则
 
-- **Evidence first**：重要判断必须能回到原始资料、事实字段和引用位置；UI 提供 Evidence Chain（结论 → 事实 → 证据 → 来源）的逐级追溯。
-- **Human in the loop**：Agent 生成提示和草稿，关键决策由授权人员确认。
-- **Explainable rules**：展示规则命中原因、潜在影响、证据与处理状态。
-- **Secure by default**：密钥不进入前端，上传和出站访问经过安全边界。
-- **Open and self-hosted**：MIT 开源，支持自托管和按业务需要扩展。
+Evidence first · Human in the loop · Explainable rules · Secure by default · Open and self-hosted：重要判断可回溯到原始资料、事实与引用位置，关键决策由授权人员确认，规则命中可解释，密钥不进入前端，MIT 开源可自托管。完整说明见 [图文详解 · FinOS AI 是什么](./docs/introduction.md#1-finos-ai-是什么)。
 
 ## 技术架构
 
-```text
-Browser
-  └─ Next.js 15 / React 19 / TypeScript / Tailwind CSS
-       ├─ 企业零数据工作区（Zustand 本地持久化）
-       ├─ Route Handlers（工作区会话、模型配置、文档解析与 AI 网关）
-       ├─ AES-256-GCM 模型凭据存储（仅服务端可解密）
-       └─ FastAPI
-            ├─ 访客会话 / JWT / HttpOnly Refresh Cookie
-            ├─ 文档、Agent、任务、金融、组织治理与审计服务
-            ├─ SQLite（开发）/ PostgreSQL（生产）
-            └─ Redis（可选，可降级）
-```
+浏览器侧 Next.js 15 / React 19 / TypeScript strict / Tailwind CSS / Zustand，经 Route Handlers 承载工作区会话、模型配置、文档解析与 AI 网关；服务端 FastAPI + SQLAlchemy 2，开发用 SQLite、生产用 PostgreSQL 16，Redis 7 可选并可降级。模型凭据以 AES-256-GCM 仅服务端加密，出站访问经 SSRF 防护。文件处理覆盖 `mammoth`（Word）、`pdf-parse`（PDF）、图片视觉 OCR 与 Excel/CSV 表格结构，并保留行号、单元格与图像坐标。
 
-| 层 | 技术 |
-| --- | --- |
-| 前端 | Next.js 15、React 19、TypeScript strict、Tailwind CSS、Zustand、Framer Motion |
-| 设计系统 | `--finos-*` CSS 令牌（色彩 / 表面 / 动效）、组件分层（ui / intelligence / evidence / feedback / workspace / data-display） |
-| 后端 | FastAPI、SQLAlchemy 2、Pydantic v2、Uvicorn |
-| 文档处理 | `mammoth`（Word）、`pdf-parse`（PDF）、图片视觉 OCR、Excel/CSV 表格结构、证据行号/单元格/图像坐标 |
-| 数据 | SQLite、PostgreSQL 16、Redis 7 |
-| 安全 | 短期 Access Token、HttpOnly Refresh Cookie、AES-256-GCM、限流、可信代理、SSRF 防护 |
-| 部署 | Docker Compose、nginx、独立 Next.js 运行产物 |
+完整分层、数据流与部署拓扑见 [架构文档](./docs/architecture.md)。
 
 ## 快速开始
 
@@ -147,37 +103,22 @@ npm install
 npm run dev
 ```
 
-打开 <http://localhost:3000>。首次进入不需要账号，也不会加载任何预置业务数据。建议依次创建企业项目、配置并测试 AI 模型、上传真实资料、建立适用规则，再启动研判。
-
-如果使用 `npm run build && npm start` 进行生产预览，请先复制 `.env.local.example` 为 `.env.local`，并为 `FINOS_AUTH_SECRET` 与 `FINOS_DATA_KEY` 设置两个独立的强随机值。生产模式会拒绝公开的开发兜底密钥，这是有意的安全保护。
+打开 <http://localhost:3000>，无需账号，也不会加载任何预置业务数据。生产预览需先复制 `.env.local.example` 为 `.env.local`，并为 `FINOS_AUTH_SECRET` 与 `FINOS_DATA_KEY` 设置两个独立的强随机值；生产模式会拒绝公开的开发兜底密钥。
 
 ### 配置 AI 模型
 
-1. 打开 `/models`，选择模型供应商并填写 API Key、模型名称与可选接口地址。
-2. 为模型选择通用、对话、复杂研判、图像理解或长文档任务角色。
-3. 保存后点击“测试连接”；测试通过的配置可以设为默认模型。
-4. 在智能助手、资料研判、Agent 中心或投研中心发起调用。
-
-API Key 通过 HttpOnly 工作区会话隔离，在服务端使用 AES-256-GCM 加密保存；返回浏览器时只提供掩码。Ollama 或自建 OpenAI 兼容服务可使用自定义 Base URL。
+打开 `/models` 选择供应商，填写 API Key、模型名称与可选接口地址，保存后点击「测试连接」，通过即可设为默认模型并选择任务角色。API Key 在工作区会话隔离下于服务端以 AES-256-GCM 加密保存，返回浏览器时只提供掩码；Ollama 或自建兼容服务可使用自定义 Base URL。
 
 ### 启动完整本地服务
 
 要求：Python 3.11+。
 
-```powershell
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
-.\.venv\Scripts\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8300 --reload
-
-# 另一个终端
-npm run dev
-```
-
-macOS / Linux：
-
 ```bash
 python -m venv .venv
+
+# Windows 使用 .\.venv\Scripts\activate
 source .venv/bin/activate
+
 pip install -r backend/requirements.txt
 python -m uvicorn backend.main:app --host 127.0.0.1 --port 8300 --reload
 
@@ -185,9 +126,7 @@ python -m uvicorn backend.main:app --host 127.0.0.1 --port 8300 --reload
 npm run dev
 ```
 
-后端健康检查：<http://127.0.0.1:8300/api/health>。
-
-> Next.js 已内置 fallback rewrite：所有未匹配到 Next.js 路由的 `/api/*` 请求自动代理到 `http://127.0.0.1:8300`，无需手动设置 `NEXT_PUBLIC_BACKEND_URL`。可通过 `BACKEND_PROXY_URL` 环境变量覆盖后端地址。
+后端健康检查 <http://127.0.0.1:8300/api/health>。Next.js 内置 fallback rewrite，未匹配的 `/api/*` 会自动代理到 `http://127.0.0.1:8300`，无需设置 `NEXT_PUBLIC_BACKEND_URL`，可用 `BACKEND_PROXY_URL` 覆盖。
 
 ### Docker Compose
 
@@ -197,25 +136,13 @@ cp .env.example .env
 docker compose up --build -d
 ```
 
-通过 <http://localhost> 访问。Docker 默认经 nginx 使用同源 `/api` 代理，因此 `NEXT_PUBLIC_BACKEND_URL` 保持为空。
+通过 <http://localhost> 访问，Docker 默认经 nginx 使用同源 `/api` 代理。
 
 ## 配置
 
-配置模板：
+生产环境至少需要为 `JWT_SECRET`、`ENCRYPTION_MASTER_KEY`、`FINOS_DATA_KEY`、`POSTGRES_PASSWORD`、`REDIS_PASSWORD` 配置强随机值，缺失、过短或使用示例占位值时前后端同一策略拒绝启动。配置模板见 [`.env.example`](./.env.example)（Docker Compose）、[`.env.local.example`](./.env.local.example)（Next.js）与 [`backend/.env.example`](./backend/.env.example)（FastAPI）。
 
-- [`.env.example`](./.env.example)：Docker Compose
-- [`.env.local.example`](./.env.local.example)：Next.js 本地开发
-- [`backend/.env.example`](./backend/.env.example)：FastAPI
-
-生产环境至少需要配置强随机值：
-
-- `JWT_SECRET`
-- `ENCRYPTION_MASTER_KEY`
-- `FINOS_DATA_KEY`
-- `POSTGRES_PASSWORD`
-- `REDIS_PASSWORD`
-
-不要给模型密钥添加 `NEXT_PUBLIC_` 前缀；该前缀变量会被编译进浏览器产物。真实 `.env`、数据库、上传目录、虚拟环境和构建产物均不应提交到 Git。
+模型密钥不要添加 `NEXT_PUBLIC_` 前缀，该前缀变量会编译进浏览器产物。真实 `.env`、数据库、上传目录、虚拟环境和构建产物均不应提交到 Git。
 
 ## 测试与质量门禁
 
@@ -232,71 +159,15 @@ node tests/e2e/main-chain.mjs   # 端到端主链路（本地 mock LLM，需先 
 
 ## 安全与责任边界
 
-已实现的核心控制包括：
+- 短期 Access Token 仅驻留前端内存，Refresh Token 使用 HttpOnly Cookie 并以原子吊销实现轮换与重放检测。
+- 上传文件分块读取并限制大小；Webhook 与模型 Base URL 拒绝本机、内网、保留地址和自动重定向，仅信任明确配置的反向代理来源。
+- 模型凭据以 AES-256-GCM 加密落盘，解密失败时拒绝读写并保留原密文；模型密钥、数据库凭据和企业资料不进入公开仓库或浏览器构建。
 
-- Access Token 默认 15 分钟且仅驻留前端内存，Refresh Token 使用 HttpOnly Cookie 并以原子吊销实现轮换与重放检测。
-- 生产环境缺失、过短或使用示例占位值的 JWT / 数据加密密钥时拒绝启动（前后端同一策略）。
-- 上传文件分块读取并限制大小，文件路径必须保持在允许目录内。
-- Webhook 等出站 URL 拒绝本机、内网、保留地址和自动重定向；模型 Base URL 同样拒绝云元数据/链路本地地址，本机与内网地址默认仅限开发环境、生产需显式放行。
-- 仅信任明确配置的反向代理来源提供的转发地址（限流与审计同一判定）。
-- 模型凭据以 AES-256-GCM 加密落盘，解密失败时拒绝读写而不是清空；健康检查与错误响应不泄漏内部细节。
-- 模型密钥、数据库凭据和企业资料不进入公开仓库或浏览器构建（`.dockerignore` 同步排除子目录环境文件）。
-
-项目已经提供应用层组织角色、项目授权、数据分级、复核与审计控制，但这不自动构成完成企业身份接入、基础设施隔离或监管认证的 SaaS 产品。部署者仍须对接真实身份源，并完成日志留存、备份恢复、模型供应商评估和适用地区的监管合规。模式对比与上线门槛见 [部署模式说明](./docs/deployment-modes.md)。
-
-发现漏洞时，请不要创建公开 Issue，也不要上传真实企业数据。按照 [`SECURITY.md`](./SECURITY.md) 使用 GitHub 私密漏洞报告。
-
-## 项目结构
-
-```text
-FinOS-AI/
-├─ src/app/(dashboard)/       # 企业工作台、模型中心、治理与业务模块（含 /guide 使用指引）
-├─ src/app/api/enterprise/ai/ # 企业助手、Agent 与资料研判 AI 网关（SSE 流式）
-├─ src/components/ui/         # 基础 UI 组件（Button、Badge、Tooltip）
-├─ src/components/enterprise/ # 企业 UI 基础组件
-├─ src/components/intelligence/ # AI 组件（ProcessingState、ExecutionTimeline）
-├─ src/components/evidence/   # 证据链组件（EvidenceReference、EvidenceChain）
-├─ src/components/feedback/   # 反馈组件（Toast、ErrorState）
-├─ src/components/workspace/  # 工作区组件（DetailDrawer）
-├─ src/components/data-display/ # 数据展示（EnterpriseDataTable）
-├─ src/store/                 # 工作区状态、业务操作与服务端同步
-├─ src/lib/rule-engine.ts     # 确定性规则引擎（纯函数，非 LLM）
-├─ src/types/                 # TypeScript 业务模型
-├─ backend/                   # FastAPI、数据库、安全与服务层
-│  ├─ enterprise/            # 企业对象持久化（6 表 CRUD + 快照）
-│  └─ governance/            # 组织权限、分级、复核、评测、连接器和可观测性
-├─ tests/                     # 前端契约、后端回归、规则引擎单测与端到端
-├─ deploy/                    # Docker 与 nginx 配置
-└─ docs/                      # 架构、安全、API、使用指引、图文详解与部署资料
-```
-
-## 路线图
-
-- [x] 企业金融产品定位、信息架构与 UI 2.0
-- [x] 项目、资料、风险、投研、规则、Agent、流程和助手体验闭环
-- [x] 无登录零数据工作区、浏览器持久化和响应式适配
-- [x] 多供应商模型配置、加密凭据、连通测试与默认模型切换
-- [x] 智能助手、文档研判、Agent 和投研生成接入真实模型调用
-- [x] 会话、上传、出站访问、可信代理和并发任务安全加固
-- [x] 企业对象、证据链、规则测试与工作流审计同步到服务端数据库
-- [x] 组织、角色、项目权限、数据分级和完整审计日志
-- [x] OCR、表格结构识别和真实证据坐标
-- [x] 可配置确定性规则、版本与真实测试样本记录
-- [x] 完整规则变更历史与历史版本回放
-- [x] 模型评测集、细粒度提示词防护和生产级人机复核闭环
-- [x] 企业数据源连接器和可观测性体系
-- [x] 企业设计令牌体系、组件分层、Command Palette 与 Evidence Chain UI
-
-2.2 路线图已全部落地。后续迭代将以真实部署反馈、评测数据和合规要求驱动，不用预置演示数据扩充表面功能。
+FinOS AI 提供应用层组织角色、项目授权、数据分级、复核与审计控制，部署者仍须对接真实身份源，并完成日志留存、备份恢复、模型供应商评估和适用地区的监管合规。完整清单见 [安全策略](./SECURITY.md) 与 [安全设计](./docs/security.md)，模式对比与上线门槛见 [部署模式说明](./docs/deployment-modes.md)。发现漏洞请使用 GitHub 私密漏洞报告，不要创建公开 Issue 或上传真实企业数据。
 
 ## 参与贡献
 
-欢迎通过 Issue 讨论产品建议，通过 Pull Request 提交改进。提交前请：
-
-1. 运行类型检查、测试和生产构建。
-2. 不提交真实企业资料、个人信息、数据库或任何密钥。
-3. 对安全问题使用私密报告渠道，而不是公开 Issue。
-4. 在涉及金融判断时保留证据、解释和人工复核边界。
+欢迎通过 Issue 讨论产品建议，通过 Pull Request 提交改进。提交前请运行类型检查、测试和生产构建，不提交真实企业资料、个人信息、数据库或任何密钥，对安全问题使用私密报告渠道，并在涉及金融判断时保留证据、解释和人工复核边界。
 
 ## License
 
