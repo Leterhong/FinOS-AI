@@ -15,12 +15,16 @@ import { useModelStore } from "@/store/model-store";
 import { AIExecutionTimeline } from "@/components/intelligence/AIExecutionTimeline";
 import { toast } from "@/components/feedback/toast";
 
-const capabilities = [
-  [FileSearch, "资料理解", "读取当前项目关联的资料元数据，识别可用事实与缺口"],
-  [Braces, "规则匹配", "把已录入业务规则与可用事实进行可解释匹配"],
-  [ShieldCheck, "风险研判", "区分事实、推断与不确定性，形成复核清单"],
-  [GitBranch, "流程辅助", "把需要补充和人工核验的事项整理为下一步动作"],
-] as const;
+type AgentRole = "document" | "rules" | "risk" | "workflow";
+
+/** 四个子 Agent：各自带专属底层提示词（服务端强制），不进入技能中心。 */
+const AGENT_DEFS: Array<{ id: AgentRole; icon: typeof FileSearch; title: string; text: string; question: string }> = [
+  { id: "document", icon: FileSearch, title: "资料理解", text: "读取当前项目关联的资料元数据，识别可用事实与缺口", question: "仅执行资料理解：列出当前项目可用的结构化事实、字段/期间缺口与可信度，以及需要补充的资料；不要输出风险结论。" },
+  { id: "rules", icon: Braces, title: "规则匹配", text: "把已录入业务规则与可用事实进行可解释匹配", question: "仅执行规则匹配：把已录入业务规则与可用事实逐条匹配，明确命中/未命中及依据；事实不足时指出缺口，不得臆造数值或规则。" },
+  { id: "risk", icon: ShieldCheck, title: "风险研判", text: "区分事实、推断与不确定性，形成复核清单", question: "仅执行风险研判：严格区分事实、推断与不确定性，输出候选风险与人工复核清单；证据不足时不得给出确定性结论。" },
+  { id: "workflow", icon: GitBranch, title: "流程辅助", text: "把需要补充和人工核验的事项整理为下一步动作", question: "仅执行流程辅助：把需要补充与人工核验的事项整理为下一步动作、建议负责人与截止时间，不编造已完成的动作。" },
+];
+const ALL_QUESTION = "请执行一次完整的企业经营与风险研判，列出可用事实、适用规则、风险观察、信息缺口和人工复核清单。";
 
 export default function AgentsPage() {
   const { cases, activeCase, activeCaseId, setActiveCaseId } = useActiveEnterpriseCase();
@@ -35,6 +39,7 @@ export default function AgentsPage() {
   const addRisk = useEnterpriseStore((state) => state.addRisk);
   const addTask = useEnterpriseStore((state) => state.addTask);
   const active = useModelStore((state) => state.active);
+  const [activeAgent, setActiveAgent] = useState<AgentRole | "all">("all");
   const [running, setRunning] = useState(false);
   const [notice, setNotice] = useState("");
   const [streamText, setStreamText] = useState("");
@@ -53,11 +58,12 @@ export default function AgentsPage() {
   const caseRisks = useMemo(() => risks.filter((item) => item.caseId === activeCaseId), [activeCaseId, risks]);
   const canRun = Boolean(active?.configured && activeCase && caseDocuments.length > 0);
 
-  const run = async () => {
+  const run = async (agentId: AgentRole | "all" = activeAgent) => {
     if (!canRun || running) return;
+    const def = AGENT_DEFS.find((item) => item.id === agentId);
     const startedAt = performance.now();
     const currentRun = beginAgentRun({
-      task: `研判 ${activeCase?.company} 的 ${caseDocuments.length} 份资料`,
+      task: `${def ? `${def.title} Agent` : "全流程研判"} · ${activeCase?.company} 的 ${caseDocuments.length} 份资料`,
       model: active?.modelName,
       caseId: activeCase!.id,
       company: activeCase!.company,
@@ -74,7 +80,8 @@ export default function AgentsPage() {
       const result = await streamEnterpriseAI(
         {
           mode: "agent",
-          question: "请执行一次完整的企业经营与风险研判，列出可用事实、适用规则、风险观察、信息缺口和人工复核清单。",
+          agent: agentId === "all" ? undefined : agentId,
+          question: def?.question ?? ALL_QUESTION,
           context: { cases: [activeCase!], documents: caseDocuments, rules, risks: caseRisks, external: external ?? undefined },
         },
         (delta) => {
@@ -179,14 +186,30 @@ export default function AgentsPage() {
   ].filter(Boolean) as string[];
 
   return <div className="page-shell">
-    <PageIntro eyebrow="AI agent orchestration" title="企业金融 Agent 中心" description="由当前默认大模型执行真实研判调用。系统不会用计时器模拟运行，也不会在没有项目或资料时生成伪造结果。" actions={<><button onClick={() => void run()} disabled={!canRun || running} className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018] disabled:cursor-not-allowed disabled:opacity-40">{running ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}{running ? "模型研判中…" : "运行研判 Agent"}</button>{running && <button onClick={cancelRun} className="rounded-xl border border-white/15 px-4 py-2.5 text-xs text-slate-300 transition hover:border-rose-400/30 hover:text-rose-200">取消</button>}</>} />
+    <PageIntro eyebrow="AI agent orchestration" title="企业金融 Agent 中心" description="由当前默认大模型执行真实研判调用。每个子 Agent 拥有专属底层提示词；系统不会用计时器模拟运行，也不会在没有项目或资料时生成伪造结果。" actions={<><button onClick={() => void run()} disabled={!canRun || running} className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018] disabled:cursor-not-allowed disabled:opacity-40">{running ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}{running ? "模型研判中…" : activeAgent === "all" ? "运行全流程 Agent" : `运行「${AGENT_DEFS.find((item) => item.id === activeAgent)?.title}」`}</button>{running && <button onClick={cancelRun} className="rounded-xl border border-white/15 px-4 py-2.5 text-xs text-slate-300 transition hover:border-rose-400/30 hover:text-rose-200">取消</button>}</>} />
 
     {running && <Panel><PanelHeader eyebrow="Live output" title="模型正在生成（实时）" description="推理模型可能需要数分钟；生成过程实时可见，可随时取消。" />{skill && <p className="border-b border-white/[0.06] px-5 py-2 text-[10px] text-cyan-300">当前技能：{skill.name}</p>}<div className="scrollbar-thin max-h-72 overflow-y-auto p-5 text-xs leading-6 text-slate-400">{streamText ? <Markdown content={streamText} /> : <div><span className="inline-flex items-center gap-2"><Loader2 className="h-3.5 w-3.5 animate-spin text-cyan-300" />已发送请求，等待模型首个输出</span><RotatingTip className="mt-1.5" /></div>}</div></Panel>}
     {!running && skill && <p className="text-[10px] text-cyan-300/80">上次研判使用技能：{skill.name}</p>}
 
     <CaseContextSelector cases={cases} value={activeCaseId} onChange={setActiveCaseId} detail={`${caseDocuments.length} 份资料 · ${caseRisks.length} 个既有风险，仅当前项目会进入模型`} />
 
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{capabilities.map(([Icon, title, text]) => <Panel key={title} className="p-4"><div className="grid h-10 w-10 place-items-center rounded-xl border border-cyan-400/15 bg-cyan-400/[0.07]"><Icon className="h-5 w-5 text-cyan-300" /></div><h2 className="mt-4 text-sm font-semibold text-slate-100">{title} Agent</h2><p className="mt-2 text-[11px] leading-5 text-slate-500">{text}</p></Panel>)}</div>
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {AGENT_DEFS.map((def) => {
+        const Icon = def.icon;
+        const selected = activeAgent === def.id;
+        return <Panel key={def.id} className={`p-4 transition ${selected ? "border-cyan-400/30 ring-1 ring-inset ring-cyan-400/20" : ""}`}>
+          <button type="button" onClick={() => setActiveAgent(selected ? "all" : def.id)} className="block w-full text-left">
+            <div className="flex items-center gap-2">
+              <div className="grid h-10 w-10 place-items-center rounded-xl border border-cyan-400/15 bg-cyan-400/[0.07]"><Icon className="h-5 w-5 text-cyan-300" /></div>
+              {selected && <span className="ml-auto rounded-md border border-cyan-400/25 bg-cyan-400/[0.08] px-2 py-0.5 text-[9px] text-cyan-200">已选中</span>}
+            </div>
+            <h2 className="mt-4 text-sm font-semibold text-slate-100">{def.title} Agent</h2>
+            <p className="mt-2 text-[11px] leading-5 text-slate-400">{def.text}</p>
+          </button>
+          <button type="button" onClick={() => { setActiveAgent(def.id); void run(def.id); }} disabled={!canRun || running} className="mt-3 w-full rounded-lg border border-white/[0.1] py-2 text-[10px] text-slate-300 transition hover:border-cyan-400/25 hover:text-cyan-200 disabled:opacity-40">单独运行此 Agent</button>
+        </Panel>;
+      })}
+    </div>
 
     {!canRun && <Panel><EmptyStateCard icon={active?.configured ? FileSearch : Cpu} title="研判链路尚未就绪" description={`还需要：${missing.join("、")}。配置完成后，运行按钮会发起真实模型请求并保存输出。`} action={<div className="flex flex-wrap justify-center gap-2">{!active?.configured && <Link href="/models" className="rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]">配置模型</Link>}{!activeCase && <Link href="/cases" className="rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-300">创建项目</Link>}{activeCase && caseDocuments.length === 0 && <Link href={`/documents?caseId=${encodeURIComponent(activeCase.id)}`} className="rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-300">上传当前项目资料</Link>}</div>} /></Panel>}
 

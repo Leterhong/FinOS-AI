@@ -109,6 +109,8 @@ export async function streamEnterpriseAI(
     mode?: "chat" | "agent" | "research";
     context?: EnterpriseAIContext;
     skillId?: string;
+    /** 指定子 Agent 角色（资料理解/规则匹配/风险研判/流程辅助），服务端强制其专属提示词。 */
+    agent?: "document" | "rules" | "risk" | "workflow";
   },
   onDelta: (text: string) => void,
   signal?: AbortSignal,
@@ -138,6 +140,8 @@ async function streamOnce(
     mode?: "chat" | "agent" | "research";
     context?: EnterpriseAIContext;
     skillId?: string;
+    /** 指定子 Agent 角色（资料理解/规则匹配/风险研判/流程辅助），服务端强制其专属提示词。 */
+    agent?: "document" | "rules" | "risk" | "workflow";
   },
   onDelta: (text: string) => void,
   signal: AbortSignal | undefined,

@@ -5,6 +5,7 @@ import { DatabaseZap, Loader2, Search } from "lucide-react";
 import { Panel, PanelHeader } from "@/components/enterprise/EnterpriseUI";
 import { Select } from "@/components/ui/Select";
 import { backendAuthedFetch } from "@/lib/enterprise-sync";
+import { ensureWorkspaceSession } from "@/lib/workspace-session";
 
 type ProviderId = "akshare" | "fx" | "worldbank" | "gleif" | "sec";
 
@@ -37,6 +38,8 @@ export default function ExternalDataPanel() {
 
   useEffect(() => {
     void (async () => {
+      // 先确保工作区会话就绪，避免首帧令牌尚未换发导致的 401。
+      try { await ensureWorkspaceSession(); } catch { /* 忽略 */ }
       try {
         const resp = await backendAuthedFetch("/api/data-sources/akshare/datasets");
         const payload = await resp.json() as { data?: { datasets?: Array<{ id: string; label: string; category: string }> } };
