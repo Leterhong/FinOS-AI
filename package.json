@@ -18,7 +18,7 @@
     "clsx": "^2.1.1",
     "docx": "^9.8.1",
     "framer-motion": "^11.15.0",
-    "lucide-react": "^0.468.0",
+    "lucide-react": "^1.49.0",
     "mammoth": "^1.12.1",
     "next": "^15.3.0",
     "pdf-parse": "^1.1.1",
