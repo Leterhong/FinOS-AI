@@ -82,7 +82,7 @@
     --finos-border: rgba(15, 23, 42, 0.10);
     --finos-text-primary: #0F172A;
     --finos-text-secondary: #475569;
-    --finos-text-muted: #64748B;
+    --finos-text-muted: #5B6674;
     color-scheme: light;
   }
 
@@ -315,59 +315,165 @@
   }
 }
 
-/* ── 浅色主题：将历史页面大量使用的深色工具类（text-white / slate / 半透明白底白边）
-   在 .light 作用域内重映射为浅色语义，避免逐组件改造。选择器带 html.light 前缀，
-   特异性高于单一工具类，可稳定覆盖。── */
+/* ── 浅色主题：将历史页面大量使用的深色工具类在 .light 作用域内重映射为浅色语义。
+   【关键】用 [class^=] / [class*=" "] 前缀边界匹配「基础 token」，而非子串匹配，
+   这样不会误命中 hover:/focus:/group-hover: 等变体（它们前面是「:」），
+   避免把悬停色变成常态色、或给仅悬停才有底色的元素加上常驻底色。
+   变体则用带 :hover/:focus 的独立规则在浅色下恢复可见反馈。── */
 html.light .text-white {
   color: #0F172A;
 }
-html.light [class*="text-white/"] {
-  color: rgba(15, 23, 42, 0.55);
+
+/* 文字：半透明白 */
+html.light [class^="text-white/"],
+html.light [class*=" text-white/"] {
+  color: rgba(15, 23, 42, 0.62);
 }
-html.light [class*="text-slate-100"],
-html.light [class*="text-slate-200"] {
+
+/* 文字：slate 灰阶（深→浅依次提亮层级） */
+html.light [class^="text-slate-1"],
+html.light [class*=" text-slate-1"],
+html.light [class^="text-slate-2"],
+html.light [class*=" text-slate-2"] {
   color: #0F172A;
 }
-html.light [class*="text-slate-300"] {
+html.light [class^="text-slate-3"],
+html.light [class*=" text-slate-3"] {
   color: #334155;
 }
-html.light [class*="text-slate-400"] {
-  color: #475569;
+html.light [class^="text-slate-4"],
+html.light [class*=" text-slate-4"] {
+  color: #3F4B5C;
 }
-html.light [class*="text-slate-500"] {
-  color: #64748B;
+html.light [class^="text-slate-5"],
+html.light [class*=" text-slate-5"] {
+  color: #556070;
 }
-html.light [class*="text-slate-600"],
-html.light [class*="text-slate-700"],
-html.light [class*="text-slate-800"] {
-  color: #64748B;
+html.light [class^="text-slate-6"],
+html.light [class*=" text-slate-6"],
+html.light [class^="text-slate-7"],
+html.light [class*=" text-slate-7"] {
+  color: #556070;
 }
-html.light [class*="text-cyan-"] {
-  color: #0E9F63;
+
+/* 文字：品牌绿（cyan 工具类已整体重映射为品牌色阶） */
+html.light [class^="text-cyan-"],
+html.light [class*=" text-cyan-"],
+html.light [class^="text-emerald-"],
+html.light [class*=" text-emerald-"],
+html.light [class^="text-wealth"],
+html.light [class*=" text-wealth"] {
+  color: #0A6C46;
 }
-html.light [class*="text-wealth"],
-html.light [class*="text-emerald"] {
-  color: #0E9F63;
+
+/* 文字：蓝（AI / 低风险） */
+html.light [class^="text-intel"],
+html.light [class*=" text-intel"],
+html.light [class^="text-blue-"],
+html.light [class*=" text-blue-"] {
+  color: #1D4ED8;
 }
-html.light [class*="text-intel"],
-html.light [class*="text-blue"] {
-  color: #2563EB;
+
+/* 文字：琥珀（中风险 / 预警） */
+html.light [class^="text-amber-"],
+html.light [class*=" text-amber-"] {
+  color: #7E5006;
 }
-html.light [class*="text-amber"] {
-  color: #B45309;
+
+/* 文字：玫红（高风险 / 错误） */
+html.light [class^="text-rose-"],
+html.light [class*=" text-rose-"],
+html.light [class^="text-red-"],
+html.light [class*=" text-red-"] {
+  color: #B21C2C;
 }
-html.light [class*="text-rose"],
-html.light [class*="text-red"] {
-  color: #BE123C;
+
+/* 文字：风险徽标使用的固定十六进制色值 */
+html.light [class^="text-[#FF4D4F]"],
+html.light [class*=" text-[#FF4D4F]"],
+html.light [class^="text-[#FF8A8C]"],
+html.light [class*=" text-[#FF8A8C]"] {
+  color: #B21C2C;
 }
-html.light [class*="bg-white/"] {
+html.light [class^="text-[#FF7A45]"],
+html.light [class*=" text-[#FF7A45]"],
+html.light [class^="text-[#FFA37A]"],
+html.light [class*=" text-[#FFA37A]"] {
+  color: #A34A08;
+}
+html.light [class^="text-[#F6C344]"],
+html.light [class*=" text-[#F6C344]"],
+html.light [class^="text-[#F8D47A]"],
+html.light [class*=" text-[#F8D47A]"] {
+  color: #7E5006;
+}
+html.light [class^="text-[#4C8DFF]"],
+html.light [class*=" text-[#4C8DFF]"],
+html.light [class^="text-[#8AB2FF]"],
+html.light [class*=" text-[#8AB2FF]"] {
+  color: #1D4ED8;
+}
+
+/* 背景：半透明白底 → 深色低透明底 */
+html.light [class^="bg-white/"],
+html.light [class*=" bg-white/"] {
   background-color: rgba(15, 23, 42, 0.045);
 }
-html.light [class*="bg-black/"] {
+
+/* 背景：黑色遮罩（仅面板级低透明；bg-black/60、/70 为弹窗遮罩，保持深色） */
+html.light [class~="bg-black/10"] {
+  background-color: rgba(15, 23, 42, 0.05);
+}
+html.light [class~="bg-black/15"] {
   background-color: rgba(15, 23, 42, 0.06);
 }
-html.light [class*="border-white"] {
+html.light [class~="bg-black/20"] {
+  background-color: rgba(15, 23, 42, 0.07);
+}
+html.light [class~="bg-black/30"] {
+  background-color: rgba(15, 23, 42, 0.09);
+}
+html.light [class~="bg-slate-500"] {
+  background-color: rgba(15, 23, 42, 0.15);
+}
+
+/* 背景：语义色低透明底 */
+html.light [class^="bg-cyan-400/"],
+html.light [class*=" bg-cyan-400/"],
+html.light [class~="bg-cyan-300/[0.07]"],
+html.light [class^="bg-emerald-400/"],
+html.light [class*=" bg-emerald-400/"] {
+  background-color: rgba(14, 159, 99, 0.10);
+}
+html.light [class^="bg-amber-400/"],
+html.light [class*=" bg-amber-400/"] {
+  background-color: rgba(180, 83, 9, 0.10);
+}
+html.light [class^="bg-rose-400/"],
+html.light [class*=" bg-rose-400/"],
+html.light [class~="bg-rose-400/10"],
+html.light [class~="bg-rose-400/15"] {
+  background-color: rgba(190, 18, 60, 0.10);
+}
+
+/* 边框：半透明白边 → 深色低透明边 */
+html.light [class^="border-white"],
+html.light [class*=" border-white"] {
   border-color: rgba(15, 23, 42, 0.12);
+}
+html.light [class^="border-cyan-"],
+html.light [class*=" border-cyan-"],
+html.light [class^="border-emerald-"],
+html.light [class*=" border-emerald-"] {
+  border-color: rgba(14, 159, 99, 0.30);
+}
+html.light [class^="border-amber-"],
+html.light [class*=" border-amber-"] {
+  border-color: rgba(180, 83, 9, 0.30);
+}
+html.light [class^="border-rose-"],
+html.light [class*=" border-rose-"] {
+  border-color: rgba(190, 18, 60, 0.30);
 }
 html.light [class*="divide-white"] {
   border-color: rgba(15, 23, 42, 0.10);
@@ -375,12 +481,34 @@ html.light [class*="divide-white"] {
 html.light [class*="ring-white"] {
   --tw-ring-color: rgba(15, 23, 42, 0.12);
 }
-html.light [class*="border-cyan-"] {
-  border-color: rgba(14, 159, 99, 0.30);
+
+/* 变体：浅色下恢复 hover / focus 的可见反馈 */
+html.light [class*="hover:bg-white/"]:hover,
+html.light [class*="hover:bg-black/"]:hover {
+  background-color: rgba(15, 23, 42, 0.09);
 }
-html.light [class*="bg-cyan-400/"] {
-  background-color: rgba(14, 159, 99, 0.10);
+html.light [class*="focus:bg-white/"]:focus,
+html.light [class*="focus:bg-black/"]:focus {
+  background-color: rgba(15, 23, 42, 0.06);
 }
+html.light [class*="hover:border-white"]:hover {
+  border-color: rgba(15, 23, 42, 0.22);
+}
+html.light [class*="hover:text-white"]:hover,
+html.light [class*="hover:text-slate-"]:hover {
+  color: #0F172A;
+}
+html.light [class*="hover:text-cyan-"]:hover {
+  color: #0A6C46;
+}
+html.light [class*="hover:text-amber-"]:hover {
+  color: #7E5006;
+}
+html.light [class*="hover:text-rose-"]:hover {
+  color: #B21C2C;
+}
+
+/* 占位符 */
 html.light [class*="placeholder:text-white"],
 html.light [class*="placeholder:text-slate-"]::placeholder {
   color: rgba(15, 23, 42, 0.35);

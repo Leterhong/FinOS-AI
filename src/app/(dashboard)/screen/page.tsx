@@ -117,7 +117,7 @@ function Heatmap({ rows, cols, empty }: { rows: Array<{ label: string; counts: n
               const intensity = count / max;
               const color = LEVEL_META[LEVEL_ORDER[index]].color;
               return (
-                <div key={index} className="grid h-7 place-items-center rounded-md border border-white/[0.05] text-[10px]" style={{ backgroundColor: count ? `${color}${Math.round(20 + intensity * 60).toString(16).padStart(2, "0")}` : "rgba(255,255,255,0.02)", color: count ? "#fff" : "#475569" }}>
+                <div key={index} className="grid h-7 place-items-center rounded-md border border-white/[0.05] text-[10px]" style={{ backgroundColor: count ? `${color}${Math.round(20 + intensity * 60).toString(16).padStart(2, "0")}` : "rgba(255,255,255,0.02)", color: count ? "var(--finos-text-primary)" : "var(--finos-text-muted)" }}>
                   {count || "—"}
                 </div>
               );
