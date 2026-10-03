@@ -74,10 +74,12 @@ export default function DocumentsPage() {
   const searchParams = useSearchParams();
   const requestedCase = searchParams?.get("caseId") ?? null;
 
+  const appliedRequestedCase = useRef<string | null>(null);
   useEffect(() => {
-    // 响应 URL 的 ?caseId= 变化（含同路由前进/后退与站内链接）。
-    if (requestedCase && cases.some((item) => item.id === requestedCase)) {
-      if (requestedCase !== caseId) setCaseId(requestedCase);
+    // 仅当 URL 的 ?caseId= 首次出现或发生变化时应用一次，之后用户手动切换项目不再被 URL 覆盖。
+    if (requestedCase && requestedCase !== appliedRequestedCase.current && cases.some((item) => item.id === requestedCase)) {
+      appliedRequestedCase.current = requestedCase;
+      setCaseId(requestedCase);
       return;
     }
     if (!caseId && cases.length) setCaseId(cases[0].id);
@@ -205,7 +207,7 @@ export default function DocumentsPage() {
     }
     const text = parts.filter(Boolean).join("\n\n");
     if (!text) return;
-    void navigator.clipboard?.writeText(text).then(() => toast.success("已复制研判结果为 Markdown 文本"));
+    void navigator.clipboard?.writeText(text).then(() => toast.success("已复制研判结果为 Markdown 文本")).catch(() => toast.error("复制失败，请手动选择文本复制"));
   };
 
   const removeDocument = (document: AnalysisDocument) => {
@@ -265,7 +267,7 @@ export default function DocumentsPage() {
     }
     setUploading(false);
     processingIds.forEach((id) => toast.dismiss(id));
-    toast.success(`批量处理完成：${succeeded} 成功`);
+    if (succeeded > 0) toast.success(`批量处理完成：${succeeded} 成功`);
     if (failures.length) toast.error(`失败 ${failures.length} 个：${failures.join("；")}`);
   };
 

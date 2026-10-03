@@ -82,10 +82,15 @@ export default function RulesPage() {
     const conditions = metric && rawValue !== "" && Number.isFinite(value)
       ? [{ metric, op: String(data.get("op") || "lt") as "lt" | "lte" | "gt" | "gte" | "eq", value }]
       : undefined;
-    addRule({ code: String(data.get("code")), name: String(data.get("name")), domain: String(data.get("domain")), version: String(data.get("version") || "v1.0"), conditions });
+    const code = String(data.get("code") || "").trim();
+    if (allRules.some((rule) => rule.code === code)) {
+      setFormNotice(`规则编号 ${code} 已存在，请使用唯一编号，避免规则命中结果无法追溯。`);
+      return;
+    }
+    addRule({ code, name: String(data.get("name")), domain: String(data.get("domain")), version: String(data.get("version") || "v1.0"), conditions });
     setFormNotice("");
     setOpen(false);
-    toast.success(`规则 ${String(data.get("code"))} 已创建`);
+    toast.success(`规则 ${code} 已创建`);
   };
   const submitTest = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

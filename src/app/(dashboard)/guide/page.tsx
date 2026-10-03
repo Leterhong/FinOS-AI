@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { PageIntro, Panel, PanelHeader } from "@/components/enterprise/EnterpriseUI";
 import { cn } from "@/lib/utils";
+import Link from "next/link";
 
 const STEPS = [
   {
@@ -122,9 +123,9 @@ export default function GuidePage() {
           {openStep === index && (
             <div className="border-t border-white/[0.05] px-5 pb-4 pt-1">
               <p className="text-xs leading-6 text-slate-400">{step.body}</p>
-              <a href={step.link} className="mt-2 inline-block rounded-lg border border-cyan-400/20 px-3 py-1.5 text-[10px] text-cyan-200 transition hover:bg-cyan-400/[0.08]">
+              <Link href={step.link} className="mt-2 inline-block rounded-lg border border-cyan-400/20 px-3 py-1.5 text-[10px] text-cyan-200 transition hover:bg-cyan-400/[0.08]">
                 {step.linkLabel} →
-              </a>
+              </Link>
             </div>
           )}
         </Panel>

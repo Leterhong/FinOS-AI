@@ -38,6 +38,7 @@ export default function NotificationsPage() {
   const [archived, setArchived] = useState("active");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [acting, setActing] = useState("");
   const loadSeq = useRef(0);
 
   const load = useCallback(async () => {
@@ -65,6 +66,9 @@ export default function NotificationsPage() {
   useEffect(() => { void load(); }, [load]);
 
   const act = async (id: string, action: "read" | "archive" | "delete") => {
+    if (acting) return;
+    if (action === "delete" && !window.confirm("确定删除该通知？删除后不可恢复。")) return;
+    setActing(`${id}:${action}`);
     try {
       const resp = action === "delete"
         ? await backendAuthedFetch(`/api/notifications/${encodeURIComponent(id)}`, { method: "DELETE" })
@@ -73,6 +77,8 @@ export default function NotificationsPage() {
       await load();
     } catch (reason) {
       toast.error(reason instanceof Error ? reason.message : "操作失败");
+    } finally {
+      setActing("");
     }
   };
 
@@ -118,9 +124,9 @@ export default function NotificationsPage() {
             {item.body && <p className="mt-1 text-[11px] leading-5 text-slate-500">{item.body}</p>}
           </div>
           <div className="flex shrink-0 gap-1.5">
-            {!item.read && <button type="button" onClick={() => void act(item.id, "read")} className="rounded-lg border border-white/10 px-2.5 py-1.5 text-[10px] text-slate-400 hover:text-cyan-200">已读</button>}
-            <Tooltip label={item.archived ? "取消归档" : "归档"}><button type="button" onClick={() => void act(item.id, "archive")} className="grid h-7 w-7 place-items-center rounded-lg border border-white/10 text-slate-500 hover:text-cyan-200"><Archive className="h-3.5 w-3.5" /></button></Tooltip>
-            <Tooltip label="删除"><button type="button" onClick={() => void act(item.id, "delete")} className="grid h-7 w-7 place-items-center rounded-lg border border-white/10 text-slate-500 hover:text-rose-300"><Trash2 className="h-3.5 w-3.5" /></button></Tooltip>
+            {!item.read && <button type="button" disabled={Boolean(acting)} onClick={() => void act(item.id, "read")} className="rounded-lg border border-white/10 px-2.5 py-1.5 text-[10px] text-slate-400 hover:text-cyan-200 disabled:opacity-40">已读</button>}
+            <Tooltip label={item.archived ? "取消归档" : "归档"}><button type="button" aria-label={item.archived ? "取消归档" : "归档通知"} disabled={Boolean(acting)} onClick={() => void act(item.id, "archive")} className="grid h-7 w-7 place-items-center rounded-lg border border-white/10 text-slate-500 hover:text-cyan-200 disabled:opacity-40"><Archive className="h-3.5 w-3.5" /></button></Tooltip>
+            <Tooltip label="删除"><button type="button" aria-label="删除通知" disabled={Boolean(acting)} onClick={() => void act(item.id, "delete")} className="grid h-7 w-7 place-items-center rounded-lg border border-white/10 text-slate-500 hover:text-rose-300 disabled:opacity-40"><Trash2 className="h-3.5 w-3.5" /></button></Tooltip>
           </div>
         </article>)}</div>}
     </Panel>

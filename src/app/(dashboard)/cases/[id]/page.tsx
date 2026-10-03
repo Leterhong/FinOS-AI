@@ -36,7 +36,7 @@ export default function CaseWorkspacePage() {
   const [external, setExternal] = useState<ReportExternalData | null>(null);
   const [extLoading, setExtLoading] = useState(false);
   const [extError, setExtError] = useState("");
-  const [amount, setAmount] = useState("1000000");
+  const [amount, setAmount] = useState("");
   const [fromCurrency, setFromCurrency] = useState("USD");
   const [toCurrency, setToCurrency] = useState("CNY");
 

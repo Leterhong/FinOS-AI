@@ -29,6 +29,7 @@ import type { PublicProviderConfig } from "@/ai/model-center/types";
 import { useModelStore } from "@/store/model-store";
 import { ErrorState } from "@/components/feedback/ErrorState";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { toast } from "@/components/feedback/toast";
 
 const statusMeta = {
   online: { label: "连接正常", className: "text-emerald-300", dot: "bg-emerald-400" },
@@ -87,19 +88,25 @@ export default function ModelsPage() {
   };
 
   const handleTest = async (id: string) => {
-    await testModel(id);
-    await refresh();
+    const result = await testModel(id);
+    // testModel 失败时在 store 写入 error，这里直接消费，避免 refresh() 把它清掉导致「点了没反应」。
+    if (result) toast.success("模型测试完成");
+    else toast.error(useModelStore.getState().error ?? "模型测试失败");
   };
 
   const handleDefault = async (id: string) => {
     await setDefaultModel(id);
-    await refresh();
+    const failure = useModelStore.getState().error;
+    if (failure) toast.error(failure);
+    else toast.success("已切换默认模型");
   };
 
   const handleDelete = async (model: PublicProviderConfig) => {
     if (!window.confirm(`确定删除模型「${model.displayName}」？`)) return;
     await deleteModel(model.id);
-    await refresh();
+    const failure = useModelStore.getState().error;
+    if (failure) toast.error(failure);
+    else toast.success("模型已删除");
   };
 
   return <div className="page-shell">

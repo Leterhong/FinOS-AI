@@ -95,7 +95,7 @@ export default function CommandPalette() {
     return [
       ...suggested.filter((item) => match(item.label)),
       ...pages.filter((item) => match(item.label)),
-      ...cases.filter((item) => match(`${item.company}${item.title}`)).slice(0, 4).map((item) => ({ href: "/cases", label: item.company, hint: item.title, group: "Projects" as const, icon: BriefcaseBusiness })),
+      ...cases.filter((item) => match(`${item.company}${item.title}`)).slice(0, 4).map((item) => ({ href: `/cases/${encodeURIComponent(item.id)}`, label: item.company, hint: item.title, group: "Projects" as const, icon: BriefcaseBusiness })),
       ...documents.filter((item) => match(item.name)).slice(0, 4).map((item) => ({ href: item.caseId ? `/documents?caseId=${encodeURIComponent(item.caseId)}` : "/documents", label: item.name, hint: item.status, group: "Documents" as const, icon: Files })),
       ...risks.filter((item) => match(`${item.title}${item.company}`)).slice(0, 4).map((item) => ({ href: "/risk", label: item.title, hint: item.company, group: "Risks" as const, icon: ShieldAlert })),
     ];
