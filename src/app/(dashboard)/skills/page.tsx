@@ -217,8 +217,8 @@ export default function SkillsPage() {
           />
           <div className="space-y-4 p-5">
             <div className="flex flex-wrap gap-1.5">
-              {skill.modes.map((mode) => <span key={mode} className="rounded-md border border-cyan-400/20 bg-cyan-400/[0.05] px-2 py-0.5 text-[9px] text-cyan-200">{MODE_LABEL[mode] ?? mode}</span>)}
-              <span className="rounded-md border border-white/10 px-2 py-0.5 text-[9px] text-slate-500">来源：{skill.source}</span>
+              {skill.modes.map((mode) => <span key={mode} className="rounded-md border border-cyan-400/20 bg-cyan-400/[0.05] px-2 py-0.5 text-[10px] text-cyan-200">{MODE_LABEL[mode] ?? mode}</span>)}
+              <span className="rounded-md border border-white/10 px-2 py-0.5 text-[10px] text-slate-500">来源：{skill.source}</span>
             </div>
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[.15em] text-slate-400">触发关键词</p>

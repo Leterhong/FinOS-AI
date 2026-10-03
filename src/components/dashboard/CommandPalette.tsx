@@ -136,7 +136,7 @@ export default function CommandPalette() {
             placeholder="搜索或执行命令：项目、资料、风险、页面…"
             className="h-12 flex-1 bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-400"
           />
-          <kbd className="rounded border border-white/10 px-1.5 py-0.5 text-[9px] text-slate-400">ESC</kbd>
+          <kbd className="rounded border border-white/10 px-1.5 py-0.5 text-[10px] text-slate-400">ESC</kbd>
         </div>
         <div className="scrollbar-thin max-h-[52vh] overflow-y-auto py-2">
           {entries.length === 0 && <p className="px-4 py-8 text-center text-xs text-slate-400">没有匹配的命令或内容</p>}

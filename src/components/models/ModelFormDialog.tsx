@@ -363,7 +363,7 @@ export default function ModelFormDialog({ open, onClose, editing }: Props) {
                           />
                           <span>
                             <span className="block text-[11px] text-slate-200">{role.label}</span>
-                            <span className="mt-0.5 block text-[9px] leading-4 text-slate-500">{role.description}</span>
+                            <span className="mt-0.5 block text-[10px] leading-4 text-slate-500">{role.description}</span>
                           </span>
                         </label>
                       );

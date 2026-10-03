@@ -1,5 +1,9 @@
 "use client";
 
+// 可见触发器是 sr-only 原生 select 的交互代理：required/invalid 语义由该原生控件承载，
+// 这里把同样的状态映射到可见按钮供辅助技术读取（button 隐式 role 不在 jsx-a11y 白名单内）。
+/* eslint-disable jsx-a11y/role-supports-aria-props */
+
 /**
  * 平台统一下拉选择组件。
  *
@@ -29,6 +33,7 @@ interface SelectProps {
   placeholder?: string;
   disabled?: boolean;
   required?: boolean;
+  invalid?: boolean;
   className?: string;
   "aria-label"?: string;
 }
@@ -42,6 +47,7 @@ export function Select({
   placeholder = "请选择",
   disabled = false,
   required = false,
+  invalid = false,
   className,
   "aria-label": ariaLabel,
 }: SelectProps) {
@@ -81,7 +87,7 @@ export function Select({
         disabled={disabled}
         aria-label={ariaLabel}
         tabIndex={-1}
-        className="sr-only"
+        className="pointer-events-none absolute inset-0 h-full w-full opacity-0"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value} disabled={option.disabled}>
@@ -95,6 +101,9 @@ export function Select({
             type="button"
             aria-label={ariaLabel}
             aria-haspopup="listbox"
+            aria-required={required || undefined}
+            aria-invalid={invalid || undefined}
+            aria-disabled={disabled || undefined}
             className={cn(
               "field-control flex items-center justify-between gap-2 text-left",
               disabled && "cursor-not-allowed opacity-50"

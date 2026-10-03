@@ -65,7 +65,7 @@ export function EvidenceChain({ steps, className }: { steps: EvidenceChainStep[]
               {index + 1}
             </span>
             <div className="min-w-0">
-              <p className="text-[9px] font-semibold uppercase tracking-[.14em] text-slate-400">{step.label}</p>
+              <p className="text-[10px] font-semibold uppercase tracking-[.14em] text-slate-400">{step.label}</p>
               <p className="mt-0.5 break-words text-xs leading-5 text-slate-300">{step.value}</p>
             </div>
           </div>

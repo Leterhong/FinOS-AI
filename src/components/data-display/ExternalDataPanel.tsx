@@ -128,7 +128,7 @@ export default function ExternalDataPanel() {
         : <div className="scrollbar-thin overflow-x-auto">
           <table className="w-full border-collapse text-left text-[11px]">
             <thead><tr>{columns.map((column) => <th key={column} className="border-b border-white/10 px-3 py-2 font-medium text-cyan-200/80">{column}</th>)}</tr></thead>
-            <tbody>{rows.map((row, index) => <tr key={index} className="odd:bg-white/[0.02]">{columns.map((column) => <td key={column} className="border-b border-white/[0.06] px-3 py-2 text-slate-300">{row[column] === null || row[column] === undefined ? "—" : String(row[column])}</td>)}</tr>)}</tbody>
+            <tbody>{rows.map((row, index) => <tr key={`${columns.map((column) => String(row[column] ?? "")).join("|")}-${index}`} className="odd:bg-white/[0.02]">{columns.map((column) => <td key={column} className="border-b border-white/[0.06] px-3 py-2 text-slate-300">{row[column] === null || row[column] === undefined ? "—" : String(row[column])}</td>)}</tr>)}</tbody>
           </table>
           <p className="mt-2 text-[10px] text-slate-400">外部来源 · 最近 {rows.length} 条 · 需人工复核</p>
         </div>}

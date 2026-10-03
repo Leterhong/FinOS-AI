@@ -95,7 +95,7 @@ function LineChart({ points, labels, color = "#22d3ee" }: { points: number[]; la
         <polyline points={line} fill="none" stroke={color} strokeWidth="0.7" vectorEffect="non-scaling-stroke" />
         {coords.map(([x, y], index) => <circle key={index} cx={x} cy={y} r="1" fill={color} />)}
       </svg>
-      <div className="mt-1.5 flex justify-between text-[9px] text-slate-400">
+      <div className="mt-1.5 flex justify-between text-[10px] text-slate-400">
         {(labels.length <= 5 ? labels : [0, Math.floor((labels.length - 1) / 4), Math.floor((labels.length - 1) / 2), Math.floor(((labels.length - 1) * 3) / 4), labels.length - 1].map((index) => labels[index])).map((label, index) => <span key={`${label}-${index}`} className="min-w-0 flex-1 truncate text-center">{label}</span>)}
       </div>
     </div>
@@ -109,7 +109,7 @@ function Heatmap({ rows, cols, empty }: { rows: Array<{ label: string; counts: n
     <div className="scrollbar-thin h-full overflow-y-auto pr-1">
       <div className="grid gap-1.5" style={{ gridTemplateColumns: `minmax(72px, 1.4fr) repeat(${cols.length}, 1fr)` }}>
         <span />
-        {cols.map((col) => <span key={col} className="text-center text-[9px] text-slate-500">{col}</span>)}
+        {cols.map((col) => <span key={col} className="text-center text-[10px] text-slate-500">{col}</span>)}
         {rows.map((row) => (
           <div key={row.label} className="contents">
             <span className="truncate text-[10px] text-slate-400">{row.label}</span>
@@ -162,12 +162,15 @@ export default function ScreenPage() {
   const active = useModelStore((state) => state.active);
   const [clock, setClock] = useState("--:--:--");
   const [external, setExternal] = useState<{ fx?: string; lpr?: string } | null>(null);
+  const [externalState, setExternalState] = useState<"loading" | "ready" | "error">("loading");
   const [tab, setTab] = useState<Tab>("总览");
   const [monitor, setMonitor] = useState(false);
   const tabRef = useRef(0);
 
   useEffect(() => {
-    const tick = () => setClock(new Date().toLocaleTimeString("zh-CN", { hour12: false }));
+    // 时钟标注本地时区，避免跨时区查看大屏时时间口径不一致。
+    const tz = Intl.DateTimeFormat("zh-CN", { timeZoneName: "short" }).formatToParts(new Date()).find((part) => part.type === "timeZoneName")?.value ?? "";
+    const tick = () => setClock(`${new Date().toLocaleTimeString("zh-CN", { hour12: false })}${tz ? ` ${tz}` : ""}`);
     tick();
     const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
@@ -183,6 +186,7 @@ export default function ScreenPage() {
   }, [monitor]);
 
   const loadExternal = async () => {
+    setExternalState("loading");
     try {
       const [fxResp, lprResp] = await Promise.all([
         backendAuthedFetch("/api/data-sources/fx/latest?base=USD&symbols=CNY"),
@@ -196,8 +200,10 @@ export default function ScreenPage() {
         fx: rate != null ? String(rate) : undefined,
         lpr: lprRow ? Object.entries(lprRow).filter(([, value]) => value != null).slice(0, 2).map(([key, value]) => `${key} ${value}`).join(" · ") : undefined,
       });
+      setExternalState(fxResp.ok || lprResp.ok ? "ready" : "error");
     } catch {
       setExternal({});
+      setExternalState("error");
     }
   };
   useEffect(() => { void loadExternal(); }, []);
@@ -237,6 +243,7 @@ export default function ScreenPage() {
   const donutSegments = stats.riskByLevel.map((item) => ({ label: `${LEVEL_META[item.level].label}风险`, value: item.count, color: LEVEL_META[item.level].color }));
   const stageMax = Math.max(1, ...stats.stageCounts);
   const scoreMax = Math.max(1, ...stats.projectScores.map((item) => item.score));
+  const extPlaceholder = externalState === "error" ? "加载失败" : externalState === "loading" ? "加载中…" : "—";
 
   const goFullscreen = () => {
     if (document.fullscreenElement) void document.exitFullscreen();
@@ -297,8 +304,8 @@ export default function ScreenPage() {
           </Section>
           <Section title="外部市场数据" hint="公开数据" className="xl:col-span-3">
             <div className="grid h-full grid-cols-1 gap-2">
-              <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3"><p className="text-[10px] text-slate-500">USD / CNY 汇率</p><p className="numeric mt-1 text-xl text-white">{external?.fx ?? "—"}</p></div>
-              <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3"><p className="text-[10px] text-slate-500">最新 LPR</p><p className="mt-1 line-clamp-2 break-all text-[11px] leading-5 text-slate-200">{external?.lpr ?? "—"}</p><p className="mt-1 text-[9px] text-slate-400">模型：{active?.configured ? "已连接" : "未配置"}</p></div>
+              <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3"><p className="text-[10px] text-slate-500">USD / CNY 汇率</p><p className="numeric mt-1 text-xl text-white">{external?.fx ?? extPlaceholder}</p></div>
+              <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3"><p className="text-[10px] text-slate-500">最新 LPR</p><p className="mt-1 line-clamp-2 break-all text-[11px] leading-5 text-slate-200">{external?.lpr ?? extPlaceholder}</p><p className="mt-1 text-[10px] text-slate-400">模型：{active?.configured ? "已连接" : "未配置"}</p></div>
             </div>
           </Section>
         </div>
@@ -349,8 +356,8 @@ export default function ScreenPage() {
           </Section>
           <Section title="外部市场数据" hint="公开数据" className="xl:col-span-3">
             <div className="grid h-full grid-cols-1 gap-2">
-              <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3"><p className="text-[10px] text-slate-500">USD / CNY 汇率</p><p className="numeric mt-1 text-xl text-white">{external?.fx ?? "—"}</p></div>
-              <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3"><p className="text-[10px] text-slate-500">最新 LPR</p><p className="mt-1 line-clamp-2 break-all text-[11px] leading-5 text-slate-200">{external?.lpr ?? "—"}</p></div>
+              <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3"><p className="text-[10px] text-slate-500">USD / CNY 汇率</p><p className="numeric mt-1 text-xl text-white">{external?.fx ?? extPlaceholder}</p></div>
+              <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3"><p className="text-[10px] text-slate-500">最新 LPR</p><p className="mt-1 line-clamp-2 break-all text-[11px] leading-5 text-slate-200">{external?.lpr ?? extPlaceholder}</p></div>
             </div>
           </Section>
           <Section title="最近更新风险" className="xl:col-span-5">

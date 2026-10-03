@@ -6,8 +6,9 @@
  * 适用于 Project / Document / Risk / Task / Rule / Audit 的快速查看；
  * 支持 Esc 关闭、backdrop 点击关闭、焦点进入（a11y 基线）。
  */
-import { type ReactNode, useEffect } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 import { X } from "lucide-react";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 
 export default function DetailDrawer({
   open,
@@ -24,6 +25,8 @@ export default function DetailDrawer({
   children: ReactNode;
   width?: string;
 }) {
+  const panelRef = useRef<HTMLElement>(null);
+  useFocusTrap(open, panelRef);
   useEffect(() => {
     if (!open) return;
     const handler = (event: KeyboardEvent) => {
@@ -45,17 +48,19 @@ export default function DetailDrawer({
   return (
     <div className="fixed inset-0 z-[110] flex justify-end bg-black/60 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <aside
+        ref={panelRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`flex h-full w-full ${width} flex-col border-l border-white/[0.09] bg-elevated shadow-2xl`}
+        className={`flex h-full w-full ${width} flex-col border-l border-white/[0.09] bg-elevated shadow-2xl outline-none`}
       >
         <div className="flex items-start justify-between border-b border-white/[0.07] px-5 py-4">
           <div className="min-w-0">
             <h2 className="truncate text-sm font-semibold text-white">{title}</h2>
             {subtitle && <p className="mt-0.5 truncate text-[11px] text-slate-500">{subtitle}</p>}
           </div>
-          <button type="button" onClick={onClose} aria-label="关闭" autoFocus className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-white/[0.06] hover:text-white">
+          <button type="button" onClick={onClose} aria-label="关闭" className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-white/[0.06] hover:text-white">
             <X className="h-4 w-4" />
           </button>
         </div>

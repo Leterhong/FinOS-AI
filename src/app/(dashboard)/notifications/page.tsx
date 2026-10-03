@@ -116,9 +116,9 @@ export default function NotificationsPage() {
         : <div className="divide-y divide-white/[0.06]">{items.map((item) => <article key={item.id} className={`flex flex-wrap items-start gap-3 px-5 py-4 ${item.read ? "opacity-70" : ""}`}>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <span className={`rounded-md border px-2 py-0.5 text-[9px] ${SEVERITY_CLASS[item.severity] ?? SEVERITY_CLASS.info}`}>{CATEGORY_LABEL[item.category] ?? item.category}</span>
-              {!item.read && <span className="rounded-md bg-rose-400/15 px-2 py-0.5 text-[9px] text-rose-200">未读</span>}
-              <span className="text-[9px] text-slate-400">{item.createdAt ? new Date(item.createdAt).toLocaleString("zh-CN") : ""}</span>
+              <span className={`rounded-md border px-2 py-0.5 text-[10px] ${SEVERITY_CLASS[item.severity] ?? SEVERITY_CLASS.info}`}>{CATEGORY_LABEL[item.category] ?? item.category}</span>
+              {!item.read && <span className="rounded-md bg-rose-400/15 px-2 py-0.5 text-[10px] text-rose-200">未读</span>}
+              <span className="text-[10px] text-slate-400">{item.createdAt ? new Date(item.createdAt).toLocaleString("zh-CN") : ""}</span>
             </div>
             <p className="mt-2 text-xs font-medium text-slate-200">{item.title}</p>
             {item.body && <p className="mt-1 text-[11px] leading-5 text-slate-500">{item.body}</p>}
