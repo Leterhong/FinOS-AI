@@ -12,7 +12,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6.svg)](https://www.typescriptlang.org/)
 [![Security Policy](https://img.shields.io/badge/security-policy-f59e0b.svg)](./SECURITY.md)
 
-[产品能力](#产品能力) · [快速开始](#快速开始) · [技术架构](#技术架构) · [安全边界](#安全与责任边界) · [路线图](#路线图)
+[图文详解](./docs/introduction.md) · [产品能力](#产品能力) · [快速开始](#快速开始) · [技术架构](#技术架构) · [安全边界](#安全与责任边界) · [路线图](#路线图)
 
 </div>
 
@@ -58,6 +58,20 @@ FinOS AI 2.2 已完成企业金融信息架构、可配置模型中心、AI 研�
 
 无登录模式使用浏览器隔离的访客身份，适合单机评估，不等同于企业身份源或共享设备隔离。组织、成员与项目权限在完整后端模式生效；生产环境仍应接入企业账户生命周期、HTTPS、密钥管理和留存策略。详见 [安全策略](./SECURITY.md) 和 [安全设计](./docs/security.md)。
 
+## 界面预览
+
+FinOS AI 采用深色金融工作台设计，浅色主题达 WCAG AA，移动端完整适配。下面是几个核心界面，完整图文讲解见 [FinOS AI 图文详解](./docs/introduction.md)。
+
+| 经营决策台 | 资料研判 · 事实台账 | 风险中心 · 详情 |
+| --- | --- | --- |
+| ![经营决策台](./docs/screenshots/guide/01-dashboard.png) | ![资料研判](./docs/screenshots/guide/08-documents-facts.png) | ![风险中心](./docs/screenshots/guide/12-risk-drawer.png) |
+
+| 规则库 · Visual View | 数据大屏 | 浅色主题 |
+| --- | --- | --- |
+| ![规则库](./docs/screenshots/guide/15-rules-visual.png) | ![数据大屏](./docs/screenshots/guide/29-screen-overview.png) | ![浅色主题](./docs/screenshots/guide/33-light-dashboard.png) |
+
+> 📖 [FinOS AI 图文详解](./docs/introduction.md) 收录 35 张按页面顺序编号的截图，逐页逐功能讲解从「接入模型」到「输出风险清单」的完整链路。
+
 ## 产品能力
 
 | 模块 | 解决的问题 |
@@ -76,7 +90,7 @@ FinOS AI 2.2 已完成企业金融信息架构、可配置模型中心、AI 研�
 | 使用指引 | 内置 8 步交互指南 + 常见问题 + 快捷键 + 核心价值链可视化（`/guide`） |
 | 全局命令面板 | ⌘K/Ctrl+K 搜索项目、资料、风险、页面；建议动作随工作区状态变化 |
 
-> 📖 **首次使用？** 请查看内置 [使用指引](/guide) 或 [完整使用文档](./docs/user-guide.md)，按 8 个步骤完成从"上传资料"到"输出风险清单"的完整研判。
+> 📖 **首次使用？** 请查看内置 [使用指引](/guide)、[完整使用文档](./docs/user-guide.md) 或 [图文详解](./docs/introduction.md)，按 8 个步骤完成从"上传资料"到"输出风险清单"的完整研判。
 
 ### 适用方向
 
@@ -253,7 +267,7 @@ FinOS-AI/
 │  └─ governance/            # 组织权限、分级、复核、评测、连接器和可观测性
 ├─ tests/                     # 前端契约、后端回归、规则引擎单测与端到端
 ├─ deploy/                    # Docker 与 nginx 配置
-└─ docs/                      # 架构、安全、API、使用指引与部署资料
+└─ docs/                      # 架构、安全、API、使用指引、图文详解与部署资料
 ```
 
 ## 路线图
