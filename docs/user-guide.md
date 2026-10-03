@@ -9,18 +9,43 @@
 
 ### 第 0 步：启动系统
 
-```bash
-# 终端 1：启动后端
-python -m venv .venv
-.venv/Scripts/python -m pip install -r backend/requirements.txt
-.venv/Scripts/python -m uvicorn backend.main:app --port 8300
+只体验前端（Node.js 20+）：
 
-# 终端 2：启动前端
+```bash
+git clone https://github.com/Leterhong/FinOS-AI.git
+cd FinOS-AI
 npm install
 npm run dev
 ```
 
-打开浏览器访问 **http://localhost:3000**。系统以空工作区启动——不会预置任何企业、金额或风险数据。
+打开浏览器访问 **http://localhost:3000**。系统以空工作区启动，不会预置任何企业、金额或风险数据。
+
+启动完整本地服务，包含前端与 FastAPI（Python 3.11+）：
+
+```bash
+python -m venv .venv
+
+# Windows 使用 .\.venv\Scripts\activate
+source .venv/bin/activate
+
+pip install -r backend/requirements.txt
+python -m uvicorn backend.main:app --host 127.0.0.1 --port 8300 --reload
+
+# 另一个终端
+npm run dev
+```
+
+后端健康检查 <http://127.0.0.1:8300/api/health>。Next.js 内置 fallback rewrite，未匹配的 `/api/*` 会自动代理到 `http://127.0.0.1:8300`，无需设置 `NEXT_PUBLIC_BACKEND_URL`，可用 `BACKEND_PROXY_URL` 覆盖。
+
+使用 Docker Compose 一键部署：
+
+```bash
+cp .env.example .env
+# 替换所有 CHANGE_ME_* 值后再启动
+docker compose up --build -d
+```
+
+通过 <http://localhost> 访问，Docker 默认经 nginx 使用同源 `/api` 代理，因此 `NEXT_PUBLIC_BACKEND_URL` 保持为空。Docker、macOS、Linux 与 Windows 的完整环境要求、部署方式与故障排查见 [部署文档](./deployment.md)。
 
 ### 第 1 步：接入 AI 模型（必须）
 
@@ -122,6 +147,20 @@ npm run dev
 | 模型评测 | 定义评测样本，记录评分与防护标志 |
 | 连接器 | 配置外部数据源同步（需公网 HTTPS 地址） |
 | 审计 | 全量操作留痕（Who/Action/Object/Result/When/Source），支持搜索和详情 |
+
+---
+
+## 环境变量配置
+
+生产环境至少需要为 `JWT_SECRET`、`ENCRYPTION_MASTER_KEY`、`FINOS_DATA_KEY`、`POSTGRES_PASSWORD`、`REDIS_PASSWORD` 配置强随机值。前后端采用同一策略：缺失、过短或使用示例占位值时会拒绝启动。
+
+配置模板：
+
+- [`.env.example`](../.env.example)：Docker Compose
+- [`.env.local.example`](../.env.local.example)：Next.js 本地开发
+- [`backend/.env.example`](../backend/.env.example)：FastAPI
+
+模型密钥不要添加 `NEXT_PUBLIC_` 前缀，该前缀变量会被编译进浏览器产物。真实 `.env`、数据库、上传目录、虚拟环境和构建产物均不应提交到 Git。
 
 ---
 
