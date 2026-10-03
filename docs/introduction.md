@@ -113,17 +113,21 @@ API Key 通过工作区会话隔离，在服务端使用 AES-256-GCM 加密保�
 
 ### 3.3 启动完整本地服务
 
-要求 Python 3.11+。macOS / Linux：
+要求 Node.js 20+、Python 3.11+。macOS / Linux：
 
 ```bash
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 pip install -r backend/requirements.txt
-python -m uvicorn backend.main:app --host 127.0.0.1 --port 8300 --reload
+
+# 本地开发：未配置密钥时用开发模式启动临时随机密钥
+ENV=development python -m uvicorn backend.main:app --host 127.0.0.1 --port 8300 --reload
 
 # 另一个终端
 npm run dev
 ```
+
+> Debian / Ubuntu 若 `python3 -m venv` 报 `ensurepip is not available`，先执行 `sudo apt install -y python3 python3-venv python3-pip`。
 
 后端健康检查：<http://127.0.0.1:8300/api/health>。
 

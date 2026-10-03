@@ -78,12 +78,23 @@ npm run dev
 ## 测试与质量门禁
 
 ```bash
-npm run typecheck       # TypeScript 类型检查
-npm test                # 前端契约与安全回归
-npm run test:unit       # 规则引擎等纯函数单测
-npm run build           # Next.js 生产构建
-npm run test:backend    # 后端与 AI 回归（pytest）
-node tests/e2e/main-chain.mjs   # 端到端主链路（本地 mock LLM，需先 build）
+# TypeScript 类型检查
+npm run typecheck
+
+# 前端契约与安全回归
+npm test
+
+# 规则引擎等纯函数单测
+npm run test:unit
+
+# Next.js 生产构建
+npm run build
+
+# 后端与 AI 回归（pytest）
+npm run test:backend
+
+# 端到端主链路（本地 mock LLM，需先 build）
+node tests/e2e/main-chain.mjs
 ```
 
 以上门禁同时由 GitHub Actions（CI + CodeQL + Dependabot）自动执行。测试使用隔离数据与本地 mock 模型，不连接任何真实模型服务。更多信息见 [`tests/README.md`](./tests/README.md)。

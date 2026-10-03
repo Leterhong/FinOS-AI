@@ -37,6 +37,14 @@
 | Docker | Docker ≥ 24、Docker Compose V2 |
 | 生产 | 2 vCPU / 4GB RAM 起，Linux（Ubuntu 22.04+ 推荐） |
 
+Python 环境准备：
+
+- Linux（Debian / Ubuntu）：`sudo apt update && sudo apt install -y python3 python3-venv python3-pip`
+- macOS：`brew install node python@3.11`
+- Windows：从 <https://www.python.org/downloads/> 安装 Python 3.11+，并勾选「Add python.exe to PATH」
+
+系统通常只提供 `python3` 命令，本文档统一使用 `python3 -m venv`。虚拟环境激活后，其中的 `python` 与 `pip` 即指向该环境。
+
 ## 3. 环境变量
 
 复制模板并按需修改：
@@ -88,7 +96,7 @@ cp .env.example .env
 openssl rand -hex 32
 
 # ENCRYPTION_MASTER_KEY（URL-safe Base64 编码的 32 字节）
-python -c "import base64,os;print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
+python3 -c "import base64,os;print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
 
 # BACKUP_API_KEY
 openssl rand -hex 24
@@ -101,21 +109,31 @@ openssl rand -hex 24
 ### 4.1 后端
 
 ```bash
-cd "F:/FinOS AI"
+# 进入仓库根目录（克隆后的 FinOS-AI 目录）
+cd FinOS-AI
 
-# 创建虚拟环境
-python -m venv .venv
-source .venv/Scripts/activate    # Windows Git Bash
-# source .venv/bin/activate      # Linux / macOS
+# 创建虚拟环境（系统通常只提供 python3）
+python3 -m venv .venv
+
+# macOS / Linux
+source .venv/bin/activate
+# Windows PowerShell
+# .\.venv\Scripts\Activate.ps1
+# Windows Git Bash
+# source .venv/Scripts/activate
 
 pip install -r backend/requirements.txt
 
-# 配置后端环境变量
+# 本地开发：使用开发模式启动，自动生成临时随机密钥
+ENV=development python -m uvicorn backend.main:app --host 127.0.0.1 --port 8300 --reload
+```
+
+若需要稳定密钥（重启后仍能解密已保存数据）：
+
+```bash
 cp .env.example backend/.env
 # 编辑 backend/.env，至少设置 JWT_SECRET 与 ENCRYPTION_MASTER_KEY
-
-# 启动（注意是点号模块路径 backend.main:app）
-PYTHONPATH=. python -m uvicorn backend.main:app --port 8300 --reload
+python -m uvicorn backend.main:app --host 127.0.0.1 --port 8300 --reload
 ```
 
 > **常见错误**：写成 `backend/main:app`（斜杠）会报 `Could not import module`。Python 模块路径必须用点号。
@@ -131,19 +149,14 @@ curl http://127.0.0.1:8300/api/health
 ### 4.2 前端
 
 ```bash
-cd "F:/FinOS AI"
+# 在仓库根目录另开一个终端
 npm install
-
-# 配置前端环境变量
-cp .env.example .env.local
-# 设置 NEXT_PUBLIC_BACKEND_URL=http://127.0.0.1:8300
-
 npm run dev
 ```
 
-访问 `http://localhost:3000`。
+访问 `http://localhost:3000`。前端内置 fallback rewrite，`/api/*` 会自动代理到 `http://127.0.0.1:8300`，因此本地无需设置 `NEXT_PUBLIC_BACKEND_URL`。
 
-> **重要**：本地跨域时，后端 `CORS_ORIGINS` 必须包含前端实际 origin（含端口）。否则登录请求被 CORS 拦截 → 拿不到 token → 被弹回登录页。
+> 仅在前后端分域名部署时才需要复制 `.env.local.example` 为 `.env.local` 并设置 `NEXT_PUBLIC_BACKEND_URL`。此时后端 `CORS_ORIGINS` 必须包含前端实际 origin（含端口），否则跨域请求被拦截。
 
 ### 4.3 交互式 API 文档
 
@@ -153,12 +166,23 @@ npm run dev
 
 ### 5.1 启动
 
+推荐使用一键脚本，它会自动生成 `.env` 与全部随机密钥，然后构建并启动服务：
+
+```bash
+cd FinOS-AI
+bash deploy.sh
+```
+
+也可以手动执行（必须先把 `.env` 中所有 `CHANGE_ME_*` 替换为真实密钥，否则后端弱密钥守卫会拒绝启动）：
+
 ```bash
 cp .env.example .env
-# 编辑 .env 设置密钥
+# 编辑 .env：至少设置 POSTGRES_PASSWORD、REDIS_PASSWORD、JWT_SECRET、ENCRYPTION_MASTER_KEY、FINOS_DATA_KEY
 
-docker compose up -d
+docker compose up -d --build
 ```
+
+> macOS / Windows 安装 Docker Desktop；Linux 安装 Docker Engine 与 `docker compose` 插件。可用 `HTTP_PORT` 修改对外端口（默认 80）。
 
 服务拓扑与端口：
 
@@ -175,12 +199,23 @@ docker compose up -d
 ### 5.2 常用命令
 
 ```bash
-docker compose ps                # 查看服务与健康状态
-docker compose logs -f api       # 跟踪后端日志
-docker compose logs -f web       # 跟踪前端日志
-docker compose restart api       # 重启后端
-docker compose down              # 停止（保留数据卷）
-docker compose down -v           # 停止并删除数据卷（⚠️ 数据丢失）
+# 查看服务与健康状态
+docker compose ps
+
+# 跟踪后端日志
+docker compose logs -f api
+
+# 跟踪前端日志
+docker compose logs -f web
+
+# 重启后端
+docker compose restart api
+
+# 停止（保留数据卷）
+docker compose down
+
+# 停止并删除数据卷（数据丢失）
+docker compose down -v
 ```
 
 ### 5.3 数据卷
@@ -189,14 +224,22 @@ docker compose down -v           # 停止并删除数据卷（⚠️ 数据丢�
 |---|---|---|
 | `finos-db-data` | `/var/lib/postgresql/data` | PostgreSQL 数据 |
 | `finos-redis-data` | `/data` | Redis AOF 持久化 |
-| `finos-uploads` | `/app/backend/data/uploads` | 用户上传文件 |
+| `finos-api-uploads` | `/app/backend/data/uploads` | 用户上传文件 |
 
 ## 6. 生产部署
 
 ### 6.1 使用生产编排
 
+生产编排是覆盖层，需要与基础编排叠加使用：
+
 ```bash
-docker compose -f docker-compose.prod.yml up -d
+bash deploy.sh --prod
+```
+
+等价于：
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ```
 
 生产编排相比开发版的差异：
@@ -227,17 +270,17 @@ deploy/nginx/certs/
 3. 重启 Nginx：
 
 ```bash
-docker compose -f docker-compose.prod.yml restart nginx
+docker compose -f docker-compose.yml -f docker-compose.prod.yml restart nginx
 ```
 
 > **注意**：`src/auth/session.ts` 的 session cookie `secure` 标志由 `isSecureContext(req)` 动态判断（依据 `x-forwarded-proto`），HTTP 环境自动为 `false`，HTTPS 自动为 `true`。**切勿改成写死 `NODE_ENV === "production"`** —— 那会导致 HTTP 部署下浏览器拒收 cookie，用户登录后被反复弹回登录页。
 
 ### 6.3 数据库迁移
 
-生产环境使用 Alembic：
+`api` 容器入口脚本会在启动时自动执行 `alembic upgrade head`，通常无需手动迁移。排查或补跑时使用：
 
 ```bash
-docker compose exec api alembic upgrade head
+docker compose exec api alembic -c backend/alembic.ini upgrade head
 ```
 
 ### 6.4 备份与恢复
@@ -280,21 +323,25 @@ curl http://localhost/api/health
   "success": true,
   "data": {
     "status": "ok",
-    "database": "ok",
-    "redis": "ok",
-    "ai": "ok",
+    "service": "FinOS AI Backend",
+    "database": { "status": "ok" },
+    "redis": { "mode": "redis" },
+    "ai_service": { "status": "available" },
     "uptime_seconds": 86400
   }
 }
 ```
 
-Redis 不可用时返回 `"redis": "degraded"`，系统自动降级为进程内缓存，**不影响可用性**。
+Redis 不可用时 `data.redis.mode` 为 `memory`，`data.status` 为 `degraded`，系统自动降级为进程内缓存，**不影响可用性**。
 
 ## 8. 故障排查
 
 | 症状 | 原因 | 解决 |
 |---|---|---|
-| 前端报 `ERR_CONNECTION_REFUSED :8300` | 后端未启动 | `netstat -ano \| grep :8300` 确认，重启后端 |
+| 前端报 `ERR_CONNECTION_REFUSED :8300` | 后端未启动 | Linux/macOS 用 `ss -ltnp \| grep :8300` 或 `lsof -iTCP:8300 -sTCP:LISTEN`，Windows 用 `netstat -ano \| findstr :8300` 确认，重启后端 |
+| `python3 -m venv` 报 `ensurepip is not available` | 系统缺少 venv 模块 | Debian/Ubuntu：`sudo apt install -y python3 python3-venv python3-pip` |
+| 后端报 `JWT_SECRET 未配置或强度不足，拒绝启动` | 未设置密钥 | 本地用 `ENV=development` 启动，或在 `backend/.env` 设置 `JWT_SECRET` 与 `ENCRYPTION_MASTER_KEY` |
+| `docker compose up` 后 api 反复重启、web 一直 waiting | `.env` 仍是 `CHANGE_ME_*` 占位值，后端弱密钥守卫拒绝启动 | 执行 `bash deploy.sh` 自动生成密钥，或手动替换 `.env` 中全部占位值 |
 | 登录后反复弹回 `/login` | cookie `secure` 标志错误 或 CORS 未放行 | 检查 `isSecureContext` 逻辑与 `CORS_ORIGINS` |
 | `Could not import module "backend/main"` | 用了斜杠路径 | 改为点号 `backend.main:app` |
 | `OperationalError: no such column` | 扩展表后未补列 | 在 `init_db()` 添加幂等补列自愈逻辑 |

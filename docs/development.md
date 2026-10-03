@@ -20,14 +20,23 @@ cd finos-ai
 npm install
 
 # 后端依赖
-python -m venv .venv
-source .venv/Scripts/activate     # Windows Git Bash
+python3 -m venv .venv
+
+# macOS / Linux
+source .venv/bin/activate
+# Windows PowerShell
+# .\.venv\Scripts\Activate.ps1
+# Windows Git Bash
+# source .venv/Scripts/activate
+
 pip install -r backend/requirements.txt
 
 # 环境变量
-cp .env.example .env.local        # 前端
-cp .env.example backend/.env      # 后端
+cp .env.local.example .env.local
+cp .env.example backend/.env
 ```
+
+> Debian / Ubuntu 若 `python3 -m venv` 报 `ensurepip is not available`，先执行 `sudo apt install -y python3 python3-venv python3-pip`。
 
 至少设置 `JWT_SECRET` 与 `ENCRYPTION_MASTER_KEY`（生成方式见 [deployment.md](./deployment.md#32-生成安全密钥)）。
 
@@ -311,7 +320,7 @@ npx tsc --noEmit && npm run lint && pytest tests/backend -q
 
 - `alembic.ini` 中禁止写中文注释（编码问题）
 - Git Bash 下 `PYTHONPATH` 可能不生效，用编程式启动脚本
-- 路径含空格时必须加引号：`cd "F:/FinOS AI"`
+- 路径含空格时必须加引号：`cd "D:/path with space/FinOS-AI"`
 
 ## 8. 项目结构速查
 

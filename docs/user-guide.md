@@ -9,7 +9,9 @@
 
 ### 第 0 步：启动系统
 
-只体验前端（Node.js 20+）：
+FinOS AI 提供三种启动方式，按设备与场景选择。
+
+#### 方式一：只体验前端（最快，Node.js 20+）
 
 ```bash
 git clone https://github.com/Leterhong/FinOS-AI.git
@@ -18,34 +20,98 @@ npm install
 npm run dev
 ```
 
-打开浏览器访问 **http://localhost:3000**。系统以空工作区启动，不会预置任何企业、金额或风险数据。
+打开浏览器访问 **http://localhost:3000**。系统以空工作区启动，不会预置任何企业、金额或风险数据。此方式没有后端，AI 调用与数据同步不可用，项目管理、规则录入与资料上传仍可用。
 
-启动完整本地服务，包含前端与 FastAPI（Python 3.11+）：
+#### 方式二：完整本地服务（Linux / macOS）
+
+前置：Node.js 20+、Python 3.11+。
+
+Linux（Debian / Ubuntu）先安装 Python 与虚拟环境支持：
 
 ```bash
-python -m venv .venv
+sudo apt update
+sudo apt install -y python3 python3-venv python3-pip
+```
+
+macOS 使用 Homebrew 安装（`brew` 可从 <https://brew.sh> 获取）：
+
+```bash
+brew install node python@3.11
+```
+
+创建虚拟环境并启动后端：
+
+```bash
+git clone https://github.com/Leterhong/FinOS-AI.git
+cd FinOS-AI
+
+python3 -m venv .venv
 
 # Windows 使用 .\.venv\Scripts\activate
 source .venv/bin/activate
 
 pip install -r backend/requirements.txt
-python -m uvicorn backend.main:app --host 127.0.0.1 --port 8300 --reload
 
-# 另一个终端
+# 本地开发：未配置密钥时用开发模式启动临时随机密钥
+ENV=development python -m uvicorn backend.main:app --host 127.0.0.1 --port 8300 --reload
+```
+
+> 需要稳定密钥或数据加密时，请改为在 `backend/.env` 设置 `JWT_SECRET` 与 `ENCRYPTION_MASTER_KEY` 后再启动。未设置且未开启开发模式时，后端会拒绝启动以保护密钥。密钥生成方式见 [部署文档 · 环境变量](./deployment.md)。
+
+另开一个终端启动前端：
+
+```bash
+npm install
 npm run dev
 ```
 
-后端健康检查 <http://127.0.0.1:8300/api/health>。Next.js 内置 fallback rewrite，未匹配的 `/api/*` 会自动代理到 `http://127.0.0.1:8300`，无需设置 `NEXT_PUBLIC_BACKEND_URL`，可用 `BACKEND_PROXY_URL` 覆盖。
+打开 <http://localhost:3000>。前端内置 fallback rewrite，未匹配的 `/api/*` 会自动代理到 `http://127.0.0.1:8300`，无需设置 `NEXT_PUBLIC_BACKEND_URL`，可用 `BACKEND_PROXY_URL` 覆盖。
 
-使用 Docker Compose 一键部署：
+#### 方式三：Docker Compose 一键部署（推荐用于生产）
+
+前置：Docker 24+ 与 Docker Compose V2。macOS / Windows 安装 Docker Desktop，Linux 安装 Docker Engine 与 compose 插件。
+
+```bash
+git clone https://github.com/Leterhong/FinOS-AI.git
+cd FinOS-AI
+
+# 自动生成 .env 并填入随机密钥，再构建并启动全部服务
+bash deploy.sh
+```
+
+`deploy.sh` 会复制 `.env.example` 为 `.env`，自动生成 PostgreSQL、Redis、JWT、AES 主密钥与前端数据密钥，随后构建镜像、启动 `db / redis / api / web / nginx` 并等待各服务健康，最后探活访问入口。
+
+也可以手动执行，务必先替换全部 `CHANGE_ME_*` 占位值，否则后端弱密钥守卫与生产编排会拒绝启动：
 
 ```bash
 cp .env.example .env
-# 替换所有 CHANGE_ME_* 值后再启动
-docker compose up --build -d
+# 编辑 .env：生成并填入 JWT_SECRET、ENCRYPTION_MASTER_KEY、FINOS_DATA_KEY、POSTGRES_PASSWORD、REDIS_PASSWORD
+docker compose up -d --build
 ```
 
-通过 <http://localhost> 访问，Docker 默认经 nginx 使用同源 `/api` 代理，因此 `NEXT_PUBLIC_BACKEND_URL` 保持为空。Docker、macOS、Linux 与 Windows 的完整环境要求、部署方式与故障排查见 [部署文档](./deployment.md)。
+启动后通过 <http://localhost> 访问（默认 nginx 80 端口，可用 `HTTP_PORT` 修改）。Docker 默认经 nginx 使用同源 `/api` 代理，`NEXT_PUBLIC_BACKEND_URL` 保持为空。
+
+```bash
+# 查看服务与健康状态
+docker compose ps
+
+# 跟踪后端日志
+docker compose logs -f api
+
+# 停止（保留数据卷）
+docker compose down
+
+# 停止并删除数据卷（数据丢失）
+docker compose down -v
+```
+
+生产 HTTPS 部署使用覆盖层：
+
+```bash
+bash deploy.sh --prod
+```
+
+需要 TLS 证书，放于 `deploy/nginx/certs/`。完整环境要求、变量清单与故障排查见 [部署文档](./deployment.md)。
 
 ### 第 1 步：接入 AI 模型（必须）
 
