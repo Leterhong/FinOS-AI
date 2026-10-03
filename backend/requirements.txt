@@ -17,7 +17,7 @@ python-docx>=1.1
 Pillow>=10.4
 pytest>=8.3
 # PostgreSQL 生产环境驱动
-psycopg2-binary>=2.9
+psycopg2-binary>=2.9.13
 # 外部业务数据源（宏观 / 汇率，免费）
 akshare>=1.16
 # PDF 导出（风险清单等，内置中文 CID 字体）
