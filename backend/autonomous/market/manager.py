@@ -44,39 +44,68 @@ _BENCHMARK = {"stock": "sh000300", "fund": "sh000300", "crypto": "sh000300"}
 
 
 class _Breaker:
-    """极简熔断器（进程内）。"""
+    """熔断器：状态存统一缓存层（生产 Redis，多 worker 共享；不可用回退进程内）。"""
 
     def __init__(self) -> None:
         self._fails: dict[str, int] = {}
         self._until: dict[str, float] = {}
         self._lock = threading.Lock()
 
-    def is_open(self, name: str) -> bool:
+    def _key(self, name: str) -> str:
+        return f"breaker:market:{name}"
+
+    def _load(self, name: str) -> dict:
+        from backend.core.cache import cache_get
+
+        data = cache_get(self._key(name))
+        if isinstance(data, dict):
+            return data
         with self._lock:
-            until = self._until.get(name, 0.0)
-            if until and time.time() < until:
-                return True
-            if until and time.time() >= until:
-                self._until.pop(name, None)
-                self._fails[name] = 0
-            return False
+            return {"fails": self._fails.get(name, 0), "until": self._until.get(name, 0.0)}
+
+    def _store(self, name: str, data: dict) -> None:
+        from backend.core.cache import cache_set
+
+        with self._lock:
+            self._fails[name] = int(data.get("fails", 0))
+            self._until[name] = float(data.get("until", 0.0))
+        try:
+            cache_set(self._key(name), data, ttl_seconds=int(_BREAKER_COOLDOWN) + 60)
+        except Exception:  # noqa: BLE001
+            pass
+
+    def is_open(self, name: str) -> bool:
+        data = self._load(name)
+        until = float(data.get("until", 0.0) or 0.0)
+        if until and time.time() < until:
+            return True
+        if until and time.time() >= until:
+            self._store(name, {"fails": 0, "until": 0.0})
+        return False
 
     def record_failure(self, name: str) -> None:
-        with self._lock:
-            n = self._fails.get(name, 0) + 1
-            self._fails[name] = n
-            if n >= _BREAKER_THRESHOLD:
-                self._until[name] = time.time() + _BREAKER_COOLDOWN
+        data = self._load(name)
+        n = int(data.get("fails", 0)) + 1
+        until = float(data.get("until", 0.0) or 0.0)
+        if n >= _BREAKER_THRESHOLD:
+            until = time.time() + _BREAKER_COOLDOWN
+        self._store(name, {"fails": n, "until": until})
 
     def record_success(self, name: str) -> None:
-        with self._lock:
-            self._fails[name] = 0
-            self._until.pop(name, None)
+        self._store(name, {"fails": 0, "until": 0.0})
 
     def reset(self) -> None:
+        from backend.core.cache import cache_delete
+
         with self._lock:
+            names = set(self._fails) | set(self._until)
             self._fails.clear()
             self._until.clear()
+        for name in names:
+            try:
+                cache_delete(self._key(name))
+            except Exception:  # noqa: BLE001
+                pass
 
 
 class MarketDataManager:
