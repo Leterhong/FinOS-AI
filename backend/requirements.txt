@@ -19,7 +19,7 @@ pytest>=8.3
 # PostgreSQL 生产环境驱动
 psycopg2-binary>=2.9
 # 外部业务数据源（宏观 / 汇率，免费）
-akshare>=1.16
+akshare>=1.19.1
 # PDF 导出（风险清单等，内置中文 CID 字体）
 reportlab>=4.0
 # 可选：Prometheus 指标暴露（部署监控时启用）
