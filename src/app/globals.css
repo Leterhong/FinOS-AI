@@ -55,6 +55,69 @@
     --font-mono-local: "Cascadia Code", "SFMono-Regular", Consolas, ui-monospace, monospace;
   }
 
+  /* ── 浅色主题令牌：切换 html.light 时覆盖同名变量，令引用 --finos-* 的组件自动适配。── */
+  html.light {
+    --background: #F5F7FA;
+    --foreground: #0F172A;
+    --card: rgba(255, 255, 255, 0.9);
+    --card-foreground: #0F172A;
+    --popover: #FFFFFF;
+    --popover-foreground: #0F172A;
+    --secondary: rgba(15, 23, 42, 0.06);
+    --secondary-foreground: #0F172A;
+    --muted: rgba(15, 23, 42, 0.04);
+    --muted-foreground: #64748B;
+    --accent: rgba(15, 23, 42, 0.06);
+    --accent-foreground: #0F172A;
+    --border: rgba(15, 23, 42, 0.10);
+    --input: rgba(15, 23, 42, 0.10);
+    --surface-1: rgba(15, 23, 42, 0.03);
+    --surface-2: rgba(15, 23, 42, 0.05);
+    --surface-3: rgba(15, 23, 42, 0.08);
+
+    --finos-bg: #F5F7FA;
+    --finos-surface: #FFFFFF;
+    --finos-surface-elevated: #FFFFFF;
+    --finos-surface-hover: #EEF2F6;
+    --finos-border: rgba(15, 23, 42, 0.10);
+    --finos-text-primary: #0F172A;
+    --finos-text-secondary: #475569;
+    --finos-text-muted: #64748B;
+    color-scheme: light;
+  }
+
+  html.light {
+    background: var(--finos-bg);
+    color: #0F172A;
+  }
+
+  html.light body {
+    background: var(--finos-bg);
+    color: #0F172A;
+  }
+
+  html.light select,
+  html.light option {
+    color-scheme: light;
+  }
+
+  html.light select option {
+    background-color: #ffffff;
+    color: #0f172a;
+  }
+
+  html.light input:-webkit-autofill,
+  html.light input:-webkit-autofill:hover,
+  html.light input:-webkit-autofill:focus {
+    -webkit-text-fill-color: #0f172a;
+    -webkit-box-shadow: 0 0 0 1000px #ffffff inset;
+  }
+
+  html.light ::selection {
+    background: rgba(0, 214, 143, 0.25);
+    color: #04120b;
+  }
+
   * {
     border-color: var(--border);
   }
@@ -252,6 +315,77 @@
   }
 }
 
+/* ── 浅色主题：将历史页面大量使用的深色工具类（text-white / slate / 半透明白底白边）
+   在 .light 作用域内重映射为浅色语义，避免逐组件改造。选择器带 html.light 前缀，
+   特异性高于单一工具类，可稳定覆盖。── */
+html.light .text-white {
+  color: #0F172A;
+}
+html.light [class*="text-white/"] {
+  color: rgba(15, 23, 42, 0.55);
+}
+html.light [class*="text-slate-100"],
+html.light [class*="text-slate-200"] {
+  color: #0F172A;
+}
+html.light [class*="text-slate-300"] {
+  color: #334155;
+}
+html.light [class*="text-slate-400"] {
+  color: #475569;
+}
+html.light [class*="text-slate-500"] {
+  color: #64748B;
+}
+html.light [class*="text-slate-600"],
+html.light [class*="text-slate-700"],
+html.light [class*="text-slate-800"] {
+  color: #64748B;
+}
+html.light [class*="text-cyan-"] {
+  color: #0E9F63;
+}
+html.light [class*="text-wealth"],
+html.light [class*="text-emerald"] {
+  color: #0E9F63;
+}
+html.light [class*="text-intel"],
+html.light [class*="text-blue"] {
+  color: #2563EB;
+}
+html.light [class*="text-amber"] {
+  color: #B45309;
+}
+html.light [class*="text-rose"],
+html.light [class*="text-red"] {
+  color: #BE123C;
+}
+html.light [class*="bg-white/"] {
+  background-color: rgba(15, 23, 42, 0.045);
+}
+html.light [class*="bg-black/"] {
+  background-color: rgba(15, 23, 42, 0.06);
+}
+html.light [class*="border-white"] {
+  border-color: rgba(15, 23, 42, 0.12);
+}
+html.light [class*="divide-white"] {
+  border-color: rgba(15, 23, 42, 0.10);
+}
+html.light [class*="ring-white"] {
+  --tw-ring-color: rgba(15, 23, 42, 0.12);
+}
+html.light [class*="border-cyan-"] {
+  border-color: rgba(14, 159, 99, 0.30);
+}
+html.light [class*="bg-cyan-400/"] {
+  background-color: rgba(14, 159, 99, 0.10);
+}
+html.light [class*="placeholder:text-white"],
+html.light [class*="placeholder:text-slate-"]::placeholder {
+  color: rgba(15, 23, 42, 0.35);
+}
+
 @layer components {
   .page-shell {
     @apply space-y-5 pb-5 md:space-y-6;
@@ -268,6 +402,66 @@
   .field-control {
     @apply w-full rounded-xl border border-white/10 bg-white/[0.04] px-3.5 py-2.5 text-sm text-white outline-none transition placeholder:text-white/25 hover:border-white/15 focus:border-semantic-success/50 focus:bg-white/[0.06];
   }
+}
+
+/* ── 浅色主题：玻璃拟态与背景装饰在浅色下改为白色玻璃与浅色网格。── */
+html.light .glass {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.72));
+  border-color: rgba(15, 23, 42, 0.10);
+  box-shadow: 0 22px 70px rgba(15, 23, 42, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+html.light .glass::after {
+  background: linear-gradient(115deg, rgba(255, 255, 255, 0.5), transparent 28%, transparent 72%, rgba(14, 165, 233, 0.04));
+}
+html.light .glass-strong {
+  background: rgba(255, 255, 255, 0.94);
+  border-color: rgba(15, 23, 42, 0.12);
+  box-shadow: 0 8px 32px rgba(15, 23, 42, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+html.light .section-surface {
+  background-color: rgba(255, 255, 255, 0.85);
+  border-color: rgba(15, 23, 42, 0.10);
+  box-shadow: 0 20px 64px rgba(15, 23, 42, 0.08);
+}
+html.light .eyebrow {
+  color: rgba(15, 23, 42, 0.45);
+}
+html.light .field-control {
+  background-color: rgba(15, 23, 42, 0.03);
+  border-color: rgba(15, 23, 42, 0.12);
+  color: #0F172A;
+}
+html.light .field-control::placeholder {
+  color: rgba(15, 23, 42, 0.35);
+}
+html.light .field-control:hover {
+  border-color: rgba(15, 23, 42, 0.20);
+}
+html.light .field-control:focus {
+  background-color: rgba(15, 23, 42, 0.05);
+}
+html.light .mesh-bg {
+  background:
+    radial-gradient(ellipse 70% 55% at 10% 0%, rgba(34, 230, 168, 0.16) 0%, transparent 62%),
+    radial-gradient(ellipse 62% 52% at 96% 88%, rgba(24, 191, 242, 0.13) 0%, transparent 60%),
+    radial-gradient(circle at 72% 8%, rgba(59, 130, 246, 0.06), transparent 30%),
+    linear-gradient(160deg, #F7F9FC 0%, #EDF2F8 50%, #F7F9FC 100%);
+}
+html.light .grid-dots {
+  background-image: radial-gradient(rgba(15, 23, 42, 0.05) 1px, transparent 1px);
+}
+html.light .shimmer {
+  background: linear-gradient(90deg, rgba(15, 23, 42, 0.02) 0%, rgba(15, 23, 42, 0.06) 50%, rgba(15, 23, 42, 0.02) 100%);
+  background-size: 200% 100%;
+}
+html.light .scrollbar-thin {
+  scrollbar-color: rgba(15, 23, 42, 0.2) transparent;
+}
+html.light .scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(15, 23, 42, 0.15);
+}
+html.light .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: rgba(15, 23, 42, 0.28);
 }
 
 @media (max-width: 767px) {

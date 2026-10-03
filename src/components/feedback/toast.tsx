@@ -57,11 +57,11 @@ export const toast = {
 };
 
 const toneMeta = {
-  success: { icon: CheckCircle2, className: "border-emerald-400/25 bg-[#0E1B14]/95 text-emerald-200" },
-  info: { icon: Info, className: "border-intel/25 bg-[#0C1424]/95 text-intel" },
-  warning: { icon: AlertTriangle, className: "border-amber-400/25 bg-[#1D1809]/95 text-amber-200" },
-  error: { icon: XCircle, className: "border-rose-400/25 bg-[#1D0C0E]/95 text-rose-200" },
-  processing: { icon: Loader2, className: "border-intel/25 bg-[#0C1424]/95 text-slate-200" },
+  success: { icon: CheckCircle2, className: "border-emerald-400/25 bg-elevated text-emerald-300" },
+  info: { icon: Info, className: "border-intel/25 bg-elevated text-intel" },
+  warning: { icon: AlertTriangle, className: "border-amber-400/25 bg-elevated text-amber-300" },
+  error: { icon: XCircle, className: "border-rose-400/25 bg-elevated text-rose-300" },
+  processing: { icon: Loader2, className: "border-intel/25 bg-elevated text-slate-200" },
 } as const;
 
 export function ToastViewport() {

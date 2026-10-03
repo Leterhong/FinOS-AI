@@ -128,7 +128,7 @@ export default function EnterpriseCommandCenter() {
       </div>
     </Panel>}
 
-    <Panel className="relative bg-gradient-to-r from-[#0b1825] to-[#08111c]">
+    <Panel className="relative bg-elevated">
       <div className="absolute right-0 top-0 h-64 w-64 rounded-full bg-cyan-400/[0.05] blur-3xl" />
       <div className="relative grid gap-6 p-5 lg:grid-cols-[1.2fr_.8fr] lg:p-6">
         <div>

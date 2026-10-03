@@ -17,6 +17,15 @@ export default function RootLayout({
 }) {
   return (
     <html lang="zh-CN" className="dark" data-scroll-behavior="smooth" suppressHydrationWarning>
+      <head>
+        {/* 首屏绘制前应用已保存的主题，避免深浅色闪烁（FOUC）。 */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "(function(){try{var t=localStorage.getItem('finos-theme');if(t==='light'){var e=document.documentElement;e.classList.remove('dark');e.classList.add('light');e.style.colorScheme='light';}}catch(e){}})();",
+          }}
+        />
+      </head>
       <body className="font-sans antialiased">
         <Providers>
           <div className="mesh-bg" />

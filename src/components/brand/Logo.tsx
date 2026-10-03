@@ -22,7 +22,7 @@ export default function Logo({
       <span
         aria-hidden="true"
         className={cn(
-          "relative inline-grid shrink-0 place-items-center overflow-hidden border border-white/12 bg-[#09131c] shadow-[0_10px_30px_rgba(0,214,143,.18),inset_0_1px_0_rgba(255,255,255,.12)]",
+          "relative inline-grid shrink-0 place-items-center overflow-hidden border border-white/12 bg-elevated shadow-[0_10px_30px_rgba(0,214,143,.18),inset_0_1px_0_rgba(255,255,255,.12)]",
           rounded && "rounded-[28%]",
         )}
         style={{ width: size, height: size }}

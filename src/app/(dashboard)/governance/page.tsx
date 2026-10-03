@@ -313,7 +313,7 @@ export default function GovernancePage() {
       </>}
     </DetailDrawer>
     {!snapshot && busy !== "load" && <Panel><EmptyStateCard icon={ShieldCheck} title="治理服务尚未连接" description="请确认 FastAPI 服务可用；纯前端模式仍可使用研判功能，但组织权限与审计不会被错误标记为已启用。" /></Panel>}
-    {busy && busy !== "load" && <div className="pointer-events-none fixed bottom-6 right-6 flex items-center gap-2 rounded-xl border border-cyan-400/20 bg-[#07111d] px-4 py-3 text-xs text-cyan-100 shadow-2xl"><Loader2 className="h-4 w-4 animate-spin" />正在执行治理操作</div>}
+    {busy && busy !== "load" && <div className="pointer-events-none fixed bottom-6 right-6 flex items-center gap-2 rounded-xl border border-cyan-400/20 bg-elevated px-4 py-3 text-xs text-cyan-100 shadow-2xl"><Loader2 className="h-4 w-4 animate-spin" />正在执行治理操作</div>}
     <EnterpriseDialog open={Boolean(deciding)} onClose={() => setDeciding(null)} title={deciding?.status === "approved" ? "批准复核事项" : "驳回复核事项"} description="复核依据将进入不可篡改留痕；复核人身份由系统记录，无需手填。">
       <form onSubmit={submitDecision} className="space-y-4">
         <label className="block"><span className="mb-1.5 block text-[11px] text-slate-400">{deciding?.status === "approved" ? "批准依据" : "驳回原因"}</span><textarea required rows={3} value={decisionNote} onChange={(event) => setDecisionNote(event.target.value)} placeholder="写明对照的证据、规则与结论" className="field-control resize-none" /></label>
