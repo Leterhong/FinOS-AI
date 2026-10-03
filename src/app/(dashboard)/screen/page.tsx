@@ -73,6 +73,14 @@ function BarList({ items, max, empty }: { items: Array<{ label: string; value: n
 
 function LineChart({ points, labels, color = "#22d3ee" }: { points: number[]; labels: string[]; color?: string }) {
   if (points.length === 0) return <p className="py-8 text-center text-xs text-slate-400">尚无期间化事实数据</p>;
+  if (points.length === 1) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center">
+        <p className="numeric text-3xl font-semibold text-white">{points[0]}</p>
+        <p className="mt-1 text-[10px] text-slate-500">{labels[0]} · 单期事实数（暂无可对比期间）</p>
+      </div>
+    );
+  }
   const max = Math.max(1, ...points);
   const w = 100;
   const h = 40;
@@ -290,7 +298,7 @@ export default function ScreenPage() {
           <Section title="外部市场数据" hint="公开数据" className="xl:col-span-3">
             <div className="grid h-full grid-cols-1 gap-2">
               <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3"><p className="text-[10px] text-slate-500">USD / CNY 汇率</p><p className="numeric mt-1 text-xl text-white">{external?.fx ?? "—"}</p></div>
-              <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3"><p className="text-[10px] text-slate-500">最新 LPR</p><p className="mt-1 text-[11px] text-slate-200">{external?.lpr ?? "—"}</p><p className="mt-1 text-[9px] text-slate-400">模型：{active?.configured ? "已连接" : "未配置"}</p></div>
+              <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3"><p className="text-[10px] text-slate-500">最新 LPR</p><p className="mt-1 line-clamp-2 break-all text-[11px] leading-5 text-slate-200">{external?.lpr ?? "—"}</p><p className="mt-1 text-[9px] text-slate-400">模型：{active?.configured ? "已连接" : "未配置"}</p></div>
             </div>
           </Section>
         </div>
@@ -342,7 +350,7 @@ export default function ScreenPage() {
           <Section title="外部市场数据" hint="公开数据" className="xl:col-span-3">
             <div className="grid h-full grid-cols-1 gap-2">
               <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3"><p className="text-[10px] text-slate-500">USD / CNY 汇率</p><p className="numeric mt-1 text-xl text-white">{external?.fx ?? "—"}</p></div>
-              <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3"><p className="text-[10px] text-slate-500">最新 LPR</p><p className="mt-1 text-[11px] text-slate-200">{external?.lpr ?? "—"}</p></div>
+              <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3"><p className="text-[10px] text-slate-500">最新 LPR</p><p className="mt-1 line-clamp-2 break-all text-[11px] leading-5 text-slate-200">{external?.lpr ?? "—"}</p></div>
             </div>
           </Section>
           <Section title="最近更新风险" className="xl:col-span-5">
