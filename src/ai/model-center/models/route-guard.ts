@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { UnsafeBaseUrlError } from "../providers/base-url-guard";
 import { ModelStoreDecryptError } from "./store";
+import { ModelConfigValidationError } from "./validation";
 
 type Handler<Args extends unknown[]> = (...args: Args) => Promise<NextResponse>;
 
@@ -20,6 +21,9 @@ export function withModelStoreErrors<Args extends unknown[]>(
         return NextResponse.json({ error: error.message }, { status: 503 });
       }
       if (error instanceof UnsafeBaseUrlError) {
+        return NextResponse.json({ error: error.message }, { status: 400 });
+      }
+      if (error instanceof ModelConfigValidationError) {
         return NextResponse.json({ error: error.message }, { status: 400 });
       }
       throw error;

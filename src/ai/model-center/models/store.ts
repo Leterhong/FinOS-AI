@@ -13,6 +13,7 @@ import { randomUUID } from "node:crypto";
 import { encryptJson, decryptJson } from "../../../financial-data/storage/crypto";
 import { encryptApiKey, decryptApiKey, maskApiKey } from "../encryption";
 import { assertSafeBaseUrl } from "../providers/base-url-guard";
+import { assertModelFieldLengths } from "./validation";
 import { getPreset } from "../providers/presets";
 import type { EncryptedBlob } from "../../../financial-data/types";
 import type {
@@ -232,6 +233,7 @@ class ModelConfigStore {
   }
 
   private async _add(userId: string, input: ProviderConfigInput): Promise<PublicProviderConfig> {
+    assertModelFieldLengths(input);
     const configs = await this.load(userId);
     const preset = getPreset(input.providerName);
     const now = new Date().toISOString();
@@ -268,6 +270,7 @@ class ModelConfigStore {
     id: string,
     input: Partial<ProviderConfigInput>
   ): Promise<PublicProviderConfig | null> {
+    assertModelFieldLengths(input);
     const configs = await this.load(userId);
     const c = configs.find((x) => x.id === id);
     if (!c) return null;
