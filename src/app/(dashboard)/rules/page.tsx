@@ -214,12 +214,20 @@ export default function RulesPage() {
           {RULE_TEMPLATES.filter((template) => templateGroup === "全部" || template.group === templateGroup).map((template) => {
             const added = allRules.some((rule) => rule.code === template.code);
             const opLabel = template.op === "lt" ? "<" : template.op === "lte" ? "≤" : template.op === "gt" ? ">" : template.op === "gte" ? "≥" : "=";
-            return <div key={template.id} className="flex items-center gap-3 rounded-xl border border-white/[0.07] p-3">
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-xs text-slate-200">{template.code} · {template.name}</p>
-                <p className="mt-1 text-[10px] text-slate-400">{template.group} · {template.metric} {opLabel} {template.value}{conditionUnit(template.metric)} · {template.note}</p>
+            return <div key={template.id} className="rounded-xl border border-white/[0.07] p-3">
+              <div className="flex items-start gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs text-slate-200">{template.code} · {template.name}</p>
+                  <p className="mt-1 text-[10px] text-slate-400">{template.group} · {template.metric} {opLabel} {template.value}{conditionUnit(template.metric)} · {template.note}</p>
+                  <p className="mt-1.5 text-[10px] leading-5 text-slate-500">{template.description}</p>
+                  <div className="mt-2 grid gap-1 text-[10px] leading-5 text-slate-500">
+                    <p><span className="text-slate-400">口径依据：</span>{template.basis}</p>
+                    <p><span className="text-slate-400">潜在影响：</span>{template.impact}</p>
+                    <p><span className="text-slate-400">复核建议：</span>{template.suggestion}</p>
+                  </div>
+                </div>
+                <button type="button" onClick={() => addFromTemplate(template)} disabled={added} className="shrink-0 rounded-lg border border-cyan-400/25 px-3 py-1.5 text-[10px] text-cyan-200 disabled:opacity-40">{added ? "已加入" : "加入规则库"}</button>
               </div>
-              <button type="button" onClick={() => addFromTemplate(template)} disabled={added} className="shrink-0 rounded-lg border border-cyan-400/25 px-3 py-1.5 text-[10px] text-cyan-200 disabled:opacity-40">{added ? "已加入" : "加入规则库"}</button>
             </div>;
           })}
         </div>

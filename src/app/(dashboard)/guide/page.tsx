@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import {
-  BriefcaseBusiness, ChevronDown, Files, MessageSquareText, Scale,
+  BriefcaseBusiness, ChevronDown, ExternalLink, Files, MessageSquareText, Scale,
   ShieldAlert, Workflow, Cpu, ShieldCheck, Users,
   CloudUpload, Database, HelpCircle,
 } from "lucide-react";
@@ -103,6 +103,7 @@ export default function GuidePage() {
       eyebrow="User guide"
       title="使用指引"
       description={'按照以下 8 个步骤，完成一次从「上传资料」到「输出风险清单」的完整企业金融研判。所有步骤可反复执行，系统不会预置任何示例数据。'}
+      actions={<Link href="https://github.com/Leterhong/FinOS-AI/blob/main/docs/introduction.md" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-300">查看图文详解<ExternalLink className="h-3.5 w-3.5" /></Link>}
     />
 
     {/* 快速启动流程 */}

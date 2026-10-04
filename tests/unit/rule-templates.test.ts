@@ -15,9 +15,18 @@ test("规则模板库非空且编号唯一", () => {
   assert.ok(ruleTemplateGroups().includes("通用"));
 });
 
+test("规则模板数量扩充且每条都带详细说明", () => {
+  assert.ok(RULE_TEMPLATES.length >= 50, `模板数量应扩充到 50 条以上，实际 ${RULE_TEMPLATES.length}`);
+  for (const item of RULE_TEMPLATES) {
+    for (const field of ["description", "basis", "impact", "suggestion"] as const) {
+      assert.ok(item[field] && item[field].length >= 4, `${item.code} 缺少详细字段 ${field}`);
+    }
+  }
+});
+
 test("行业阈值分组覆盖主要行业", () => {
   const ids = INDUSTRY_PROFILES.map((profile) => profile.id);
-  for (const id of ["general", "manufacturing", "trading", "realestate", "construction"]) {
+  for (const id of ["general", "manufacturing", "trading", "realestate", "construction", "software", "pharma", "logistics", "agriculture"]) {
     assert.ok(ids.includes(id), `缺少行业分组 ${id}`);
   }
 });
@@ -33,6 +42,10 @@ test("按企业所属行业匹配分组并推荐模板", () => {
   assert.equal(matchIndustryProfile("房地产开发").id, "realestate");
   assert.equal(matchIndustryProfile("商贸零售").id, "trading");
   assert.equal(matchIndustryProfile("建筑工程").id, "construction");
+  assert.equal(matchIndustryProfile("软件与信息服务").id, "software");
+  assert.equal(matchIndustryProfile("医药制造").id, "pharma");
+  assert.equal(matchIndustryProfile("物流运输").id, "logistics");
+  assert.equal(matchIndustryProfile("农业养殖").id, "agriculture");
   assert.equal(matchIndustryProfile("").id, "general");
   const rec = recommendedTemplates("制造业");
   assert.equal(rec.profile.id, "manufacturing");
