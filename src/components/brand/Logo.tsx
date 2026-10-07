@@ -59,7 +59,7 @@ export default function Logo({
           <span className="block text-[15px] font-bold tracking-[-0.02em] text-white">
             FinOS <span className="text-semantic-success">AI</span>
           </span>
-          <span className="mt-1 block text-[8px] font-semibold uppercase tracking-[0.22em] text-white/35">
+          <span className="mt-1 block text-[10px] font-semibold uppercase tracking-[0.18em] text-white/35">
             Enterprise Financial Agent
           </span>
         </span>

@@ -18,7 +18,7 @@ from backend.config import get_settings
 from backend.security.audit import effective_client_ip
 
 # 严格限流的认证端点（防暴力破解 / 撞库）
-_STRICT_AUTH_PATHS = {"/api/auth/login", "/api/auth/register", "/api/auth/bootstrap"}
+_STRICT_AUTH_PATHS = {"/api/auth/login", "/api/auth/register"}
 
 # CSRF 校验豁免（登录态尚未建立，或使用 Refresh Cookie 引导/续期的端点）
 _CSRF_EXEMPT = {
@@ -42,6 +42,9 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         settings = get_settings()
         if path in _STRICT_AUTH_PATHS:
             return f"auth:{ip}", settings.auth_rate_limit_per_minute
+        if path == "/api/auth/bootstrap":
+            # 幂等的静默换发：整页加载即触发，使用独立且更宽松的配额。
+            return f"bootstrap:{ip}", settings.bootstrap_rate_limit_per_minute
         if path.startswith("/api/ai/"):
             return f"ai:{ip}", settings.ai_rate_limit_per_minute
         return f"api:{ip}", settings.api_rate_limit_per_minute

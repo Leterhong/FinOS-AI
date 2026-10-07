@@ -38,7 +38,9 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
 - Instructions:
   - 生产模式预览通过仓库根目录 `./start.sh` 启动（Web 3000 / API 8300），停止使用 `./stop.sh`。
   - 修改前端或后端代码后，需先 `./stop.sh` 再 `./start.sh` 才会生效，服务就绪约 120 秒，需等待后再访问。
-  - 限流配置的后端字段名为 `api_in_in` / `auth_in_in` / `ai_in_in`（见 `backend/config/settings.py`），可通过环境变量在启动时覆盖，例如 `AUTH_IN_IN=9000 API_IN_IN=20000 AI_IN_IN=2000 ./start.sh`；`.env.example` 中的 `API_RATE_LIMIT_PER_MINUTE` / `AI_RATE_LIMIT_PER_MINUTE` 与后端字段名不同。
+  - 限流配置的后端字段名为 `api_rate_limit_per_minute` / `auth_rate_limit_per_minute` / `bootstrap_rate_limit_per_minute` / `ai_rate_limit_per_minute`（见 `backend/config/settings.py`），对应环境变量为同名的全大写形式：`API_RATE_LIMIT_PER_MINUTE` / `AUTH_RATE_LIMIT_PER_MINUTE` / `BOOTSTRAP_RATE_LIMIT_PER_MINUTE` / `AI_RATE_LIMIT_PER_MINUTE`。默认 auth 为 10、bootstrap 为 60、api 为 300、ai 为 30（次/分钟/IP）。
+  - `POST /api/auth/bootstrap` 每次整页加载都会被前端静默调用，使用独立的 `bootstrap` 限流桶，不要并入登录的严格限流（否则正常刷新约 10 次即 429）。
+  - 注意：仓库中不存在 `api_in_in` / `auth_in_in` / `ai_in_in` 这类字段名或环境变量，使用它们不会生效。
 
 [本地开发与部署前置]
 - Date: 2026-10-04

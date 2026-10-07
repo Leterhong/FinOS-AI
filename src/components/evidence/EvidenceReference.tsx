@@ -61,7 +61,7 @@ export function EvidenceChain({ steps, className }: { steps: EvidenceChainStep[]
       {steps.map((step, index) => (
         <div key={`${step.label}-${index}`}>
           <div className="flex items-start gap-2.5">
-            <span className="mt-1.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border border-cyan-400/20 bg-cyan-400/[0.05] text-[8px] font-bold text-cyan-300">
+            <span className="mt-1.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border border-cyan-400/20 bg-cyan-400/[0.05] text-[10px] font-bold text-cyan-300">
               {index + 1}
             </span>
             <div className="min-w-0">

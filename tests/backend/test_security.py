@@ -53,6 +53,17 @@ def test_auth_endpoints_are_rate_limited(client):
     cache._rate.clear()
 
 
+def test_bootstrap_not_subject_to_strict_auth_limit(client):
+    """bootstrap 每次整页加载都会静默调用，必须比登录限流宽松，避免正常刷新触发 429。"""
+    cache._rate.clear()
+    statuses = []
+    for _ in range(15):
+        r = client.post(f"{API}/auth/bootstrap", json={})
+        statuses.append(r.status_code)
+    assert 429 not in statuses, f"bootstrap 被过严限流，实际状态码序列: {statuses}"
+    cache._rate.clear()
+
+
 # ---------------------------------------------------------------- 密钥零泄露
 def test_no_plaintext_key_in_any_response(client, auth):
     secret = "sk-leak-canary-0987654321abcdefghij"

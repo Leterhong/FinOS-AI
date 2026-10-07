@@ -105,8 +105,11 @@ class Settings(BaseSettings):
 
     # --- 安全限制 ---
     api_rate_limit_per_minute: int = 300
-    # 登录/注册/bootstrap 严格限流：次 / 分钟 / IP（可配置以便本地联调与压测）
+    # 登录/注册 严格限流：次 / 分钟 / IP（防暴力破解与撞库）
     auth_rate_limit_per_minute: int = 10
+    # bootstrap（refresh cookie → access token，幂等）独立限流：每次整页加载都会静默调用，
+    # 比登录宽松，避免正常刷新/多标签页/审计脚本触发 429。
+    bootstrap_rate_limit_per_minute: int = 60
     ai_rate_limit_per_minute: int = 30
     ai_max_tokens: int = 8192
     ai_max_input_chars: int = 100_000
