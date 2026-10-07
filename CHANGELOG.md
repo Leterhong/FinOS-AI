@@ -21,6 +21,7 @@
 ### 变更
 
 - Next.js 页面响应新增 `Content-Security-Policy-Report-Only`、`Cross-Origin-Opener-Policy`、`Cross-Origin-Resource-Policy` 与 `X-DNS-Prefetch-Control`
+- 浏览器标签标题按当前模块显示（如「规则库 · FinOS AI」）；所有 `/api/*` 响应统一 `Cache-Control: no-store`
 
 ### 修复
 

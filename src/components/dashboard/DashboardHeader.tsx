@@ -85,6 +85,13 @@ export default function DashboardHeader({ onMenuToggle }: { onMenuToggle?: () =>
   };
   const noticeCount = pending.length + invitations.length + notifications.length;
   const pageTitle = pathname.startsWith("/cases/") ? "项目研判工作台" : (titles[pathname] ?? "FinOS 企业金融 Agent");
+  useEffect(() => {
+    // Next 的路由 metadata 会在 hydration 后回写 <title>，这里延迟再应用一次以稳定胜出。
+    const apply = () => { document.title = `${pageTitle} · FinOS AI`; };
+    apply();
+    const timer = window.setTimeout(apply, 400);
+    return () => window.clearTimeout(timer);
+  }, [pageTitle]);
   return <header className="relative z-30 mb-5 flex h-[58px] shrink-0 items-center gap-3 border-b border-white/[0.07] pb-3">
     <button type="button" onClick={onMenuToggle} aria-label="打开导航" className="grid h-10 w-10 place-items-center rounded-xl border border-white/[0.08] bg-white/[0.03] text-slate-300 lg:hidden"><Menu className="h-5 w-5" /></button>
     <div className="min-w-0"><p className="truncate text-[11px] text-slate-500">工作区<span className="mx-1.5 text-slate-500">/</span><span className="text-slate-400">{pageTitle}</span></p><p className="truncate text-sm font-semibold text-slate-100">{pageTitle}</p></div>

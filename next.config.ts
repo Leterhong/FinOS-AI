@@ -42,6 +42,11 @@ const nextConfig: NextConfig = {
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
         ],
       },
+      {
+        // API 响应一律禁止缓存：模型配置、技能、用量等均为按会话隔离的敏感数据。
+        source: "/api/:path*",
+        headers: [{ key: "Cache-Control", value: "no-store" }],
+      },
     ];
   },
   // Docker 生产镜像使用 standalone 产物；本地生产预览保持标准输出，
