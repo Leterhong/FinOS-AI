@@ -14,6 +14,8 @@ import { encryptJson, decryptJson } from "../../../financial-data/storage/crypto
 import { encryptApiKey, decryptApiKey, maskApiKey } from "../encryption";
 import { assertSafeBaseUrl } from "../providers/base-url-guard";
 import { assertModelFieldLengths } from "./validation";
+import { BoundedMap } from "../../../lib/bounded-map";
+import { KeyedQueue } from "../../../lib/keyed-queue";
 import { getPreset } from "../providers/presets";
 import type { EncryptedBlob } from "../../../financial-data/types";
 import type {
@@ -60,16 +62,14 @@ function safeTrim(value: unknown): string {
 }
 
 class ModelConfigStore {
-  private cache = new Map<string, AIProviderConfig[]>();
+  // 上限内的按用户缓存；超出后按插入顺序淘汰，避免匿名工作区无限累积。
+  private cache = new BoundedMap<string, AIProviderConfig[]>(200);
 
-  /** 每个 userId 的读-改-写串行化队列，避免并发写入相互覆盖。 */
-  private locks = new Map<string, Promise<unknown>>();
+  /** 每个 userId 的读-改-写串行化队列，避免并发写入相互覆盖；空闲后自动清理。 */
+  private queue = new KeyedQueue();
 
   private withLock<T>(userId: string, operation: () => Promise<T>): Promise<T> {
-    const previous = this.locks.get(userId) ?? Promise.resolve();
-    const run = previous.then(operation, operation);
-    this.locks.set(userId, run.then(() => undefined, () => undefined));
-    return run;
+    return this.queue.run(userId, operation);
   }
 
   private filePath(userId: string): string {
@@ -81,7 +81,8 @@ class ModelConfigStore {
   }
 
   private async load(userId: string): Promise<AIProviderConfig[]> {
-    if (this.cache.has(userId)) return this.cache.get(userId)!;
+    const cached = this.cache.touch(userId);
+    if (cached) return cached;
     let raw: string;
     try {
       raw = await fs.readFile(this.filePath(userId), "utf8");

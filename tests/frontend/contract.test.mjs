@@ -329,3 +329,11 @@ test("compose 的 Access Token 默认有效期必须为 15 分钟（安全模型
   assert.ok(m, "compose 缺少 JWT_EXPIRE_MINUTES 配置");
   assert.equal(m[1], "15", `compose 默认 Access Token 有效期应为 15 分钟，实际 ${m[1]}`);
 });
+
+test("Next 页面响应必须声明 CSP（Report-Only）与跨源隔离头", () => {
+  const cfg = read(join(ROOT, "next.config.ts"));
+  for (const key of ["Content-Security-Policy-Report-Only", "Cross-Origin-Opener-Policy", "Cross-Origin-Resource-Policy"]) {
+    assert.ok(cfg.includes(key), `next.config.ts 缺少安全响应头 ${key}`);
+  }
+  assert.ok(/frame-ancestors 'none'/.test(cfg), "CSP 必须禁止页面被内嵌（frame-ancestors 'none'）");
+});

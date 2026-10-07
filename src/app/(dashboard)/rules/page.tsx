@@ -1,8 +1,8 @@
 "use client";
 
-import { type FormEvent, useMemo, useState } from "react";
+import { type ChangeEvent, type FormEvent, useMemo, useRef, useState } from "react";
 import { formatWhen } from "@/lib/relative-time";
-import { CheckCircle2, FileDiff, Library, Plus, Search, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
+import { CheckCircle2, Download, FileDiff, Library, Plus, Search, ShieldCheck, Sparkles, Trash2, Upload } from "lucide-react";
 import EnterpriseDialog from "@/components/enterprise/EnterpriseDialog";
 import { Select } from "@/components/ui/Select";
 import { Tooltip } from "@/components/ui/Tooltip";
@@ -11,6 +11,8 @@ import { useActiveEnterpriseCase } from "@/hooks/use-active-enterprise-case";
 import { useEnterpriseStore } from "@/store/enterprise-store";
 import { evaluateRule, type FactCandidate } from "@/lib/rule-engine";
 import { RULE_TEMPLATES, recommendedTemplates, ruleTemplateGroups, type RuleTemplate } from "@/lib/rule-templates";
+import { buildRulePack, parseRulePack, serializeRulePack } from "@/lib/rule-pack";
+import { triggerDownload } from "@/lib/download";
 import { toast } from "@/components/feedback/toast";
 import type { EnterpriseRule } from "@/types/enterprise";
 
@@ -36,6 +38,7 @@ export default function RulesPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [templateOpen, setTemplateOpen] = useState(false);
   const [templateGroup, setTemplateGroup] = useState("全部");
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const rules = allRules
     .filter((rule) => `${rule.code}${rule.name}${rule.domain}`.toLowerCase().includes(query.toLowerCase()))
     .filter((rule) => {
@@ -65,6 +68,56 @@ export default function RulesPage() {
       addRule({ code: template.code, name: template.name, domain: template.domain, version: "v1.0", conditions: [{ metric: template.metric, op: template.op, value: template.value }], enabled: true, industries: template.industry === "general" ? [] : [template.group] });
     }
     toast.success(`已加入 ${recommendedPending.length} 条「${recommendation.profile.label}」推荐规则`);
+  };
+
+  const handleExportRules = () => {
+    if (!allRules.length) {
+      toast.info("当前规则库为空，无可导出内容");
+      return;
+    }
+    const pack = buildRulePack(allRules.map((rule) => ({
+      code: rule.code,
+      name: rule.name,
+      domain: rule.domain,
+      version: rule.version,
+      conditions: rule.conditions,
+      enabled: rule.enabled !== false,
+      industries: rule.industries,
+    })));
+    triggerDownload(new Blob([serializeRulePack(pack)], { type: "application/json" }), `finos-rules-${new Date().toISOString().slice(0, 10)}.json`);
+    toast.success(`已导出 ${allRules.length} 条规则`);
+  };
+
+  const handleImportRules = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("规则包文件过大（上限 2MB）");
+      return;
+    }
+    const result = parseRulePack(await file.text());
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+    const existing = new Set(allRules.map((rule) => rule.code));
+    let added = 0;
+    let skipped = 0;
+    for (const rule of result.rules) {
+      if (existing.has(rule.code)) {
+        skipped += 1;
+        continue;
+      }
+      addRule({ code: rule.code, name: rule.name, domain: rule.domain, version: rule.version, conditions: rule.conditions, enabled: rule.enabled, industries: rule.industries });
+      existing.add(rule.code);
+      added += 1;
+    }
+    if (added === 0) {
+      toast.info(`规则包中的 ${skipped} 条规则均已存在`);
+      return;
+    }
+    toast.success(`导入完成：新增 ${added} 条${skipped ? `，跳过已存在 ${skipped} 条` : ""}`);
   };
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
@@ -122,7 +175,7 @@ export default function RulesPage() {
   ] as const;
 
   return <div className="page-shell">
-    <PageIntro eyebrow="Policy & rules" title="企业金融规则库" description="把准入制度、审查要点与监管要求转化为可版本化、可测试、可解释的机器规则，并保留原制度依据。" actions={<><button onClick={() => setTemplateOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-cyan-400/25 px-4 py-2.5 text-xs text-cyan-200"><Library className="h-3.5 w-3.5" />规则模板</button><button onClick={() => setOpen(true)} className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]"><Plus className="h-3.5 w-3.5" />新建规则</button></>} />
+    <PageIntro eyebrow="Policy & rules" title="企业金融规则库" description="把准入制度、审查要点与监管要求转化为可版本化、可测试、可解释的机器规则，并保留原制度依据。" actions={<><button type="button" onClick={() => fileInputRef.current?.click()} className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-300"><Upload className="h-3.5 w-3.5" />导入规则包</button><button type="button" onClick={handleExportRules} className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-300"><Download className="h-3.5 w-3.5" />导出规则包</button><button onClick={() => setTemplateOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-cyan-400/25 px-4 py-2.5 text-xs text-cyan-200"><Library className="h-3.5 w-3.5" />规则模板</button><button onClick={() => setOpen(true)} className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]"><Plus className="h-3.5 w-3.5" />新建规则</button><input ref={fileInputRef} type="file" accept="application/json,.json" className="hidden" onChange={handleImportRules} aria-label="导入规则包文件" /></>} />
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{metrics.map(([Icon, value, label]) => <div key={label} className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-4"><Icon className="h-4 w-4 text-cyan-300" /><p className="numeric mt-3 text-2xl font-semibold text-white">{value}</p><p className="mt-1 text-[11px] text-slate-500">{label}</p></div>)}</div>
     {activeCase && <Panel className="border-cyan-400/20 bg-cyan-400/[0.04]"><div className="flex flex-wrap items-center gap-3 p-4"><Sparkles className="h-4 w-4 shrink-0 text-cyan-300" /><p className="min-w-0 flex-1 text-xs text-cyan-100">当前项目「{activeCase.company}」所属行业：<span className="text-white">{activeCase.industry || "未填写"}</span> → 匹配「{recommendation.profile.label}」分组，推荐 {recommendation.templates.length} 条规则模板{recommendedPending.length > 0 ? `（待加入 ${recommendedPending.length} 条）` : "（已全部加入）"}。</p><button type="button" onClick={() => { setTemplateGroup(recommendation.profile.label); setTemplateOpen(true); }} className="rounded-lg border border-cyan-400/25 px-3 py-1.5 text-[10px] text-cyan-200">查看推荐模板</button><button type="button" onClick={addRecommended} disabled={!recommendedPending.length} className="rounded-lg bg-cyan-300 px-3 py-1.5 text-[10px] font-semibold text-[#041018] disabled:opacity-40">一键加入推荐模板</button></div></Panel>}
     <Panel>

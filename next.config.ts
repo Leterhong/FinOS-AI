@@ -3,6 +3,21 @@ import type { NextConfig } from "next";
 // 后端 FastAPI 地址：本地 dev 直连 8300，Docker 内 nginx 已代理无需 rewrite。
 const BACKEND_URL = process.env.BACKEND_PROXY_URL || "http://127.0.0.1:8300";
 
+// 页面响应安全策略。先以 Report-Only 上线，便于观察 Next.js 内联脚本/样式的违规，
+// 确认无回归后再切换为强制模式（enforce）。
+const CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "font-src 'self' data:",
+  "connect-src 'self'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join("; ");
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
@@ -20,6 +35,10 @@ const nextConfig: NextConfig = {
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "X-Frame-Options", value: "DENY" },
+          { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+          { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
+          { key: "X-DNS-Prefetch-Control", value: "off" },
+          { key: "Content-Security-Policy-Report-Only", value: CONTENT_SECURITY_POLICY },
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
         ],
       },

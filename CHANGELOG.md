@@ -7,6 +7,26 @@
 
 ---
 
+## [Unreleased]
+
+### 新增
+
+- 规则库支持规则包（JSON）导入/导出：用于跨工作区共享与备份规则，导入时逐条校验结构并跳过重复编号
+- 规则模板库扩充到 71 条，覆盖 9 个行业分组，并为每条模板补充规则说明、口径依据、潜在影响与复核建议
+- 使用指引页新增「查看图文详解」入口
+
+### 变更
+
+- Next.js 页面响应新增 `Content-Security-Policy-Report-Only`、`Cross-Origin-Opener-Policy`、`Cross-Origin-Resource-Policy` 与 `X-DNS-Prefetch-Control`
+
+### 修复
+
+- 修复模型配置存储在长期运行时的内存增长：写锁队列空闲后自动清理，按工作区缓存加入容量上限
+- 工作区会话请求体增加大小上限（超限返回 413，畸形 JSON 返回 400）
+- 模型配置字符串字段增加长度校验（modelId/displayName/modelName/baseUrl/apiKey）
+
+---
+
 ## [2.2.1] - 2026-09-02
 
 UI/UX 组件体系与用户旅程补全。
