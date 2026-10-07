@@ -1,6 +1,6 @@
 import type { EvidenceFact } from "@/types/enterprise";
 import { canonicalMetricName, metricTopicMatches } from "@/lib/metric-aliases";
-import { toYuan } from "@/lib/units";
+import { toComparableValue } from "@/lib/units";
 
 export interface FinancialMetric {
   id: string;
@@ -21,7 +21,7 @@ export interface FinancialTrend {
 }
 
 function normalized(fact: EvidenceFact): number {
-  return toYuan(fact.value, fact.unit);
+  return toComparableValue(fact.value, fact.unit);
 }
 
 function matches(topic: string, names: string[]): boolean {

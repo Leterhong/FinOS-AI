@@ -12,7 +12,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6.svg)](https://www.typescriptlang.org/)
 [![Security Policy](https://img.shields.io/badge/security-policy-f59e0b.svg)](./SECURITY.md)
 
-[图文详解](./docs/introduction.md) · [完整使用文档](./docs/user-guide.md) · [界面预览](#界面预览) · [快速开始](#快速开始) · [技术架构](#技术架构) · [安全边界](#安全与责任边界)
+[图文详解](./docs/introduction.md) · [完整使用文档](./docs/user-guide.md) · [评测报告](./docs/benchmark.md) · [作品简介](./docs/pitch.md) · [界面预览](#界面预览) · [快速开始](#快速开始) · [技术架构](#技术架构) · [安全边界](#安全与责任边界)
 
 </div>
 
@@ -53,6 +53,16 @@ FinOS AI 采用深色金融工作台设计，浅色主题达 WCAG AA，移动端
 ## 设计原则
 
 Evidence first · Human in the loop · Explainable rules · Secure by default · Open and self-hosted：重要判断可回溯到原始资料、事实与引用位置，关键决策由授权人员确认，规则命中可解释，密钥不进入前端，MIT 开源可自托管。完整说明见 [图文详解 · FinOS AI 是什么](./docs/introduction.md#1-finos-ai-是什么)。
+
+## 为什么不同
+
+- **确定性规则引擎 + 大模型分工**：规则命中由纯函数判定，模型只负责资料理解与叙述生成，同一输入得到同一结论，可复现、可审计。
+- **证据优先**：每条事实携带原文引用与行号 / 单元格 / 图像坐标，结论可逐级追溯到原始资料。
+- **人机复核闭环**：候选风险必须经人工核验才成为正式风险，操作全程留痕。
+- **企业治理内建**：组织角色、项目授权、数据密级、复核队列、模型评测与审计开箱可用。
+- **自带模型、可自托管**：密钥在服务端加密，MIT 开源，支持私有化部署。
+
+量化证据：71 条规则模板、296 条确定性基准用例、100% 通过（`npm run benchmark`，见 [评测报告](./docs/benchmark.md)）。一页纸概览见 [作品简介](./docs/pitch.md)。
 
 ## 快速开始
 
@@ -95,9 +105,12 @@ npm run test:backend
 
 # 端到端主链路（本地 mock LLM，需先 build）
 node tests/e2e/main-chain.mjs
+
+# 确定性引擎评测（生成 docs/benchmark.md，不调用模型）
+npm run benchmark
 ```
 
-以上门禁同时由 GitHub Actions（CI + CodeQL + Dependabot）自动执行。测试使用隔离数据与本地 mock 模型，不连接任何真实模型服务。更多信息见 [`tests/README.md`](./tests/README.md)。
+以上门禁同时由 GitHub Actions（CI + CodeQL + Dependabot）自动执行。测试使用隔离数据与本地 mock 模型，不连接任何真实模型服务。确定性引擎评测当前为 296/296（100%），可用 `npm run benchmark` 复现，结果见 [评测报告](./docs/benchmark.md)。更多信息见 [`tests/README.md`](./tests/README.md)。
 
 ## 安全与责任边界
 

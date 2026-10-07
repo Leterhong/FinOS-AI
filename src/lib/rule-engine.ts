@@ -8,7 +8,7 @@
  */
 
 import { metricTopicMatches } from "./metric-aliases";
-import { toYuan } from "./units";
+import { toComparableValue } from "./units";
 
 /** 规则条件：对事实主题 + 比较操作 + 阈值。 */
 export interface RuleCondition {
@@ -39,9 +39,8 @@ export interface RuleOutcome {
 }
 
 function normalizeFact(fact: FactCandidate): number {
-  // 百分比保留原值；金额按统一单位表换算，未知单位返回 NaN（不命中）。
-  if (fact.unit === "%") return fact.value;
-  return toYuan(fact.value, fact.unit);
+  // 比率/时间类单位（%、倍、天等）保留原值；金额按统一单位表换算，未知单位返回 NaN（不命中）。
+  return toComparableValue(fact.value, fact.unit);
 }
 
 function compare(actual: number, op: RuleCondition["op"], threshold: number): boolean {

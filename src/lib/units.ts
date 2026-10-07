@@ -28,6 +28,11 @@ export function normalizeUnit(unit: string): string {
   return UNIT_ALIASES[text] ?? text;
 }
 
+/** 无量纲 / 比率 / 时间单位：直接使用原值，不做货币换算。 */
+export const DIMENSIONLESS_UNITS = new Set([
+  "%", "倍", "次", "天", "日", "年", "月", "个月", "个", "项", "人", "户", "家", "件", "台",
+]);
+
 /** 金额换算为「元」；未知单位返回 NaN。 */
 export function toYuan(value: number, unit: string): number {
   const factor = UNIT_TO_YUAN[normalizeUnit(unit)];
@@ -35,4 +40,16 @@ export function toYuan(value: number, unit: string): number {
   return value * factor;
 }
 
-export const KNOWN_UNITS = new Set([...Object.keys(UNIT_TO_YUAN), "%"]);
+/**
+ * 将事实值归一为可比较数值：货币类换算为元，比率/时间类（倍、天、% 等）保留原值，
+ * 未知单位返回 NaN（不命中而不是按 1 处理）。
+ */
+export function toComparableValue(value: number, unit: string): number {
+  const text = normalizeUnit(unit);
+  if (DIMENSIONLESS_UNITS.has(text)) return value;
+  const factor = UNIT_TO_YUAN[text];
+  if (factor === undefined) return Number.NaN;
+  return value * factor;
+}
+
+export const KNOWN_UNITS = new Set([...Object.keys(UNIT_TO_YUAN), ...DIMENSIONLESS_UNITS]);

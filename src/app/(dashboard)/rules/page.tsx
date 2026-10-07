@@ -11,6 +11,7 @@ import { useActiveEnterpriseCase } from "@/hooks/use-active-enterprise-case";
 import { useEnterpriseStore } from "@/store/enterprise-store";
 import { evaluateRule, type FactCandidate } from "@/lib/rule-engine";
 import { RULE_TEMPLATES, recommendedTemplates, ruleTemplateGroups, type RuleTemplate } from "@/lib/rule-templates";
+import { runRuleBenchmark } from "@/lib/engine-benchmark";
 import { buildRulePack, parseRulePack, serializeRulePack } from "@/lib/rule-pack";
 import { triggerDownload } from "@/lib/download";
 import { toast } from "@/components/feedback/toast";
@@ -48,6 +49,7 @@ export default function RulesPage() {
       return tags.includes(industryFilter);
     });
   const recommendation = useMemo(() => recommendedTemplates(activeCase?.industry), [activeCase?.industry]);
+  const engineBench = useMemo(() => runRuleBenchmark(), []);
   const recommendedPending = recommendation.templates.filter((template) => !allRules.some((rule) => rule.code === template.code));
 
   const addFromTemplate = (template: RuleTemplate) => {
@@ -178,6 +180,15 @@ export default function RulesPage() {
     <PageIntro eyebrow="Policy & rules" title="企业金融规则库" description="把准入制度、审查要点与监管要求转化为可版本化、可测试、可解释的机器规则，并保留原制度依据。" actions={<><button type="button" onClick={() => fileInputRef.current?.click()} className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-300"><Upload className="h-3.5 w-3.5" />导入规则包</button><button type="button" onClick={handleExportRules} className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-300"><Download className="h-3.5 w-3.5" />导出规则包</button><button onClick={() => setTemplateOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-cyan-400/25 px-4 py-2.5 text-xs text-cyan-200"><Library className="h-3.5 w-3.5" />规则模板</button><button onClick={() => setOpen(true)} className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]"><Plus className="h-3.5 w-3.5" />新建规则</button><input ref={fileInputRef} type="file" accept="application/json,.json" className="hidden" onChange={handleImportRules} aria-label="导入规则包文件" /></>} />
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{metrics.map(([Icon, value, label]) => <div key={label} className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-4"><Icon className="h-4 w-4 text-cyan-300" /><p className="numeric mt-3 text-2xl font-semibold text-white">{value}</p><p className="mt-1 text-[11px] text-slate-500">{label}</p></div>)}</div>
     {activeCase && <Panel className="border-cyan-400/20 bg-cyan-400/[0.04]"><div className="flex flex-wrap items-center gap-3 p-4"><Sparkles className="h-4 w-4 shrink-0 text-cyan-300" /><p className="min-w-0 flex-1 text-xs text-cyan-100">当前项目「{activeCase.company}」所属行业：<span className="text-white">{activeCase.industry || "未填写"}</span> → 匹配「{recommendation.profile.label}」分组，推荐 {recommendation.templates.length} 条规则模板{recommendedPending.length > 0 ? `（待加入 ${recommendedPending.length} 条）` : "（已全部加入）"}。</p><button type="button" onClick={() => { setTemplateGroup(recommendation.profile.label); setTemplateOpen(true); }} className="rounded-lg border border-cyan-400/25 px-3 py-1.5 text-[10px] text-cyan-200">查看推荐模板</button><button type="button" onClick={addRecommended} disabled={!recommendedPending.length} className="rounded-lg bg-cyan-300 px-3 py-1.5 text-[10px] font-semibold text-[#041018] disabled:opacity-40">一键加入推荐模板</button></div></Panel>}
+    <Panel className="border-emerald-400/15 bg-emerald-400/[0.03]">
+      <div className="flex flex-wrap items-center gap-3 p-4">
+        <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-300" />
+        <p className="min-w-0 flex-1 text-xs text-emerald-100">确定性引擎自检：<span className="numeric text-white">{engineBench.passed}/{engineBench.total}</span> 用例通过 · 准确率 <span className="numeric text-white">{(engineBench.accuracy * 100).toFixed(1)}%</span>（命中判定 / 阈值边界 / 单位归一化 / 指标别名 / 防误判，纯规则引擎，无需大模型）</p>
+        <div className="flex flex-wrap gap-1.5">
+          {engineBench.byCategory.map((item) => <span key={item.category} className="rounded-md border border-white/10 px-2 py-1 text-[10px] text-slate-300">{item.category} {Math.round(item.accuracy * 100)}%</span>)}
+        </div>
+      </div>
+    </Panel>
     <Panel>
       <div className="flex flex-col gap-3 border-b border-white/[0.07] p-4 sm:flex-row sm:items-center"><label className="flex flex-1 items-center gap-2 rounded-xl border border-white/[0.08] bg-black/10 px-3"><Search className="h-3.5 w-3.5 text-slate-400" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索规则编号、名称或业务域" className="h-10 flex-1 bg-transparent text-xs text-white outline-none placeholder:text-slate-400" /></label><div className="flex items-center gap-2"><span className="text-[10px] text-slate-500">适用行业</span><Select value={industryFilter} onChange={setIndustryFilter} className="min-w-36" options={[{ value: "", label: "全部行业" }, ...ruleTemplateGroups().map((group) => ({ value: group, label: group }))]} /></div><span className="text-[10px] text-slate-400">本地工作区自动保存</span></div>
       <div className="divide-y divide-white/[0.06]">
