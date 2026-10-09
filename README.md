@@ -12,7 +12,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6.svg)](https://www.typescriptlang.org/)
 [![Security Policy](https://img.shields.io/badge/security-policy-f59e0b.svg)](./SECURITY.md)
 
-[图文详解](./docs/introduction.md) · [完整使用文档](./docs/user-guide.md) · [评测报告](./docs/benchmark.md) · [作品简介](./docs/pitch.md) · [界面预览](#界面预览) · [快速开始](#快速开始) · [技术架构](#技术架构) · [安全边界](#安全与责任边界)
+[图文详解](./docs/introduction.md) · [完整使用文档](./docs/user-guide.md) · [评测报告](./docs/benchmark.md) · [作品简介](./docs/pitch.md) · [价值说明](./docs/value.md) · [界面预览](#界面预览) · [快速开始](#快速开始) · [技术架构](#技术架构) · [安全边界](#安全与责任边界)
 
 </div>
 
@@ -63,7 +63,7 @@ Evidence first · Human in the loop · Explainable rules · Secure by default ·
 - **自带模型、可自托管**：密钥在服务端加密，MIT 开源，支持私有化部署。
 - **外部数据可接入**：内置汇率（ECB）、LPR、世界银行、GLEIF、SEC EDGAR 与巨潮资讯上市公司公告等免费公开数据源（无需密钥），全部标注需人工复核。
 
-量化证据：确定性引擎 296 条基准用例 100% 通过（`npm run benchmark`，见 [评测报告](./docs/benchmark.md)）；事实抽取真实模型评测 精确率/召回率/F1 95.8%、原文引用有效性 100%（`npm run ai-eval`，见 [AI 评测报告](./docs/ai-eval.md)）。一页纸概览见 [作品简介](./docs/pitch.md)。
+量化证据：确定性引擎 296 条基准用例 100% 通过（`npm run benchmark`，见 [评测报告](./docs/benchmark.md)）；事实抽取真实模型评测 精确率/召回率/F1 95.8%、原文引用有效性 100%（`npm run ai-eval`，见 [AI 评测报告](./docs/ai-eval.md)）。价值度量口径见 [价值量化说明](./docs/value.md)，端到端场景见 [制造业授信尽调剧本](./docs/scenario-manufacturing-credit.md)。
 
 ## 快速开始
 
