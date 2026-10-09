@@ -39,7 +39,7 @@
 
 FinOS AI 是一个面向企业金融、产业金融、授信尽调、经营分析和风险管理场景的开源 Agent 工作台。它把原本散落在 PDF、Word、Excel、制度文件和沟通流程里的信息，组织成一条可以逐级核验的工作链路：
 
-![FinOS AI 核心研判链路](./assets/pipeline.svg)
+![FinOS AI 核心研判链路](https://cdn.jsdelivr.net/gh/Leterhong/FinOS-AI@main/docs/assets/pipeline.svg)
 
 它回答三个问题：
 
@@ -143,7 +143,7 @@ npm run dev
 
 ### 4.1 经营决策台（`/`）
 
-![经营决策台](./screenshots/guide/01-dashboard.png)
+![经营决策台](https://cdn.jsdelivr.net/gh/Leterhong/FinOS-AI@main/docs/screenshots/guide/01-dashboard.png)
 
 经营决策台是进入系统后的第一屏，把项目、资料、风险、任务、模型和 Agent 运行态收敛到同一视图。
 
@@ -162,7 +162,7 @@ npm run dev
 
 ### 4.2 全局命令中心（⌘K / Ctrl+K）
 
-![全局命令中心](./screenshots/guide/02-command-palette.png)
+![全局命令中心](https://cdn.jsdelivr.net/gh/Leterhong/FinOS-AI@main/docs/screenshots/guide/02-command-palette.png)
 
 按 `⌘K` 或 `Ctrl+K` 打开全局命令中心，在任意页面都能快速跳转或执行命令。
 
@@ -179,7 +179,7 @@ npm run dev
 
 ### 5.1 项目列表（`/cases`）
 
-![项目中心 · 表格视图](./screenshots/guide/03-cases-table.png)
+![项目中心 · 表格视图](https://cdn.jsdelivr.net/gh/Leterhong/FinOS-AI@main/docs/screenshots/guide/03-cases-table.png)
 
 项目中心围绕一个融资、尽调或经营分析任务，集中管理资料、规则、风险、结论和流程。页面顶部提供「新建项目」主操作，并支持表格 / 看板双视图切换。
 
@@ -191,13 +191,13 @@ npm run dev
 
 ### 5.2 看板视图
 
-![项目中心 · 看板视图](./screenshots/guide/04-cases-board.png)
+![项目中心 · 看板视图](https://cdn.jsdelivr.net/gh/Leterhong/FinOS-AI@main/docs/screenshots/guide/04-cases-board.png)
 
 看板视图按项目状态分列：研判中、待复核、已完成，另有资料补充列。每个项目以卡片呈现，便于按阶段推进。
 
 ### 5.3 新建项目
 
-![新建企业研判项目](./screenshots/guide/05-dialog-new-project.png)
+![新建企业研判项目](https://cdn.jsdelivr.net/gh/Leterhong/FinOS-AI@main/docs/screenshots/guide/05-dialog-new-project.png)
 
 新建项目对话框字段包括：企业名称、研判任务、所属行业、融资金额、负责人。对话框说明「创建后进入项目工作台；请先配置模型，再上传资料进行 AI 研判」。填写后点击「创建并进入研判」直接进入项目详情。
 
@@ -205,7 +205,7 @@ npm run dev
 
 ## 6. 项目详情工作台
 
-![项目详情工作台](./screenshots/guide/06-case-detail.png)
+![项目详情工作台](https://cdn.jsdelivr.net/gh/Leterhong/FinOS-AI@main/docs/screenshots/guide/06-case-detail.png)
 
 项目详情是单个企业项目的统一工作台，汇总证据、风险、规则、流程与交付结果。页头提供「邀请协作者」「编辑项目」「导出研判报告」三个主操作。
 
@@ -238,13 +238,13 @@ npm run dev
 
 ### 7.1 双栏研判工作区
 
-![资料研判 · AI 研判详情](./screenshots/guide/07-documents-detail.png)
+![资料研判 · AI 研判详情](https://cdn.jsdelivr.net/gh/Leterhong/FinOS-AI@main/docs/screenshots/guide/07-documents-detail.png)
 
 资料研判采用左右双栏布局：左侧是「当前项目资料」列表，右侧是选中资料的 AI 研判详情。两栏各自独立滚动，长内容不会撑高整页。页面支持「批量上传并分析」，并提供「导出事实 CSV」「批量复核（N）」等操作。顶部显示「资料分析模型」，未配置模型时提示「尚未配置模型 · 去配置」；存在失败资料时显示「有 N 份资料分析失败」并提供「重试当前项目失败项」。移动端切换为「资料列表（N）」与「AI 研判详情」两个视图。
 
 ### 7.2 结构化事实与原文引用
 
-![资料研判 · 事实台账](./screenshots/guide/08-documents-facts.png)
+![资料研判 · 事实台账](https://cdn.jsdelivr.net/gh/Leterhong/FinOS-AI@main/docs/screenshots/guide/08-documents-facts.png)
 
 事实台账逐条展示抽取结果，每条携带原文引用与位置坐标，并提供三个操作：
 
@@ -258,13 +258,13 @@ npm run dev
 
 ### 7.3 表格结构识别
 
-![资料研判 · 表格结构识别](./screenshots/guide/09-documents-table-ledger.png)
+![资料研判 · 表格结构识别](https://cdn.jsdelivr.net/gh/Leterhong/FinOS-AI@main/docs/screenshots/guide/09-documents-table-ledger.png)
 
 Excel / CSV 与包含表格的 PDF 会被解析为结构化表格，保留 sheet、单元格范围与表头，让财务科目、产销存等数据可直接对照。
 
 ### 7.4 人工复核事实
 
-![复核结构化事实](./screenshots/guide/10-dialog-fact-review.png)
+![复核结构化事实](https://cdn.jsdelivr.net/gh/Leterhong/FinOS-AI@main/docs/screenshots/guide/10-dialog-fact-review.png)
 
 复核对话框记录复核结论（已确认 / 已驳回 / 待复核）、复核人和复核意见。批量复核对话框可将当前项目 N 条「待复核」事实一次性标记为已确认，并要求填写复核人。
 
@@ -278,7 +278,7 @@ Excel / CSV 与包含表格的 PDF 会被解析为结构化表格，保留 sheet
 
 ### 8.1 风险列表与矩阵
 
-![风险中心 · 风险列表](./screenshots/guide/11-risk-list.png)
+![风险中心 · 风险列表](https://cdn.jsdelivr.net/gh/Leterhong/FinOS-AI@main/docs/screenshots/guide/11-risk-list.png)
 
 页面顶部提供导出格式选择（Word / PDF / Markdown）与「下载风险清单」「登记风险」操作。
 
@@ -292,7 +292,7 @@ Excel / CSV 与包含表格的 PDF 会被解析为结构化表格，保留 sheet
 
 ### 8.2 结构化风险详情
 
-![风险中心 · 风险详情抽屉](./screenshots/guide/12-risk-drawer.png)
+![风险中心 · 风险详情抽屉](https://cdn.jsdelivr.net/gh/Leterhong/FinOS-AI@main/docs/screenshots/guide/12-risk-drawer.png)
 
 点击风险打开结构化详情抽屉，固定七个区块：
 
@@ -316,7 +316,7 @@ Excel / CSV 与包含表格的 PDF 会被解析为结构化表格，保留 sheet
 
 ### 9.1 规则列表
 
-![规则库 · 规则列表](./screenshots/guide/13-rules-list.png)
+![规则库 · 规则列表](https://cdn.jsdelivr.net/gh/Leterhong/FinOS-AI@main/docs/screenshots/guide/13-rules-list.png)
 
 **指标卡：** 已测试规则、规则总数、待测试规则、当前筛选结果。
 
@@ -326,13 +326,13 @@ Excel / CSV 与包含表格的 PDF 会被解析为结构化表格，保留 sheet
 
 ### 9.2 规则模板库
 
-![规则库 · 规则模板库](./screenshots/guide/14-rules-templates.png)
+![规则库 · 规则模板库](https://cdn.jsdelivr.net/gh/Leterhong/FinOS-AI@main/docs/screenshots/guide/14-rules-templates.png)
 
 规则模板库按行业 / 通用分组提供模板，可一键加入规则库。模板说明明确：生成的是普通规则，可继续编辑或删除；阈值仅作风险提示，不替代授信政策。当当前项目所属行业匹配某个分组时，页面还会推荐相应模板并支持一键加入。
 
 ### 9.3 决策逻辑 Visual View
 
-![规则库 · 决策逻辑 Visual View](./screenshots/guide/15-rules-visual.png)
+![规则库 · 决策逻辑 Visual View](https://cdn.jsdelivr.net/gh/Leterhong/FinOS-AI@main/docs/screenshots/guide/15-rules-visual.png)
 
 展开一条规则可以看到决策链：`IF` 条件节点以 `AND` 连接，`THEN` 节点表示满足全部条件时生成风险信号，由规则引擎对已抽取事实做确定性判定。规则支持启用 / 停用、版本管理与删除。
 
@@ -344,7 +344,7 @@ Excel / CSV 与包含表格的 PDF 会被解析为结构化表格，保留 sheet
 
 ## 10. 流程中心
 
-![流程中心](./screenshots/guide/16-workflows.png)
+![流程中心](https://cdn.jsdelivr.net/gh/Leterhong/FinOS-AI@main/docs/screenshots/guide/16-workflows.png)
 
 流程中心把 Agent 发现转化为明确的补充资料、核验、复核与审批任务，让人机协作进入业务流程。
 
@@ -362,7 +362,7 @@ Excel / CSV 与包含表格的 PDF 会被解析为结构化表格，保留 sheet
 
 ## 11. Agent 中心
 
-![Agent 中心](./screenshots/guide/17-agents.png)
+![Agent 中心](https://cdn.jsdelivr.net/gh/Leterhong/FinOS-AI@main/docs/screenshots/guide/17-agents.png)
 
 Agent 中心由当前默认大模型执行真实研判调用。每个子 Agent 拥有专属底层提示词；系统不会用计时器模拟运行，也不会在没有项目或资料时生成伪造结果。
 
@@ -380,7 +380,7 @@ Agent 中心由当前默认大模型执行真实研判调用。每个子 Agent �
 
 ## 12. 智能研判助手
 
-![智能研判助手](./screenshots/guide/18-assistant.png)
+![智能研判助手](https://cdn.jsdelivr.net/gh/Leterhong/FinOS-AI@main/docs/screenshots/guide/18-assistant.png)
 
 智能研判助手由你配置的真实大模型驱动。每段对话仅接收当前企业项目的资料、规则和风险上下文，不跨项目混用信息。
 
@@ -400,7 +400,7 @@ Agent 中心由当前默认大模型执行真实研判调用。每个子 Agent �
 
 ## 13. 投研中心
 
-![投研中心](./screenshots/guide/19-research.png)
+![投研中心](https://cdn.jsdelivr.net/gh/Leterhong/FinOS-AI@main/docs/screenshots/guide/19-research.png)
 
 投研中心使用当前默认模型，基于所选企业项目生成研究框架和底稿。未连接外部数据源时，AI 会列出需要补充的来源，不会伪造行情、政策或新闻。
 
@@ -416,7 +416,7 @@ Agent 中心由当前默认大模型执行真实研判调用。每个子 Agent �
 
 ## 14. 技能中心
 
-![技能中心](./screenshots/guide/20-skills.png)
+![技能中心](https://cdn.jsdelivr.net/gh/Leterhong/FinOS-AI@main/docs/screenshots/guide/20-skills.png)
 
 技能中心支持上传自己的技能（SKILL.md / README.md / .md / .txt / .json 单文件，或包含这些文件的整包 zip，上限 5MB）。系统解析并做风险扫描后导入；启用后助手、Agent、投研均会按问题匹配或可手动指定。
 
@@ -428,7 +428,7 @@ Agent 中心由当前默认大模型执行真实研判调用。每个子 Agent �
 
 ## 15. 通知中心
 
-![通知中心](./screenshots/guide/21-notifications.png)
+![通知中心](https://cdn.jsdelivr.net/gh/Leterhong/FinOS-AI@main/docs/screenshots/guide/21-notifications.png)
 
 通知中心聚合组织邀请、风险待办、任务与系统提醒。通知按当前工作区 / 账号隔离，不发送外部邮件。
 
@@ -444,7 +444,7 @@ Agent 中心由当前默认大模型执行真实研判调用。每个子 Agent �
 
 ### 16.1 权限与分级
 
-![企业治理 · 权限与分级](./screenshots/guide/22-governance-permissions.png)
+![企业治理 · 权限与分级](https://cdn.jsdelivr.net/gh/Leterhong/FinOS-AI@main/docs/screenshots/guide/22-governance-permissions.png)
 
 - **项目可见策略（Access policy）**：可开启或关闭该策略。
 - **组织与 RBAC（Organization & RBAC）**：Owner / Admin / Analyst / Reviewer / Viewer 五级角色，数据权限独立控制。成员管理支持邮箱、角色、数据密级，成员状态区分「已生效」与「待本人确认」，可复制邀请链接；对方登录后可直接确认。邀请链接采用确认制，对方接受后权限才生效。
@@ -453,28 +453,28 @@ Agent 中心由当前默认大模型执行真实研判调用。每个子 Agent �
 
 ### 16.2 规则与复核
 
-![企业治理 · 规则与复核](./screenshots/guide/23-governance-review.png)
+![企业治理 · 规则与复核](https://cdn.jsdelivr.net/gh/Leterhong/FinOS-AI@main/docs/screenshots/guide/23-governance-review.png)
 
 - **规则历史与版本回放（Rule history）**：查看规则变更历史，并支持历史版本回放。
 - **生产级人工复核队列（Human review）**：针对风险 / 资料 / 报告 / 流程创建复核任务，支持批准与驳回。
 
 ### 16.3 模型评测
 
-![企业治理 · 模型评测](./screenshots/guide/24-governance-eval.png)
+![企业治理 · 模型评测](https://cdn.jsdelivr.net/gh/Leterhong/FinOS-AI@main/docs/screenshots/guide/24-governance-eval.png)
 
 - **新增评测样本（Evaluation set）**：填写样本名称、真实企业金融研判问题、预期关键词与禁止出现的词。
 - **真实模型评测记录（Guarded evaluation）**：运行评测并记录最近评分。评测集同时承担细粒度提示词防护的验证职责。
 
 ### 16.4 连接器
 
-![企业治理 · 连接器](./screenshots/guide/25-governance-connectors.png)
+![企业治理 · 连接器](https://cdn.jsdelivr.net/gh/Leterhong/FinOS-AI@main/docs/screenshots/guide/25-governance-connectors.png)
 
 - **新增受控数据源（Enterprise data sources）**：支持 JSON API 与 CSV API，Bearer Token 仅在服务端加密保存。
 - **连接器运行状态（Sync & lineage）**：展示同步状态与数据血缘。连接器强制公网校验、限量与人工复核。
 
 ### 16.5 可观测性
 
-![企业治理 · 可观测性](./screenshots/guide/26-governance-observability.png)
+![企业治理 · 可观测性](https://cdn.jsdelivr.net/gh/Leterhong/FinOS-AI@main/docs/screenshots/guide/26-governance-observability.png)
 
 - **请求观测（API telemetry）** 与 **模型调用（AI telemetry）**：观察接口与模型调用的运行指标。
 - **治理健康（Control health）**：汇总待复核、失败连接器与审计事件。
@@ -486,7 +486,7 @@ Agent 中心由当前默认大模型执行真实研判调用。每个子 Agent �
 
 ## 17. AI 模型中心
 
-![AI 模型中心](./screenshots/guide/27-models.png)
+![AI 模型中心](https://cdn.jsdelivr.net/gh/Leterhong/FinOS-AI@main/docs/screenshots/guide/27-models.png)
 
 模型中心支持连接 OpenAI、DeepSeek、通义千问、Claude、Gemini、智谱、Kimi、Ollama 或任意 OpenAI 兼容服务。模型密钥只在服务端加密保存，不会返回浏览器。
 
@@ -504,7 +504,7 @@ Agent 中心由当前默认大模型执行真实研判调用。每个子 Agent �
 
 ### 17.1 添加模型
 
-![添加模型](./screenshots/guide/28-dialog-add-model.png)
+![添加模型](https://cdn.jsdelivr.net/gh/Leterhong/FinOS-AI@main/docs/screenshots/guide/28-dialog-add-model.png)
 
 添加模型对话框按供应商填写 Base URL、API Key、模型名称，并勾选任务角色。Ollama 或自建 OpenAI 兼容服务使用自定义 Base URL。
 
@@ -512,7 +512,7 @@ Agent 中心由当前默认大模型执行真实研判调用。每个子 Agent �
 
 ## 18. 数据大屏
 
-![数据大屏 · 总览](./screenshots/guide/29-screen-overview.png)
+![数据大屏 · 总览](https://cdn.jsdelivr.net/gh/Leterhong/FinOS-AI@main/docs/screenshots/guide/29-screen-overview.png)
 
 数据大屏面向值班与汇报场景，提供「监看模式」「刷新」「全屏」控制，并支持总览、风险聚焦、流程与规则三个标签页。
 
@@ -520,7 +520,7 @@ Agent 中心由当前默认大模型执行真实研判调用。每个子 Agent �
 
 **总览区块：** 风险等级分布、项目风险评分排行、多期事实趋势、风险热力图、流程任务阶段、规则与事实质量（规则已测试 / 事实已确认）、外部市场数据（USD / CNY 汇率、最新 LPR）、最近更新风险。
 
-![数据大屏 · 风险聚焦](./screenshots/guide/30-screen-risk.png)
+![数据大屏 · 风险聚焦](https://cdn.jsdelivr.net/gh/Leterhong/FinOS-AI@main/docs/screenshots/guide/30-screen-risk.png)
 
 风险聚焦页把待核验与高风险信号前置，适合在会议中快速定位需要处理的项目。
 
@@ -528,7 +528,7 @@ Agent 中心由当前默认大模型执行真实研判调用。每个子 Agent �
 
 ## 19. 部署与合规准备
 
-![部署与合规准备](./screenshots/guide/31-deployment.png)
+![部署与合规准备](https://cdn.jsdelivr.net/gh/Leterhong/FinOS-AI@main/docs/screenshots/guide/31-deployment.png)
 
 部署页明确区分开源单机体验模式与企业生产模式，避免把易用的本地工作区误当作已经完成多租户与监管控制的 SaaS。
 
@@ -549,7 +549,7 @@ Agent 中心由当前默认大模型执行真实研判调用。每个子 Agent �
 
 ## 20. 使用指引
 
-![使用指引](./screenshots/guide/32-guide.png)
+![使用指引](https://cdn.jsdelivr.net/gh/Leterhong/FinOS-AI@main/docs/screenshots/guide/32-guide.png)
 
 使用指引把完整研判过程拆成 8 个可交互步骤（接入模型 → 创建项目 → 上传资料 → 录入规则 → 管理风险 → 使用助手 → 管理流程 → 企业治理），每一步都有说明和直达链接。页面还包含快捷键说明、数据存储说明（本地即时持久化 / 服务端自动同步 / 多角色协作）、常见问题和核心价值链可视化。
 
@@ -561,15 +561,15 @@ Agent 中心由当前默认大模型执行真实研判调用。每个子 Agent �
 
 ### 21.1 深浅主题
 
-![浅色主题 · 经营决策台](./screenshots/guide/33-light-dashboard.png)
+![浅色主题 · 经营决策台](https://cdn.jsdelivr.net/gh/Leterhong/FinOS-AI@main/docs/screenshots/guide/33-light-dashboard.png)
 
-![浅色主题 · 资料研判](./screenshots/guide/34-light-documents.png)
+![浅色主题 · 资料研判](https://cdn.jsdelivr.net/gh/Leterhong/FinOS-AI@main/docs/screenshots/guide/34-light-documents.png)
 
 全站支持深色与浅色主题切换。未手动选择时跟随系统偏好并实时响应；一旦用户手动选择，则以用户选择为准。浅色覆盖使用精确令牌匹配，避免命中变体类；浅色配色经过对比度校验，全站达到 WCAG AA。
 
 ### 21.2 响应式
 
-![移动端 · 经营决策台](./screenshots/guide/35-mobile-dashboard.png)
+![移动端 · 经营决策台](https://cdn.jsdelivr.net/gh/Leterhong/FinOS-AI@main/docs/screenshots/guide/35-mobile-dashboard.png)
 
 移动端下侧栏收起为抽屉，资料研判切换为列表 / 详情双视图，卡片与表格自适应窄屏。
 

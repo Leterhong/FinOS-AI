@@ -22,7 +22,7 @@
 
 FinOS AI 是一个面向企业金融、产业金融、授信尽调、经营分析和风险管理场景的开源 Agent 工作台。它将原本散落在文档、表格、制度、研究材料和沟通流程中的信息组织成一条可核验的工作链路：
 
-![FinOS AI 核心研判链路](./docs/assets/pipeline.svg)
+![FinOS AI 核心研判链路](https://cdn.jsdelivr.net/gh/Leterhong/FinOS-AI@main/docs/assets/pipeline.svg)
 
 系统的目标是提升资料处理效率和判断透明度，让关键结论能够回答三个问题：
 
@@ -42,11 +42,11 @@ FinOS AI 采用深色金融工作台设计，浅色主题达 WCAG AA，移动端
 
 | 经营决策台 | 资料研判 · 事实台账 | 风险中心 · 详情 |
 | --- | --- | --- |
-| ![经营决策台](./docs/screenshots/guide/01-dashboard.png) | ![资料研判](./docs/screenshots/guide/08-documents-facts.png) | ![风险中心](./docs/screenshots/guide/12-risk-drawer.png) |
+| ![经营决策台](https://cdn.jsdelivr.net/gh/Leterhong/FinOS-AI@main/docs/screenshots/guide/01-dashboard.png) | ![资料研判](https://cdn.jsdelivr.net/gh/Leterhong/FinOS-AI@main/docs/screenshots/guide/08-documents-facts.png) | ![风险中心](https://cdn.jsdelivr.net/gh/Leterhong/FinOS-AI@main/docs/screenshots/guide/12-risk-drawer.png) |
 
 | 规则库 · Visual View | 数据大屏 | 浅色主题 |
 | --- | --- | --- |
-| ![规则库](./docs/screenshots/guide/15-rules-visual.png) | ![数据大屏](./docs/screenshots/guide/29-screen-overview.png) | ![浅色主题](./docs/screenshots/guide/33-light-dashboard.png) |
+| ![规则库](https://cdn.jsdelivr.net/gh/Leterhong/FinOS-AI@main/docs/screenshots/guide/15-rules-visual.png) | ![数据大屏](https://cdn.jsdelivr.net/gh/Leterhong/FinOS-AI@main/docs/screenshots/guide/29-screen-overview.png) | ![浅色主题](https://cdn.jsdelivr.net/gh/Leterhong/FinOS-AI@main/docs/screenshots/guide/33-light-dashboard.png) |
 
 > [图文详解](./docs/introduction.md) 收录 35 张按页面顺序编号的截图，逐页逐功能讲解从「接入模型」到「输出风险清单」的完整链路；[完整使用文档](./docs/user-guide.md) 提供安装部署、8 步操作与常见问题。
 
