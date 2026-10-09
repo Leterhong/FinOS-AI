@@ -11,6 +11,7 @@ import {
   type EnterpriseKind,
 } from "@/lib/enterprise-sync";
 import { evaluateRules, type FactCandidate } from "@/lib/rule-engine";
+import { buildSampleWorkspace, isSampleId } from "@/lib/sample-workspace";
 import type {
   AgentRun,
   AnalysisDocument,
@@ -84,6 +85,10 @@ interface EnterpriseState {
   /** 用当前工作区规则对已解析资料重跑确定性规则评估（后建规则也能生效）。 */
   rerunRulesForDocument: (id: string) => { hits: number; total: number } | null;
   clearWorkspace: () => void;
+  /** 载入「一键示例项目」：仅本地、全部记录带 SAMPLE- 前缀，可一键清除。 */
+  loadSampleWorkspace: () => void;
+  /** 清除示例数据（按 SAMPLE- 前缀精确移除，不影响真实数据）。 */
+  clearSampleWorkspace: () => void;
   /** 本地清空工作区（同时清服务端备份由调用方决定前先清本地缓存用）。 */
   purgeLocalWorkspace: () => void;
   /** 账号切换保护：本地工作区若归属其它账号则先清空；返回是否允许迁移本地数据。 */
@@ -570,6 +575,39 @@ export const useEnterpriseStore = create<EnterpriseState>()(
         assistantMessages: caseId
           ? state.assistantMessages.filter((message) => message.caseId !== caseId)
           : [],
+      })),
+      loadSampleWorkspace: () => {
+        const sample = buildSampleWorkspace();
+        set((state) => {
+          const merge = <T extends { id: string }>(existing: T[], incoming: T[]): T[] => {
+            const ids = new Set(existing.map((item) => item.id));
+            return [...incoming.filter((item) => !ids.has(item.id)), ...existing];
+          };
+          const cases = merge(state.cases, sample.cases);
+          const documents = merge(state.documents, sample.documents);
+          const risks = merge(state.risks, sample.risks);
+          const tasks = merge(state.tasks, sample.tasks);
+          const derived = deriveCaseProgress({ cases, documents, risks, tasks });
+          return {
+            cases: derived.cases,
+            documents,
+            risks,
+            rules: merge(state.rules, sample.rules),
+            tasks,
+            briefs: merge(state.briefs, sample.briefs),
+            activeCaseId: sample.cases[0].id,
+          };
+        });
+      },
+      clearSampleWorkspace: () => set((state) => ({
+        cases: state.cases.filter((item) => !isSampleId(item.id)),
+        documents: state.documents.filter((item) => !isSampleId(item.id)),
+        risks: state.risks.filter((item) => !isSampleId(item.id)),
+        rules: state.rules.filter((item) => !isSampleId(item.id)),
+        tasks: state.tasks.filter((item) => !isSampleId(item.id)),
+        briefs: state.briefs.filter((item) => !isSampleId(item.id)),
+        assistantMessages: state.assistantMessages.filter((item) => !isSampleId(item.caseId)),
+        activeCaseId: isSampleId(state.activeCaseId) ? "" : state.activeCaseId,
       })),
       pushAllToBackend: async () => {
         // 目标账号已有数据时不迁移，避免重复导入；仅把访客本地工作区迁移到空账号。

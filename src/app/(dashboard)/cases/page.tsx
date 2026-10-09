@@ -1,7 +1,7 @@
 "use client";
 
 import { type FormEvent, useMemo, useState } from "react";
-import { Filter, Plus } from "lucide-react";
+import { Filter, Plus, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PageIntro, Panel, RiskBadge } from "@/components/enterprise/EnterpriseUI";
@@ -10,11 +10,13 @@ import { LayoutGrid, Table2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useEnterpriseStore } from "@/store/enterprise-store";
 import { EnterpriseDataTable } from "@/components/data-display/EnterpriseDataTable";
+import { toast } from "@/components/feedback/toast";
 
 export default function CasesPage() {
   const router = useRouter();
   const items = useEnterpriseStore((state) => state.cases);
   const createCase = useEnterpriseStore((state) => state.createCase);
+  const loadSampleWorkspace = useEnterpriseStore((state) => state.loadSampleWorkspace);
   const [risk, setRisk] = useState("全部");
   const [createOpen, setCreateOpen] = useState(false);
   const [view, setView] = useState<"table" | "board">("table");
@@ -32,7 +34,7 @@ export default function CasesPage() {
   };
 
   return <div className="page-shell">
-    <PageIntro eyebrow="Case management" title="企业项目中心" description="围绕一个融资、尽调或经营分析任务集中管理资料、规则、风险、结论和流程。" actions={<button onClick={() => setCreateOpen(true)} className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]"><Plus className="h-3.5 w-3.5" />新建项目</button>} />
+    <PageIntro eyebrow="Case management" title="企业项目中心" description="围绕一个融资、尽调或经营分析任务集中管理资料、规则、风险、结论和流程。" actions={<><button type="button" onClick={() => { loadSampleWorkspace(); toast.success("已载入示例项目（可随时清除，不影响真实数据）"); router.push("/cases/SAMPLE-CASE-1"); }} className="inline-flex items-center gap-2 rounded-xl border border-cyan-400/25 px-4 py-2.5 text-xs text-cyan-200"><Sparkles className="h-3.5 w-3.5" />载入示例项目</button><button onClick={() => setCreateOpen(true)} className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]"><Plus className="h-3.5 w-3.5" />新建项目</button></>} />
     <div className="flex flex-col gap-3 sm:flex-row">
       <div className="flex flex-1 items-center gap-1 overflow-x-auto rounded-xl border border-white/[0.08] bg-white/[0.025] p-1"><Filter className="ml-2 h-3.5 w-3.5 shrink-0 text-slate-400" />{[["全部", "全部"], ["重大", "critical"], ["高风险", "high"], ["中风险", "medium"], ["低风险", "low"]].map(([label, value]) => <button key={value} onClick={() => setRisk(value)} className={`whitespace-nowrap rounded-lg px-3 py-2 text-[11px] ${risk === value ? "bg-white/[0.09] text-white" : "text-slate-500 hover:text-slate-300"}`}>{label}</button>)}</div>
       <div className="flex items-center gap-1 rounded-xl border border-white/[0.08] bg-white/[0.025] p-1">
@@ -60,7 +62,7 @@ export default function CasesPage() {
         pageSize={10}
         emptyTitle={items.length === 0 ? "还没有企业项目" : "没有匹配的项目"}
         emptyDescription={items.length === 0
-          ? "从一个真实的企业经营、融资或风险研判任务开始，工作区不会自动填充任何示例数据。"
+          ? "从一个真实的企业经营、融资或风险研判任务开始；工作区不会自动填充数据，首次体验可点击右上角「载入示例项目」。"
           : "请调整搜索词或风险筛选条件。"}
         toolbar={<button onClick={() => setCreateOpen(true)} className="rounded-lg border border-cyan-400/20 bg-cyan-400/[0.06] px-2.5 py-1 text-[10px] text-cyan-200 transition hover:bg-cyan-400/[0.12]"><Plus className="mr-1 inline h-3 w-3" />新建项目</button>}
         onRowClick={(row) => router.push(`/cases/${encodeURIComponent(row.id)}`)}
