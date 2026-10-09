@@ -7,6 +7,7 @@ import "server-only";
  */
 
 import { modelConfigStore } from "./store";
+import { getSystemModel, getSystemModelSummary } from "./system-model";
 import type { ResolvedModel } from "../providers/OpenAICompatibleProvider";
 import type { AIProviderConfig, ActiveModelSummary } from "../types";
 import { getPreset } from "../providers/presets";
@@ -30,12 +31,16 @@ function toResolved(config: AIProviderConfig): ResolvedModel | null {
 
 /**
  * 解析用户当前激活模型（默认模型）。
+ * 工作区未配置可用模型时，回退到服务端共享默认模型（若已配置）。
  * @returns ResolvedModel 或 null（未配置 / 配置不完整）。
  */
 export async function resolveActiveModel(userId: string): Promise<ResolvedModel | null> {
   const config = await modelConfigStore.getDefaultRaw(userId);
-  if (!config) return null;
-  return toResolved(config);
+  if (config) {
+    const resolved = toResolved(config);
+    if (resolved) return resolved;
+  }
+  return getSystemModel();
 }
 
 /** 解析指定 id 的模型（用于 Playground / 指定测试）。 */
@@ -53,6 +58,8 @@ export async function getActiveModelSummary(userId: string): Promise<ActiveModel
   const total = await modelConfigStore.count(userId);
   const config = await modelConfigStore.getDefaultRaw(userId);
   if (!config) {
+    const system = getSystemModelSummary();
+    if (system) return { ...system, totalModels: total };
     return { configured: false, totalModels: total };
   }
   return {

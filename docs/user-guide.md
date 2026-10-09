@@ -228,6 +228,29 @@ bash deploy.sh --prod
 
 模型密钥不要添加 `NEXT_PUBLIC_` 前缀，该前缀变量会被编译进浏览器产物。真实 `.env`、数据库、上传目录、虚拟环境和构建产物均不应提交到 Git。
 
+### 全站共享默认模型（可选）
+
+默认是「自带模型」：每位用户在自己的工作区配置模型。若希望让所有访客共用一个默认模型（未自行配置的访客自动回退到它），在**服务端环境变量**中配置：
+
+```bash
+export AI_PROVIDER=deepseek
+export AI_BASE_URL=https://api.deepseek.com/v1
+export AI_MODEL=deepseek-chat
+export AI_API_KEY=你的密钥
+export AI_DISPLAY_NAME=全站默认模型
+export AI_MAX_TOKENS=2048
+export AI_SHARED_RATE_LIMIT_PER_MINUTE=20
+```
+
+也可以把这些 `export` 行写入 `.data/ai-model.env`（权限 600），`./start.sh` 会自动加载。
+
+说明：
+
+- 共享模型的密钥只保留在服务端环境变量，返回浏览器的仅是名称与掩码，绝不下发密钥。
+- 共享模型按 IP 限流（`AI_SHARED_RATE_LIMIT_PER_MINUTE`，默认 20 次/分钟），避免被刷。
+- 设为 `AI_SHARED_MODEL=0` 可关闭共享；用户自行配置的模型优先级高于共享模型。
+- 共享密钥会产生费用，请确认可接受后再启用，并建议放在受信任代理之后与独立密钥。
+
 ---
 
 ## 快捷键

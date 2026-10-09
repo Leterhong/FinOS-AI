@@ -83,6 +83,15 @@ chmod 600 "$SECRETS_FILE"
 # shellcheck disable=SC1090
 source "$SECRETS_FILE"
 export FINOS_AUTH_SECRET FINOS_DATA_KEY JWT_SECRET ENCRYPTION_MASTER_KEY
+
+# 可选：全站共享默认模型配置（AI_BASE_URL / AI_MODEL / AI_API_KEY 等）。
+# 密钥仅保留在服务端环境变量，绝不下发浏览器。文件每行写 `export KEY=value`。
+AI_MODEL_FILE="$DATA_DIR/ai-model.env"
+if [ -f "$AI_MODEL_FILE" ]; then
+  chmod 600 "$AI_MODEL_FILE" 2>/dev/null || true
+  # shellcheck disable=SC1090
+  source "$AI_MODEL_FILE"
+fi
 export NODE_ENV=production
 # 统一时区，避免容器默认 UTC 导致「每日 8 点」等调度按 UTC 执行。
 export TZ="${TZ:-Asia/Shanghai}"

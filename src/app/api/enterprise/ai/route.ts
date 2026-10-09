@@ -8,6 +8,7 @@ import { getSkill, selectSkill } from "@/ai/skills/registry";
 import { getCustomSkills, getEnabledSkillIds } from "@/ai/skills/store";
 import { recordUsage } from "@/ai/usage/usage-tracker";
 import { idemClaim, idemGet, idemRelease, idemStore, idemWait, type IdempotentResult } from "@/lib/idempotency";
+import { allowSharedModelCall, clientIpFromHeaders } from "@/lib/ai-shared-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -141,6 +142,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { error: "尚未配置可用的大模型，请先前往 AI 模型中心完成配置。", code: "NO_MODEL" },
       { status: 409 },
+    );
+  }
+  // 全站共享默认模型：按 IP 限流，避免匿名访客刷共用密钥。
+  if (model.shared && !allowSharedModelCall(clientIpFromHeaders(req.headers))) {
+    return NextResponse.json(
+      { error: "共享默认模型调用过于频繁，请稍后重试，或在 AI 模型中心配置你自己的模型。", code: "SHARED_MODEL_RATE_LIMITED" },
+      { status: 429 },
     );
   }
 

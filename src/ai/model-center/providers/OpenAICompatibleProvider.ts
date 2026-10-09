@@ -31,6 +31,8 @@ export interface ResolvedModel {
   temperature?: number;
   /** 用户配置的最大 Token 数，作为请求未显式指定时的默认值。 */
   maxTokens?: number;
+  /** 是否为全站共享默认模型（服务端配置），用于按 IP 限流。 */
+  shared?: boolean;
 }
 
 function toResolved(config: AIProviderConfig, apiKey: string): ResolvedModel {
