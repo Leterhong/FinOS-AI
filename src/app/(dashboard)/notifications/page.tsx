@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Archive, Bell, CheckCheck, ShieldAlert, Trash2 } from "lucide-react";
+import { Archive, Bell, CheckCheck, ShieldAlert, Trash2, UserPlus } from "lucide-react";
 import { EmptyStateCard, PageIntro, Panel } from "@/components/enterprise/EnterpriseUI";
 import { Select } from "@/components/ui/Select";
 import { backendAuthedFetch } from "@/lib/enterprise-sync";
@@ -44,6 +44,20 @@ export default function NotificationsPage() {
   const loadSeq = useRef(0);
   const risks = useEnterpriseStore((state) => state.risks);
   const pendingRisks = useMemo(() => risks.filter((risk) => risk.status === "待核验"), [risks]);
+  const [invitations, setInvitations] = useState<Array<{ memberId: string; organizationName: string; role: string; caseName?: string; permission?: string }>>([]);
+
+  const loadInvitations = useCallback(async () => {
+    try {
+      await ensureWorkspaceSession();
+      const resp = await backendAuthedFetch("/api/governance/snapshot");
+      if (!resp.ok) return;
+      const payload = await resp.json() as { data?: { invitations?: Array<{ memberId: string; organizationName: string; role: string; caseName?: string; permission?: string }> } };
+      setInvitations(payload.data?.invitations ?? []);
+    } catch {
+      // 邀请为可选信息，失败不影响系统通知展示
+    }
+  }, []);
+  useEffect(() => { void loadInvitations(); }, [loadInvitations]);
 
   const load = useCallback(async () => {
     const seq = ++loadSeq.current;
@@ -106,6 +120,14 @@ export default function NotificationsPage() {
       description="聚合组织邀请、风险待办、任务与系统提醒。通知按当前工作区/账号隔离，不发送外部邮件。"
       actions={<button onClick={() => void readAll()} disabled={unread === 0} className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018] disabled:opacity-40"><CheckCheck className="h-3.5 w-3.5" />全部已读（{unread}）</button>}
     />
+    {invitations.length > 0 && <Panel>
+      <div className="flex flex-wrap items-center gap-3 border-b border-white/[0.07] p-4">
+        <UserPlus className="h-4 w-4 text-cyan-300" />
+        <p className="min-w-0 flex-1 text-xs text-slate-300">组织邀请：{invitations.length} 条，前往企业治理接受后生效</p>
+        <Link href="/governance" className="rounded-lg border border-cyan-400/25 bg-cyan-400/[0.06] px-3 py-1.5 text-[10px] text-cyan-200">前往企业治理</Link>
+      </div>
+      <div className="divide-y divide-white/[0.06]">{invitations.map((invite) => <Link key={invite.memberId} href="/governance" className="flex flex-wrap items-center gap-3 px-5 py-3 text-xs transition hover:bg-white/[0.02]"><span className="min-w-0 flex-1 truncate text-slate-200">邀请加入「{invite.organizationName}」</span><span className="shrink-0 text-[10px] text-slate-400">{invite.caseName ? `协作项目：${invite.caseName}（${invite.permission}）` : `角色：${invite.role}`}</span><span className="shrink-0 rounded-md border border-cyan-400/20 px-2 py-0.5 text-[10px] text-cyan-200">待接受</span></Link>)}</div>
+    </Panel>}
     {pendingRisks.length > 0 && <Panel>
       <div className="flex flex-wrap items-center gap-3 border-b border-white/[0.07] p-4">
         <ShieldAlert className="h-4 w-4 text-amber-300" />
@@ -120,7 +142,7 @@ export default function NotificationsPage() {
         <Select value={category} onChange={setCategory} className="min-w-40" options={[{ value: "", label: "全部分类" }, ...Object.entries(CATEGORY_LABEL).map(([value, label]) => ({ value, label }))]} />
         <span className="text-[11px] text-slate-400">状态</span>
         <Select value={archived} onChange={setArchived} className="min-w-36" options={[{ value: "active", label: "未归档" }, { value: "archived", label: "已归档" }, { value: "all", label: "全部" }]} />
-        <span className="ml-auto text-[10px] text-slate-400">共 {items.length} 条 · 未读 {unread} 条{pendingRisks.length > 0 ? ` · 待核验风险 ${pendingRisks.length} 条` : ""}</span>
+        <span className="ml-auto text-[10px] text-slate-400">共 {items.length} 条 · 未读 {unread} 条{invitations.length > 0 ? ` · 组织邀请 ${invitations.length} 条` : ""}{pendingRisks.length > 0 ? ` · 待核验风险 ${pendingRisks.length} 条` : ""}</span>
       </div>
       {error && <p className="px-4 py-3 text-xs text-rose-200">{error}</p>}
       {loading ? <div className="p-6"><Skeleton rows={5} /></div>
