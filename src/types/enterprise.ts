@@ -69,7 +69,7 @@ export interface RiskSignal {
   rule: string;
   impact: string;
   status: "待核验" | "已确认" | "已缓释";
-  origin?: "AI线索" | "人工登记" | "事实台账" | "规则命中";
+  origin?: "AI线索" | "人工登记" | "事实台账" | "规则命中" | "外部公告";
   factIds?: string[];
   ruleCodes?: string[];
   sourceRunId?: string;

@@ -12,6 +12,7 @@ import { calculateFinancialMetrics, calculateFinancialTrends } from "@/lib/finan
 import { scoreProject } from "@/lib/risk-score";
 import { governancePost } from "@/lib/governance-client";
 import { backendAuthedFetch } from "@/lib/enterprise-sync";
+import { classifyAnnouncements, type ClassifiedRisk } from "@/lib/cninfo-risk";
 import { toast } from "@/components/feedback/toast";
 import { useEnterpriseStore } from "@/store/enterprise-store";
 import { useModelStore } from "@/store/model-store";
@@ -28,6 +29,7 @@ export default function CaseWorkspacePage() {
   const briefs = useEnterpriseStore((state) => state.briefs);
   const runs = useEnterpriseStore((state) => state.agents);
   const updateCase = useEnterpriseStore((state) => state.updateCase);
+  const addRisk = useEnterpriseStore((state) => state.addRisk);
   const setActiveCaseId = useEnterpriseStore((state) => state.setActiveCaseId);
   const activeModel = useModelStore((state) => state.active);
   const [editOpen, setEditOpen] = useState(false);
@@ -43,6 +45,7 @@ export default function CaseWorkspacePage() {
   const [cninfoError, setCninfoError] = useState("");
   const [cninfoListed, setCninfoListed] = useState<{ code: string; name: string } | null>(null);
   const [cninfoAnnouncements, setCninfoAnnouncements] = useState<Array<{ title: string; date: string; pdf: string }>>([]);
+  const [cninfoRisks, setCninfoRisks] = useState<ClassifiedRisk[]>([]);
 
   const project = useMemo(() => cases.find((item) => item.id === caseId), [cases, caseId]);
   const projectDocuments = useMemo(() => documents.filter((item) => item.caseId === caseId), [documents, caseId]);
@@ -155,6 +158,7 @@ export default function CaseWorkspacePage() {
     setCninfoError("");
     setCninfoAnnouncements([]);
     setCninfoListed(null);
+    setCninfoRisks([]);
     try {
       const keyword = project?.company?.trim();
       if (!keyword) throw new Error("项目未填写企业名称");
@@ -183,6 +187,29 @@ export default function CaseWorkspacePage() {
     } finally {
       setCninfoLoading(false);
     }
+  };
+
+  const extractCninfoRisks = () => {
+    const risks = classifyAnnouncements(cninfoAnnouncements);
+    setCninfoRisks(risks);
+    if (risks.length === 0) toast.info("未从公告标题中识别到风险关键词");
+  };
+
+  const promoteCninfoRisk = (item: ClassifiedRisk) => {
+    addRisk({
+      caseId,
+      company: project?.company ?? "上市公司",
+      title: `${item.category}：${item.title}`.slice(0, 120),
+      level: item.level,
+      evidence: `上市公司公告（${item.date || "日期未知"}）：${item.title}${item.pdf ? ` · ${item.pdf}` : ""}`,
+      rule: "公告关键词分类",
+      impact: "由公告标题关键词归类，需结合公告全文人工核验后再确认。",
+      origin: "外部公告",
+      factIds: [],
+      ruleCodes: [],
+      updatedAt: new Date().toISOString(),
+    });
+    toast.success("已加入风险中心（待核验）");
   };
 
   return <div className="page-shell">
@@ -241,6 +268,11 @@ export default function CaseWorkspacePage() {
           {cninfoError && <p className="mt-3 text-[11px] text-amber-300">{cninfoError}</p>}
           {cninfoListed && <p className="mt-3 text-[11px] text-slate-300">匹配：{cninfoListed.name}（{cninfoListed.code}）· 共 {cninfoAnnouncements.length} 条公告，需人工复核</p>}
           {cninfoAnnouncements.length > 0 && <div className="mt-2 divide-y divide-white/[0.06]">{cninfoAnnouncements.map((item, index) => <div key={`${item.date}-${index}`} className="py-2 text-[11px]"><div className="flex items-start gap-2"><span className="numeric shrink-0 text-slate-500">{item.date}</span>{item.pdf ? <a href={item.pdf} target="_blank" rel="noreferrer" className="min-w-0 flex-1 text-cyan-200 underline-offset-2 hover:underline">{item.title}</a> : <span className="min-w-0 flex-1 text-slate-300">{item.title}</span>}</div></div>)}</div>}
+          {cninfoAnnouncements.length > 0 && <div className="mt-3 flex flex-wrap items-center gap-3">
+            <button type="button" onClick={extractCninfoRisks} className="rounded-xl border border-amber-400/25 bg-amber-400/[0.06] px-4 py-2 text-xs text-amber-200">提取风险信号</button>
+            <span className="text-[10px] text-slate-500">按公告标题关键词确定性归类，结论需人工核验</span>
+          </div>}
+          {cninfoRisks.length > 0 && <div className="mt-2 space-y-2">{cninfoRisks.map((item, index) => <div key={`${item.title}-${index}`} className="flex flex-wrap items-center gap-2 rounded-xl border border-white/[0.07] p-3 text-[11px]"><RiskBadge level={item.level} /><span className="shrink-0 rounded-md border border-white/10 px-1.5 py-0.5 text-[10px] text-slate-400">{item.category}</span><span className="min-w-0 flex-1 truncate text-slate-200">{item.title}</span><button type="button" onClick={() => promoteCninfoRisk(item)} className="shrink-0 rounded-lg border border-cyan-400/25 px-3 py-1.5 text-[10px] text-cyan-200">加入风险中心</button></div>)}</div>}
         </div>
       </div>
     </Panel>
