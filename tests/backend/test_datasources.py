@@ -42,9 +42,16 @@ def test_catalog_lists_sources_and_runtime(client, auth):
     assert resp.status_code == 200, resp.text
     data = resp.json()["data"]
     providers = {item["provider"] for item in data["sources"]}
-    assert {"akshare", "fx", "worldbank", "gleif", "sec"} <= providers
+    assert {"akshare", "fx", "worldbank", "gleif", "sec", "cninfo"} <= providers
     assert all(item["requiresKey"] is False for item in data["sources"])
     assert "cacheSeconds" in data["runtime"] and "minIntervalSeconds" in data["runtime"]
+
+
+def test_cninfo_empty_inputs_return_502(client, auth):
+    # 空名称 / 非数字代码由 provider 校验拒绝，不发起网络请求。
+    assert client.get("/api/data-sources/cninfo/company?name=", headers=auth).status_code == 502
+    assert client.get("/api/data-sources/cninfo/announcements?code=abc", headers=auth).status_code == 502
+    assert client.get("/api/data-sources/cninfo/announcements?code=600519&category=nope", headers=auth).status_code in (200, 502)
 
 
 def test_external_config_requires_auth(client, auth):

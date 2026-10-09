@@ -39,6 +39,10 @@ export default function CaseWorkspacePage() {
   const [amount, setAmount] = useState("");
   const [fromCurrency, setFromCurrency] = useState("USD");
   const [toCurrency, setToCurrency] = useState("CNY");
+  const [cninfoLoading, setCninfoLoading] = useState(false);
+  const [cninfoError, setCninfoError] = useState("");
+  const [cninfoListed, setCninfoListed] = useState<{ code: string; name: string } | null>(null);
+  const [cninfoAnnouncements, setCninfoAnnouncements] = useState<Array<{ title: string; date: string; pdf: string }>>([]);
 
   const project = useMemo(() => cases.find((item) => item.id === caseId), [cases, caseId]);
   const projectDocuments = useMemo(() => documents.filter((item) => item.caseId === caseId), [documents, caseId]);
@@ -146,6 +150,41 @@ export default function CaseWorkspacePage() {
     }
   };
 
+  const loadListedAnnouncements = async () => {
+    setCninfoLoading(true);
+    setCninfoError("");
+    setCninfoAnnouncements([]);
+    setCninfoListed(null);
+    try {
+      const keyword = project?.company?.trim();
+      if (!keyword) throw new Error("项目未填写企业名称");
+      const searchResp = await backendAuthedFetch(`/api/data-sources/cninfo/company?name=${encodeURIComponent(keyword)}&limit=5`);
+      const searchPayload = await searchResp.json().catch(() => null) as { data?: { rows?: Array<Record<string, unknown>> }; error?: string } | null;
+      if (!searchResp.ok) throw new Error(searchPayload?.error || `检索失败（HTTP ${searchResp.status}）`);
+      const first = (searchPayload?.data?.rows ?? [])[0];
+      const code = first ? String(first["证券代码"] ?? "") : "";
+      const name = first ? String(first["证券简称"] ?? "") : "";
+      if (!code) {
+        setCninfoError("未匹配到上市公司，该企业可能未在 A 股上市，或名称需完整。");
+        return;
+      }
+      setCninfoListed({ code, name });
+      const annResp = await backendAuthedFetch(`/api/data-sources/cninfo/announcements?code=${encodeURIComponent(code)}&limit=8`);
+      const annPayload = await annResp.json().catch(() => null) as { data?: { rows?: Array<Record<string, unknown>> }; error?: string } | null;
+      if (!annResp.ok) throw new Error(annPayload?.error || `公告获取失败（HTTP ${annResp.status}）`);
+      setCninfoAnnouncements((annPayload?.data?.rows ?? []).map((row) => ({
+        title: String(row["公告标题"] ?? ""),
+        date: String(row["公告日期"] ?? ""),
+        pdf: String(row["PDF"] ?? ""),
+      })));
+      toast.success(`已获取 ${name || code} 的最新公告`);
+    } catch (error) {
+      setCninfoError(error instanceof Error ? error.message : "上市公司公告检索失败");
+    } finally {
+      setCninfoLoading(false);
+    }
+  };
+
   return <div className="page-shell">
     <Link href="/cases" className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-cyan-300"><ArrowLeft className="h-3.5 w-3.5" />返回项目中心</Link>
     <PageIntro eyebrow={`Case workspace · ${project.id}`} title={project.company} description={`${project.title} · ${project.industry || "未填写行业"}。项目工作台统一汇总证据、风险、规则、流程与交付结果。`} actions={<><button type="button" onClick={() => setInviteOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-cyan-400/25 px-4 py-2.5 text-xs text-cyan-200"><UserPlus className="h-3.5 w-3.5" />邀请协作者</button><button type="button" onClick={() => setEditOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-300"><Pencil className="h-3.5 w-3.5" />编辑项目</button><button type="button" onClick={exportReport} className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]"><Download className="h-3.5 w-3.5" />导出研判报告</button></>} />
@@ -179,7 +218,7 @@ export default function CaseWorkspacePage() {
       <Panel><PanelHeader eyebrow="Research records" title="项目研究底稿" /><div className="space-y-2 p-4">{projectBriefs.length ? projectBriefs.slice(0, 6).map((brief) => <div key={brief.id} className="rounded-xl border border-white/[0.07] p-3"><p className="text-xs text-slate-300">{brief.title}</p><p className="mt-1 text-[10px] text-slate-400">{brief.topic} · {brief.model || "未记录模型"}</p></div>) : <p className="text-xs text-slate-400">尚无当前项目研究底稿</p>}</div></Panel>
     </div>
 
-    <Panel><PanelHeader eyebrow="External linkage" title="外部数据联动" description="拉取公开汇率与 LPR，折算金额并写入研判报告；所有外部数据仅供参考，需人工复核。" />
+    <Panel><PanelHeader eyebrow="External linkage" title="外部数据联动" description="拉取公开汇率与 LPR 折算金额，并检索巨潮资讯（证监会指定披露网站）上市公司公告；所有外部数据仅供参考，需人工复核。" />
       <div className="space-y-4 p-5">
         <div className="grid gap-3 sm:grid-cols-[1.2fr_.7fr_.7fr_auto]">
           <label className="block"><span className="mb-1.5 block text-[11px] text-slate-400">金额</span><input value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="decimal" className="field-control" /></label>
@@ -194,6 +233,15 @@ export default function CaseWorkspacePage() {
           {external.conversions?.map((item) => <p key={`${item.from}-${item.to}`} className="mt-2 text-cyan-200">折算：{item.amount} {item.from} ≈ {item.converted.toLocaleString("zh-CN", { maximumFractionDigits: 2 })} {item.to}</p>)}
           {external.lpr && external.lpr.length > 0 && <p className="mt-2 text-slate-400">LPR 最新走势：{external.lpr.slice(0, 3).map((row) => Object.entries(row).filter(([, value]) => value != null).slice(0, 3).map(([key, value]) => `${key} ${value}`).join("/")).join("；")}</p>}
         </div>}
+        <div className="rounded-xl border border-white/[0.07] p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="min-w-0 flex-1 text-[11px] text-slate-400">上市公司公告 · 巨潮资讯（证监会指定披露网站，免费公开数据）</p>
+            <button type="button" onClick={() => void loadListedAnnouncements()} disabled={cninfoLoading} className="rounded-xl border border-cyan-400/20 bg-cyan-400/[0.06] px-4 py-2.5 text-xs text-cyan-200 disabled:opacity-40">{cninfoLoading ? "检索中…" : "检索上市公司公告"}</button>
+          </div>
+          {cninfoError && <p className="mt-3 text-[11px] text-amber-300">{cninfoError}</p>}
+          {cninfoListed && <p className="mt-3 text-[11px] text-slate-300">匹配：{cninfoListed.name}（{cninfoListed.code}）· 共 {cninfoAnnouncements.length} 条公告，需人工复核</p>}
+          {cninfoAnnouncements.length > 0 && <div className="mt-2 divide-y divide-white/[0.06]">{cninfoAnnouncements.map((item, index) => <div key={`${item.date}-${index}`} className="py-2 text-[11px]"><div className="flex items-start gap-2"><span className="numeric shrink-0 text-slate-500">{item.date}</span>{item.pdf ? <a href={item.pdf} target="_blank" rel="noreferrer" className="min-w-0 flex-1 text-cyan-200 underline-offset-2 hover:underline">{item.title}</a> : <span className="min-w-0 flex-1 text-slate-300">{item.title}</span>}</div></div>)}</div>}
+        </div>
       </div>
     </Panel>
 

@@ -6,6 +6,9 @@ from fastapi import APIRouter, Depends, Query
 from backend.connectors.akshare_provider import DATASETS, AkshareError, fetch_dataset, list_datasets
 from backend.connectors.http_providers import (
     ExternalDataError,
+    cninfo_announcements,
+    cninfo_categories,
+    cninfo_company_search,
     external_runtime_config,
     fx_latest,
     fx_series,
@@ -34,7 +37,7 @@ def _external(fn, *args, **kwargs):
 
 @router.get("/external/meta")
 def external_meta(user: User = Depends(get_current_user)):
-    return ok({"worldbankIndicators": worldbank_indicators(), "secTags": sec_tags(), "note": NOTE})
+    return ok({"worldbankIndicators": worldbank_indicators(), "secTags": sec_tags(), "cninfoCategories": cninfo_categories(), "note": NOTE})
 
 
 @router.get("/catalog")
@@ -49,6 +52,7 @@ def catalog(user: User = Depends(get_current_user)):
         ("worldbank", "世界银行", "api.worldbank.org", ["indicator"]),
         ("gleif", "GLEIF 法人识别", "api.gleif.org", ["search"]),
         ("sec", "SEC EDGAR", "data.sec.gov", ["concept", "tags"]),
+        ("cninfo", "巨潮资讯（上市公司公告）", "www.cninfo.com.cn", ["company", "announcements"]),
     ]:
         for dataset in datasets:
             sources.append({"provider": provider, "dataset": dataset, "label": label, "category": "external", "requiresKey": False, "cacheSeconds": runtime["cacheSeconds"], "host": host})
@@ -93,6 +97,25 @@ def external_sec(
     user: User = Depends(get_current_user),
 ):
     return _external(sec_company_concept, cik, tag, limit)
+
+
+@router.get("/cninfo/company")
+def external_cninfo_company(
+    name: str = "",
+    limit: int = Query(8, ge=1, le=25),
+    user: User = Depends(get_current_user),
+):
+    return _external(cninfo_company_search, name, limit)
+
+
+@router.get("/cninfo/announcements")
+def external_cninfo_announcements(
+    code: str = "",
+    limit: int = Query(10, ge=1, le=30),
+    category: str = "",
+    user: User = Depends(get_current_user),
+):
+    return _external(cninfo_announcements, code, limit, category)
 
 
 @router.get("/akshare/datasets")

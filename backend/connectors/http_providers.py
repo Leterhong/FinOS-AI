@@ -67,6 +67,38 @@ def _get_json(url: str, timeout: int = 15) -> Any:
     return data
 
 
+def _post_form_json(url: str, form: dict[str, Any], timeout: int = 15) -> Any:
+    """固定主机的表单 POST（仅用于无需密钥的公开数据接口），带缓存与限流。"""
+    from backend.core.cache import cache_get, cache_set
+
+    body = urllib.parse.urlencode(form).encode("utf-8")
+    use_cache = _CACHE_ENABLED and _TTL_SECONDS > 0
+    cache_key = f"ext:http:POST:{url}:{body.decode('utf-8')}"
+    if use_cache:
+        cached = cache_get(cache_key)
+        if cached is not None:
+            return cached
+    _throttle(urllib.parse.urlparse(url).netloc)
+    request = urllib.request.Request(
+        url,
+        data=body,
+        headers={"User-Agent": _UA, "Accept": "application/json", "Content-Type": "application/x-www-form-urlencoded"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as resp:
+            raw = resp.read().decode("utf-8")
+    except Exception as exc:  # noqa: BLE001
+        raise ExternalDataError(f"外部数据请求失败：{type(exc).__name__}") from exc
+    try:
+        data = json.loads(raw)
+    except Exception as exc:  # noqa: BLE001
+        raise ExternalDataError("外部数据返回非 JSON") from exc
+    if use_cache:
+        cache_set(cache_key, data, ttl_seconds=_TTL_SECONDS)
+    return data
+
+
+
 # ---------------------------------------------------------------- 汇率（Frankfurter / ECB）
 def fx_latest(base: str = "USD", symbols: str = "CNY,EUR,JPY,HKD,GBP") -> list[dict[str, Any]]:
     base = (base or "USD").upper()[:3]
@@ -175,3 +207,93 @@ def sec_company_concept(cik: str, tag: str = "Revenues", limit: int = 8) -> list
 
 def sec_tags() -> list[dict[str, str]]:
     return [{"id": key, "label": value} for key, value in SEC_TAGS.items()]
+
+
+# ---------------------------------------------------------------- 巨潮资讯（上市公司公告）
+# 中国证监会指定信息披露网站，免费公开、无需密钥；仅访问固定官方主机。
+CNINFO_HOST = "https://www.cninfo.com.cn"
+CNINFO_PDF_HOST = "http://static.cninfo.com.cn"
+_CNINFO_CATEGORIES: dict[str, str] = {
+    "风险提示": "category_gszl_szsh",
+    "业绩预告": "category_yjygjxz_szsh",
+    "诉讼仲裁": "category_sszc_szsh",
+    "重大合同": "category_zdht_szsh",
+    "股权质押": "category_gqzy_szsh",
+    "减持": "category_jjyj_szsh",
+    "年报": "category_ndbg_szsh",
+    "半年报": "category_bndbg_szsh",
+}
+
+
+def cninfo_categories() -> list[dict[str, str]]:
+    return [{"id": key, "label": key} for key in _CNINFO_CATEGORIES]
+
+
+def _cninfo_column(sec_code: str) -> str:
+    return "sse" if sec_code.startswith(("6", "9")) else "szse"
+
+
+def cninfo_company_search(keyword: str, limit: int = 8) -> list[dict[str, Any]]:
+    keyword = (keyword or "").strip()[:40]
+    if not keyword:
+        raise ExternalDataError("请提供公司名称或证券代码")
+    limit = max(1, min(int(limit), 25))
+    data = _post_form_json(
+        f"{CNINFO_HOST}/new/information/topSearch/query",
+        {"keyWord": keyword, "maxNum": limit},
+    )
+    rows: list[dict[str, Any]] = []
+    if isinstance(data, list):
+        for item in data[:limit]:
+            rows.append({
+                "证券代码": item.get("code"),
+                "证券简称": item.get("zwjc"),
+                "类别": item.get("category"),
+                "orgId": item.get("orgId"),
+            })
+    return rows
+
+
+def cninfo_announcements(sec_code: str, limit: int = 10, category: str = "") -> list[dict[str, Any]]:
+    code = "".join(c for c in (sec_code or "").strip() if c.isalnum())[:6]
+    if not code or not code.isdigit():
+        raise ExternalDataError("请提供 6 位证券代码")
+    limit = max(1, min(int(limit), 30))
+    companies = _post_form_json(
+        f"{CNINFO_HOST}/new/information/topSearch/query",
+        {"keyWord": code, "maxNum": 5},
+    )
+    org_id = ""
+    sec_name = ""
+    if isinstance(companies, list):
+        for item in companies:
+            if item.get("code") == code:
+                org_id = str(item.get("orgId") or "")
+                sec_name = str(item.get("zwjc") or "")
+                break
+    if not org_id:
+        raise ExternalDataError("未找到该证券代码对应的上市公司")
+    form: dict[str, Any] = {
+        "pageNum": 1,
+        "pageSize": limit,
+        "column": _cninfo_column(code),
+        "tabName": "fulltext",
+        "stock": f"{code},{org_id}",
+        "isHLtitle": "true",
+    }
+    if category and category in _CNINFO_CATEGORIES:
+        form["category"] = _CNINFO_CATEGORIES[category]
+    data = _post_form_json(f"{CNINFO_HOST}/new/hisAnnouncement/query", form)
+    rows: list[dict[str, Any]] = []
+    for item in (data.get("announcements") or [])[:limit]:
+        ts = item.get("announcementTime")
+        date = time.strftime("%Y-%m-%d", time.gmtime(ts / 1000)) if isinstance(ts, (int, float)) else ""
+        adjunct = item.get("adjunctUrl")
+        rows.append({
+            "证券代码": item.get("secCode") or code,
+            "证券简称": item.get("secName") or sec_name,
+            "公告标题": item.get("announcementTitle"),
+            "公告日期": date,
+            "PDF": f"{CNINFO_PDF_HOST}/{adjunct}" if adjunct else "",
+        })
+    return rows

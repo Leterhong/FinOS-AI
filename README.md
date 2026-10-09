@@ -61,6 +61,7 @@ Evidence first · Human in the loop · Explainable rules · Secure by default ·
 - **人机复核闭环**：候选风险必须经人工核验才成为正式风险，操作全程留痕。
 - **企业治理内建**：组织角色、项目授权、数据密级、复核队列、模型评测与审计开箱可用。
 - **自带模型、可自托管**：密钥在服务端加密，MIT 开源，支持私有化部署。
+- **外部数据可接入**：内置汇率（ECB）、LPR、世界银行、GLEIF、SEC EDGAR 与巨潮资讯上市公司公告等免费公开数据源（无需密钥），全部标注需人工复核。
 
 量化证据：71 条规则模板、296 条确定性基准用例、100% 通过（`npm run benchmark`，见 [评测报告](./docs/benchmark.md)）。一页纸概览见 [作品简介](./docs/pitch.md)。
 
