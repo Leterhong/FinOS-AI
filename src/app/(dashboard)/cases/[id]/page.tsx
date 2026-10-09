@@ -46,6 +46,7 @@ export default function CaseWorkspacePage() {
   const [cninfoListed, setCninfoListed] = useState<{ code: string; name: string } | null>(null);
   const [cninfoAnnouncements, setCninfoAnnouncements] = useState<Array<{ title: string; date: string; pdf: string }>>([]);
   const [cninfoRisks, setCninfoRisks] = useState<ClassifiedRisk[]>([]);
+  const [addedCninfo, setAddedCninfo] = useState<string[]>([]);
 
   const project = useMemo(() => cases.find((item) => item.id === caseId), [cases, caseId]);
   const projectDocuments = useMemo(() => documents.filter((item) => item.caseId === caseId), [documents, caseId]);
@@ -159,6 +160,7 @@ export default function CaseWorkspacePage() {
     setCninfoAnnouncements([]);
     setCninfoListed(null);
     setCninfoRisks([]);
+    setAddedCninfo([]);
     try {
       const keyword = project?.company?.trim();
       if (!keyword) throw new Error("项目未填写企业名称");
@@ -196,6 +198,8 @@ export default function CaseWorkspacePage() {
   };
 
   const promoteCninfoRisk = (item: ClassifiedRisk) => {
+    if (addedCninfo.includes(item.title)) return;
+    setAddedCninfo((current) => [...current, item.title]);
     addRisk({
       caseId,
       company: project?.company ?? "上市公司",
@@ -272,7 +276,7 @@ export default function CaseWorkspacePage() {
             <button type="button" onClick={extractCninfoRisks} className="rounded-xl border border-amber-400/25 bg-amber-400/[0.06] px-4 py-2 text-xs text-amber-200">提取风险信号</button>
             <span className="text-[10px] text-slate-500">按公告标题关键词确定性归类，结论需人工核验</span>
           </div>}
-          {cninfoRisks.length > 0 && <div className="mt-2 space-y-2">{cninfoRisks.map((item, index) => <div key={`${item.title}-${index}`} className="flex flex-wrap items-center gap-2 rounded-xl border border-white/[0.07] p-3 text-[11px]"><RiskBadge level={item.level} /><span className="shrink-0 rounded-md border border-white/10 px-1.5 py-0.5 text-[10px] text-slate-400">{item.category}</span><span className="min-w-0 flex-1 truncate text-slate-200">{item.title}</span><button type="button" onClick={() => promoteCninfoRisk(item)} className="shrink-0 rounded-lg border border-cyan-400/25 px-3 py-1.5 text-[10px] text-cyan-200">加入风险中心</button></div>)}</div>}
+          {cninfoRisks.length > 0 && <div className="mt-2 space-y-2">{cninfoRisks.map((item, index) => <div key={`${item.title}-${index}`} className="flex flex-wrap items-center gap-2 rounded-xl border border-white/[0.07] p-3 text-[11px]"><RiskBadge level={item.level} /><span className="shrink-0 rounded-md border border-white/10 px-1.5 py-0.5 text-[10px] text-slate-400">{item.category}</span><span className="min-w-0 flex-1 truncate text-slate-200">{item.title}</span><button type="button" onClick={() => promoteCninfoRisk(item)} disabled={addedCninfo.includes(item.title)} className="shrink-0 rounded-lg border border-cyan-400/25 px-3 py-1.5 text-[10px] text-cyan-200 disabled:opacity-40">{addedCninfo.includes(item.title) ? "已加入" : "加入风险中心"}</button></div>)}</div>}
         </div>
       </div>
     </Panel>

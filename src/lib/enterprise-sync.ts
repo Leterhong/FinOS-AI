@@ -199,9 +199,14 @@ export function initPendingSync(): void {
   void flushPendingSync();
 }
 
+/** 示例数据（SAMPLE- 前缀）仅本地存在，绝不推送到服务端账号。 */
+export { shouldSyncEntityId } from "@/lib/sample-guard";
+import { shouldSyncEntityId } from "@/lib/sample-guard";
+
 /** 幂等 upsert；fire-and-forget。失败进入重试队列，避免瞬断丢同步。 */
 export function pushEntity(kind: EnterpriseKind, payload: Record<string, unknown>): void {
   const id = String(payload.id ?? "");
+  if (!shouldSyncEntityId(id)) return;
   void (async () => {
     try {
       const resp = await backendAuthedFetch(`/api/enterprise/${kind}`, {
@@ -217,6 +222,7 @@ export function pushEntity(kind: EnterpriseKind, payload: Record<string, unknown
 }
 
 export function pushDelete(kind: EnterpriseKind, id: string): void {
+  if (!shouldSyncEntityId(id)) return;
   void (async () => {
     try {
       const resp = await backendAuthedFetch(`/api/enterprise/${kind}/${encodeURIComponent(id)}`, { method: "DELETE" });
@@ -230,6 +236,7 @@ export function pushDelete(kind: EnterpriseKind, id: string): void {
 
 /** 可等待的 upsert：登录迁移等需要确保写完成时使用。 */
 export async function pushEntityAwait(kind: EnterpriseKind, payload: Record<string, unknown>): Promise<void> {
+  if (!shouldSyncEntityId(payload.id)) return;
   const resp = await backendAuthedFetch(`/api/enterprise/${kind}`, { method: "POST", body: JSON.stringify(payload) });
   if (!resp.ok) throw new Error(`推送 ${kind} 失败`);
 }
