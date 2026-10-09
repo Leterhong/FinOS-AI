@@ -99,20 +99,23 @@ export FINOS_ALLOW_PRIVATE_AI_ENDPOINTS="${FINOS_ALLOW_PRIVATE_AI_ENDPOINTS:-fal
 export AI_ALLOW_PRIVATE_ENDPOINTS="${AI_ALLOW_PRIVATE_ENDPOINTS:-false}"
 export MODE=online
 
-# 3) 启动 Next.js 前端（未运行时）：清缓存 → 生产构建 → 启动。
+# 3) 构建 Next.js 前端（未运行时）：清缓存 → 生产构建。
 #    先构建再启动后端，避免后端进程占用内存抬高构建峰值触发 OOM。
+#    SKIP_WEB_BUILD=1 且已有构建产物时跳过重建（纯重启场景，显著缩短停机窗口）。
 if [ "$WEB_UP" -eq 0 ]; then
-  rm -rf "$ROOT/.next"
-  if ! NODE_OPTIONS="--max-old-space-size=768" NEXT_TELEMETRY_DISABLED=1 node "$NEXT_BIN" build --no-lint > "$LOG_DIR/build.log" 2>&1; then
-    echo "启动失败：生产构建未通过，详情见 $LOG_DIR/build.log" >&2
-    exit 2
+  if [ "${SKIP_WEB_BUILD:-0}" = "1" ] && [ -f "$ROOT/.next/BUILD_ID" ]; then
+    echo "跳过前端构建（SKIP_WEB_BUILD=1，复用现有 .next）。"
+  else
+    rm -rf "$ROOT/.next"
+    if ! NODE_OPTIONS="--max-old-space-size=768" NEXT_TELEMETRY_DISABLED=1 node "$NEXT_BIN" build --no-lint > "$LOG_DIR/build.log" 2>&1; then
+      echo "启动失败：生产构建未通过，详情见 $LOG_DIR/build.log" >&2
+      exit 2
+    fi
   fi
-  nohup node --max-old-space-size=1024 "$NEXT_BIN" start -H "$WEB_HOST" -p "$WEB_PORT" > "$LOG_DIR/web.log" 2>&1 &
-  WEB_PID=$!
-  echo "$WEB_PID" > "$RUN_DIR/web.pid"
 fi
 
-# 4) 启动 FastAPI 后端（未运行时）。先 export 再 nohup，避免环境变量被当命令。
+# 4) 先启动 FastAPI 后端。确保前端开始服务时后端已就绪，
+#    避免出现「Web 已监听、API 未就绪」的短暂 5xx 窗口。
 if [ "$API_UP" -eq 0 ]; then
   # 非 SQLite（PostgreSQL 等）时先执行迁移，避免生产库缺表；失败即中止。
   DB_URL_FOR_MIGRATE="${DATABASE_URL:-sqlite://default}"
@@ -126,11 +129,32 @@ if [ "$API_UP" -eq 0 ]; then
   nohup "$PYTHON_BIN" -m uvicorn backend.main:app --host "$API_HOST" --port "$API_PORT" > "$LOG_DIR/backend.log" 2>&1 &
   API_PID=$!
   echo "$API_PID" > "$RUN_DIR/backend.pid"
+
+  # 等待后端就绪（最多 60s）后再启动前端。
+  for _ in $(seq 1 60); do
+    if port_listening "$API_PORT"; then break; fi
+    if [ -n "${API_PID:-}" ] && ! kill -0 "$API_PID" 2>/dev/null; then
+      echo "启动失败：API 进程已退出，详情见 $LOG_DIR/backend.log" >&2
+      exit 2
+    fi
+    sleep 1
+  done
 fi
 
-# 5) 等待两个端口就绪；任一新进程提前退出或超时都视为失败。
+# 5) 启动 Next.js 前端。
+if [ "$WEB_UP" -eq 0 ]; then
+  nohup node --max-old-space-size=1024 "$NEXT_BIN" start -H "$WEB_HOST" -p "$WEB_PORT" > "$LOG_DIR/web.log" 2>&1 &
+  WEB_PID=$!
+  echo "$WEB_PID" > "$RUN_DIR/web.pid"
+fi
+
+# 6) 等待端口就绪且首页返回 200；任一新进程提前退出或超时都视为失败。
+http_ready() {
+  if ! command -v curl >/dev/null 2>&1; then return 0; fi
+  curl -fsS -o /dev/null --max-time 3 "http://127.0.0.1:$WEB_PORT/" 2>/dev/null
+}
 for _ in $(seq 1 150); do
-  if port_listening "$WEB_PORT" && port_listening "$API_PORT"; then
+  if port_listening "$WEB_PORT" && port_listening "$API_PORT" && http_ready; then
     echo "服务启动成功：http://127.0.0.1:$WEB_PORT"
     exit 0
   fi
