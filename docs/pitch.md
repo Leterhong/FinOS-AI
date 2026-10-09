@@ -27,6 +27,7 @@
 ## 可信证据（可复现）
 
 - **确定性引擎评测**：71 条规则模板、296 条基准用例、100% 通过，`npm run benchmark` 一键复现（见 `docs/benchmark.md`）。
+- **事实抽取真实评测**：精确率 / 召回率 / F1 95.8%、原文引用有效性 100%，`npm run ai-eval` 对真实模型复现（见 `docs/ai-eval.md`）。
 - **质量门禁**：TypeScript 严格模式、ESLint、前端契约测试、规则引擎单元测试、后端 pytest、Next.js 生产构建全部通过，并由 CI + CodeQL 自动执行。
 - **安全基线**：短期 Access Token + HttpOnly Refresh Cookie、AES-256-GCM 字段加密、SSRF 防护、分级限流、可信代理、页面 CSP（报告模式）。
 - **文档齐全**：35 张界面截图的图文详解、完整使用文档、部署指南与安全设计。

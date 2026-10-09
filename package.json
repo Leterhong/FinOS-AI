@@ -10,8 +10,9 @@
     "typecheck": "tsc --noEmit",
     "test": "node --test tests/frontend/contract.test.mjs",
     "benchmark": "node --import tsx scripts/benchmark.ts",
+    "ai-eval": "node --import tsx scripts/ai-eval.ts",
     "test:backend": "python -m pytest tests/backend tests/ai -q",
-    "test:unit": "node --conditions=react-server --require ./scripts/register-os-user.cjs --import tsx --test tests/unit/rule-engine.test.ts tests/unit/financial-analysis.test.ts tests/unit/pdf-parser.test.ts tests/unit/prompt-guard.test.ts tests/unit/skill-registry.test.ts tests/unit/skill-scan.test.ts tests/unit/rule-templates.test.ts tests/unit/risk-docx.test.ts tests/unit/answer-references.test.ts tests/unit/risk-score.test.ts tests/unit/zip.test.ts tests/unit/model-config-validation.test.ts tests/unit/limited-body.test.ts tests/unit/keyed-queue.test.ts tests/unit/bounded-map.test.ts tests/unit/rule-pack.test.ts tests/unit/engine-benchmark.test.ts tests/unit/system-model.test.ts"
+    "test:unit": "node --conditions=react-server --require ./scripts/register-os-user.cjs --import tsx --test tests/unit/rule-engine.test.ts tests/unit/financial-analysis.test.ts tests/unit/pdf-parser.test.ts tests/unit/prompt-guard.test.ts tests/unit/skill-registry.test.ts tests/unit/skill-scan.test.ts tests/unit/rule-templates.test.ts tests/unit/risk-docx.test.ts tests/unit/answer-references.test.ts tests/unit/risk-score.test.ts tests/unit/zip.test.ts tests/unit/model-config-validation.test.ts tests/unit/limited-body.test.ts tests/unit/keyed-queue.test.ts tests/unit/bounded-map.test.ts tests/unit/rule-pack.test.ts tests/unit/engine-benchmark.test.ts tests/unit/system-model.test.ts tests/unit/ai-eval-score.test.ts"
   },
   "dependencies": {
     "@radix-ui/react-dropdown-menu": "^2.1.4",

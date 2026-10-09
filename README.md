@@ -63,7 +63,7 @@ Evidence first · Human in the loop · Explainable rules · Secure by default ·
 - **自带模型、可自托管**：密钥在服务端加密，MIT 开源，支持私有化部署。
 - **外部数据可接入**：内置汇率（ECB）、LPR、世界银行、GLEIF、SEC EDGAR 与巨潮资讯上市公司公告等免费公开数据源（无需密钥），全部标注需人工复核。
 
-量化证据：71 条规则模板、296 条确定性基准用例、100% 通过（`npm run benchmark`，见 [评测报告](./docs/benchmark.md)）。一页纸概览见 [作品简介](./docs/pitch.md)。
+量化证据：确定性引擎 296 条基准用例 100% 通过（`npm run benchmark`，见 [评测报告](./docs/benchmark.md)）；事实抽取真实模型评测 精确率/召回率/F1 95.8%、原文引用有效性 100%（`npm run ai-eval`，见 [AI 评测报告](./docs/ai-eval.md)）。一页纸概览见 [作品简介](./docs/pitch.md)。
 
 ## 快速开始
 
@@ -109,6 +109,9 @@ node tests/e2e/main-chain.mjs
 
 # 确定性引擎评测（生成 docs/benchmark.md，不调用模型）
 npm run benchmark
+
+# 事实抽取真实评测（调用已配置模型，生成 docs/ai-eval.md）
+npm run ai-eval
 ```
 
 以上门禁同时由 GitHub Actions（CI + CodeQL + Dependabot）自动执行。测试使用隔离数据与本地 mock 模型，不连接任何真实模型服务。确定性引擎评测当前为 296/296（100%），可用 `npm run benchmark` 复现，结果见 [评测报告](./docs/benchmark.md)。更多信息见 [`tests/README.md`](./tests/README.md)。

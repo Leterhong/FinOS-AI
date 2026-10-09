@@ -202,7 +202,7 @@ async function runStages(deps: StageDeps, onStage: StageEmitter): Promise<StageO
           content:
             "你是 FinOS AI 企业资料事实抽取 Agent。从给定文件文本中抽取可核验的量化事实，" +
             '只输出 JSON 对象（不要输出其他文字），结构为：{"facts":[{"topic":"主题，如 货币资金/营业收入/资产负债率","value":数值,"unit":"元|万元|亿元|%","quote":"原文片段（必须逐字来自文本）","location":"表名/行号或章节（可选）","coordinate":{"page":1,"line":1,"bbox":[0,0,1,0.1],"sheet":"Sheet1","cell":"B2","row":2,"column":2}}],"uncertainties":["无法确定或需要人工核验的点"]}。' +
-            `规则：value 必须是纯数字；quote 必须是原文逐字引用，禁止改写；最多 40 条；文本中没有的事实不得编造。安全边界：${documentGuard}`,
+            `规则：value 必须是纯数字；quote 必须是原文逐字引用，禁止改写；最多 40 条；文本中没有的事实不得编造；否定表述（如“无对外担保”“未发生诉讼”“不存在”）不构成数值事实，不要抽取。安全边界：${documentGuard}`,
         },
         {
           role: "user",
