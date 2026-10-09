@@ -49,4 +49,12 @@
 - 生产：Docker Compose 一键部署（`bash deploy.sh`），PostgreSQL 16 + Redis 7。
 - 许可：MIT，支持自托管与按业务扩展。
 
+## 相关材料
+
+- [创新点说明](./innovation.md)：与「文档类 AI」的区别与四项创新
+- [端到端运行留痕](./demo-run.md)：真实模型一次运行的原始输出
+- [价值量化说明](./value.md) · [制造业授信尽调场景](./scenario-manufacturing-credit.md)
+- [确定性引擎评测](./benchmark.md) · [AI 事实抽取评测](./ai-eval.md)
+- [开发过程索引](./dev-process.md)
+
 > FinOS AI 提供信息分析与决策辅助，不构成投资、授信、法律、审计或合规意见。
