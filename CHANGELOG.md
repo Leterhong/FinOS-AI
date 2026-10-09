@@ -26,8 +26,9 @@
 
 ### 变更
 
-- Next.js 页面响应新增 `Content-Security-Policy-Report-Only`、`Cross-Origin-Opener-Policy`、`Cross-Origin-Resource-Policy` 与 `X-DNS-Prefetch-Control`
 - 浏览器标签标题按当前模块显示（如「规则库 · FinOS AI」）；所有 `/api/*` 响应统一 `Cache-Control: no-store`
+- 共享默认模型限流改为 Redis 固定窗口计数（配置 `REDIS_URL` 时多实例共享配额），不可用时回退进程内
+- 端到端测试扩展到 18 项：新增未登录 401、会话畸形/超大请求体 400/413、数据源目录与 cninfo 校验等集成检查
 - `start.sh` 改为先启动后端、再启动前端，并加入 HTTP 就绪探测；支持 `SKIP_WEB_BUILD=1` 复用构建产物，纯重启从约 2 分钟缩短到约 25 秒，消除「Web 已起、API 未起」的短暂 5xx 窗口
 - 侧栏品牌副标语由 `Enterprise Financial Agent` 精简为 `Financial Risk Agent` 并收紧字距，避免在 256px 侧栏内贴边溢出
 - 移除个人财富模块遗留的死代码（`src/scenario`、`src/lib/simulationEngine.ts`、`src/data/types.ts`、`src/agents/types.ts`，全项目零引用）

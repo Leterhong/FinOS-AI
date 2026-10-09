@@ -225,6 +225,34 @@ async function phaseB() {
   ok("B4 用户隔离（新会话不可见他人项目）", !(snap2?.data?.cases ?? []).some((c) => c.id === caseId));
 }
 
+async function phaseC() {
+  // 1. 未登录访问 Next API 必须 401
+  const skillsAnon = await fetch(`${WEB}/api/skills`);
+  ok("C1 未登录 /api/skills 返回 401", skillsAnon.status === 401, String(skillsAnon.status));
+  const modelsAnon = await fetch(`${WEB}/api/models`);
+  ok("C2 未登录 /api/models 返回 401", modelsAnon.status === 401, String(modelsAnon.status));
+
+  // 2. 工作区会话输入校验（畸形 JSON → 400；超大请求体 → 413）
+  const badJson = await fetch(`${WEB}/api/workspace/session`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: "{bad",
+  });
+  ok("C3 会话畸形 JSON 返回 400", badJson.status === 400, String(badJson.status));
+  const oversized = await fetch(`${WEB}/api/workspace/session`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: "a".repeat(8192),
+  });
+  ok("C4 会话超大请求体返回 413", oversized.status === 413, String(oversized.status));
+
+  // 3. 外部数据源目录与输入校验（cninfo）
+  const boot = await fetch(`${BACKEND}/api/auth/bootstrap`, { method: "POST" });
+  const token = (await boot.json())?.data?.token;
+  const auth = { Authorization: `Bearer ${token}` };
+  const catalog = await fetch(`${BACKEND}/api/data-sources/catalog`, { headers: auth }).then((r) => r.json());
+  const providers = (catalog?.data?.sources ?? []).map((s) => s.provider);
+  ok("C5 数据源目录包含 cninfo", providers.includes("cninfo"), providers.join(","));
+  const cninfoBad = await fetch(`${BACKEND}/api/data-sources/cninfo/company?name=`, { headers: auth });
+  ok("C6 cninfo 空名称返回 502", cninfoBad.status === 502, String(cninfoBad.status));
+}
+
 async function main() {
   const tmp = mkdtempSync(join(tmpdir(), "finos-e2e-"));
   try {
@@ -248,6 +276,7 @@ async function main() {
 
     await phaseA();
     await phaseB();
+    await phaseC();
   } finally {
     for (const child of children) {
       try {
