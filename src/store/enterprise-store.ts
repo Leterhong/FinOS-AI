@@ -12,6 +12,7 @@ import {
 } from "@/lib/enterprise-sync";
 import { evaluateRules, type FactCandidate } from "@/lib/rule-engine";
 import { buildSampleWorkspace, isSampleId } from "@/lib/sample-workspace";
+import { capTables, capText } from "@/lib/trim-heavy";
 import type {
   AgentRun,
   AnalysisDocument,
@@ -328,7 +329,7 @@ export const useEnterpriseStore = create<EnterpriseState>()(
               uncertainties: detail?.uncertainties ?? [],
               extractionMethod: detail?.extractionMethod ?? "text",
               ocrUsed: detail?.ocrUsed ?? false,
-              tables: detail?.tables ?? [],
+              tables: capTables(detail?.tables) ?? [],
               updatedAt: new Date().toISOString(),
             };
           }),
@@ -558,7 +559,7 @@ export const useEnterpriseStore = create<EnterpriseState>()(
           : run),
       })),
       addBrief: (input) => {
-        const brief: ResearchBrief = { ...input, id: uid("BRIEF"), createdAt: new Date().toISOString() };
+        const brief: ResearchBrief = { ...input, summary: capText(input.summary, 20_000) ?? "", id: uid("BRIEF"), createdAt: new Date().toISOString() };
         set((state) => ({ briefs: [brief, ...state.briefs] }));
         pushEntity("briefs", syncMap.briefs.payload(brief));
         return brief;
@@ -837,14 +838,16 @@ export const useEnterpriseStore = create<EnterpriseState>()(
             : d),
         });
       },
-      // 持久化裁剪：AI 分析原文/Agent 输出/对话历史截断限量，避免长期使用
-      // 撞上 localStorage ~5MB 配额后写入失败。
+      // 持久化裁剪：AI 分析原文 / 表格行 / Agent 输出 / 对话历史限量，避免长期使用
+      // 撞上 localStorage ~5MB 配额后写入失败。内存仍保留完整数据。
       partialize: (state) => ({
         ...state,
         documents: state.documents.slice(0, 100).map((d) => ({
           ...d,
           // 与服务端上限（60000）对齐：低于该值不再截断，避免刷新后用截断版覆盖服务端完整分析。
-          analysis: d.analysis ? d.analysis.slice(0, 60000) : undefined,
+          analysis: capText(d.analysis, 60_000),
+          // 表格行数无服务端上限：持久化时裁剪，防配额溢出；内存/推送仍用完整数据。
+          tables: capTables(d.tables),
         })),
         agents: state.agents.slice(0, 50).map((a) => ({
           ...a,
@@ -852,7 +855,7 @@ export const useEnterpriseStore = create<EnterpriseState>()(
           error: a.error ? a.error.slice(0, 500) : undefined,
         })),
         assistantMessages: state.assistantMessages.slice(-500),
-        briefs: state.briefs.slice(0, 50),
+        briefs: state.briefs.slice(0, 50).map((b) => ({ ...b, summary: capText(b.summary, 20_000) ?? "" })),
       }),
     },
   ),
