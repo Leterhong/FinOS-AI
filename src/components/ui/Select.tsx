@@ -86,6 +86,7 @@ export function Select({
         required={required}
         disabled={disabled}
         aria-label={ariaLabel}
+        aria-hidden="true"
         tabIndex={-1}
         className="pointer-events-none absolute inset-0 h-full w-full opacity-0"
       >
