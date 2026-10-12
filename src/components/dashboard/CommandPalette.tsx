@@ -9,7 +9,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bot, BriefcaseBusiness, Files, Search, ShieldAlert, Sparkles, Upload, Cpu, Command, Bell } from "lucide-react";
+import { Bot, BriefcaseBusiness, Files, FileText, Scale, Search, ShieldAlert, Sparkles, Upload, Cpu, Command, Bell, Workflow } from "lucide-react";
 import { useEnterpriseStore } from "@/store/enterprise-store";
 import { useModelStore } from "@/store/model-store";
 import { cn } from "@/lib/utils";
@@ -18,7 +18,7 @@ interface Entry {
   href: string;
   label: string;
   hint?: string;
-  group: "Suggested" | "Pages" | "Projects" | "Documents" | "Risks";
+  group: "Suggested" | "Pages" | "Projects" | "Documents" | "Risks" | "Rules" | "Tasks" | "Briefs";
   icon: React.ComponentType<{ className?: string }>;
 }
 
@@ -37,6 +37,9 @@ export default function CommandPalette() {
   const cases = useEnterpriseStore((state) => state.cases);
   const documents = useEnterpriseStore((state) => state.documents);
   const risks = useEnterpriseStore((state) => state.risks);
+  const rules = useEnterpriseStore((state) => state.rules);
+  const tasks = useEnterpriseStore((state) => state.tasks);
+  const briefs = useEnterpriseStore((state) => state.briefs);
   const active = useModelStore((state) => state.active);
   const loadActive = useModelStore((state) => state.loadActive);
   const pending = risks.filter((risk) => risk.status === "待核验");
@@ -98,8 +101,11 @@ export default function CommandPalette() {
       ...cases.filter((item) => match(`${item.company}${item.title}`)).slice(0, 4).map((item) => ({ href: `/cases/${encodeURIComponent(item.id)}`, label: item.company, hint: item.title, group: "Projects" as const, icon: BriefcaseBusiness })),
       ...documents.filter((item) => match(item.name)).slice(0, 4).map((item) => ({ href: item.caseId ? `/documents?caseId=${encodeURIComponent(item.caseId)}` : "/documents", label: item.name, hint: item.status, group: "Documents" as const, icon: Files })),
       ...risks.filter((item) => match(`${item.title}${item.company}`)).slice(0, 4).map((item) => ({ href: "/risk", label: item.title, hint: item.company, group: "Risks" as const, icon: ShieldAlert })),
+      ...rules.filter((item) => match(`${item.code}${item.name}${item.domain}`)).slice(0, 4).map((item) => ({ href: "/rules", label: `${item.code} · ${item.name}`, hint: item.domain, group: "Rules" as const, icon: Scale })),
+      ...tasks.filter((item) => match(`${item.title}${item.assignee}${item.caseName}`)).slice(0, 4).map((item) => ({ href: "/workflows", label: item.title, hint: `${item.stage} · ${item.assignee}`, group: "Tasks" as const, icon: Workflow })),
+      ...briefs.filter((item) => match(`${item.title}${item.topic}`)).slice(0, 4).map((item) => ({ href: "/research", label: item.title, hint: item.topic, group: "Briefs" as const, icon: FileText })),
     ];
-  }, [open, query, pending.length, active?.configured, cases, documents, risks]);
+  }, [open, query, pending.length, active?.configured, cases, documents, risks, rules, tasks, briefs]);
 
   useEffect(() => { setCursor(0); }, [query]);
 
@@ -133,7 +139,7 @@ export default function CommandPalette() {
               if (event.key === "ArrowUp") { event.preventDefault(); setCursor((c) => Math.max(c - 1, 0)); }
               if (event.key === "Enter" && !event.nativeEvent.isComposing && entries[cursor]) { go(entries[cursor].href); }
             }}
-            placeholder="搜索或执行命令：项目、资料、风险、页面…"
+            placeholder="搜索或执行命令：项目、资料、风险、规则、任务、底稿、页面…"
             className="h-12 flex-1 bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-400"
           />
           <kbd className="rounded border border-white/10 px-1.5 py-0.5 text-[10px] text-slate-400">ESC</kbd>
