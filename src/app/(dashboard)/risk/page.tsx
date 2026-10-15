@@ -22,6 +22,9 @@ export default function RiskPage() {
   const addRisk = useEnterpriseStore((state) => state.addRisk);
   const verifyRisk = useEnterpriseStore((state) => state.verifyRisk);
   const mitigateRisk = useEnterpriseStore((state) => state.mitigateRisk);
+  const deleteRisk = useEnterpriseStore((state) => state.deleteRisk);
+  const verifyRisks = useEnterpriseStore((state) => state.verifyRisks);
+  const [batchOpen, setBatchOpen] = useState(false);
   const [exported, setExported] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportFormat, setExportFormat] = useState("docx");
@@ -39,6 +42,7 @@ export default function RiskPage() {
     ["待人工核验", risks.filter((risk) => risk.status === "待核验").length, "pending"],
   ] as const;
   const projectScore = scoreProject(risks);
+  const pendingRisks = risks.filter((risk) => risk.status === "待核验");
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -66,6 +70,15 @@ export default function RiskPage() {
     if (reviewing.mode === "verify") verifyRisk(reviewing.risk.id, input);
     else mitigateRisk(reviewing.risk.id, input);
     setReviewing(null);
+  };
+
+  const submitBatch = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!pendingRisks.length) return;
+    const data = new FormData(event.currentTarget);
+    verifyRisks(pendingRisks.map((risk) => risk.id), { reviewer: String(data.get("reviewer")), note: String(data.get("note")) });
+    toast.success(`已核验 ${pendingRisks.length} 条候选风险`);
+    setBatchOpen(false);
   };
 
   const downloadRisks = async () => {
@@ -96,7 +109,7 @@ export default function RiskPage() {
     }
   };
   return <div className="page-shell">
-    <PageIntro eyebrow="Risk intelligence" title="企业风险中心" description="风险提示必须同时呈现事实证据、命中规则、潜在影响与核验状态，避免黑箱评分和无依据结论。" actions={<><Select value={exportFormat} onChange={setExportFormat} className="min-w-44" options={[{ value: "docx", label: "导出格式：Word" }, { value: "pdf", label: "导出格式：PDF" }, { value: "md", label: "导出格式：Markdown" }]} /><button type="button" onClick={() => void downloadRisks()} disabled={exporting} className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-300 hover:border-cyan-400/25 hover:text-cyan-200 disabled:opacity-40"><Download className="h-3.5 w-3.5" />{exporting ? "生成中…" : exported ? "已下载" : "下载风险清单"}</button><Button variant="primary" disabled={cases.length === 0} onClick={() => setOpen(true)}><Plus className="h-3.5 w-3.5" />登记风险</Button></>} />
+    <PageIntro eyebrow="Risk intelligence" title="企业风险中心" description="风险提示必须同时呈现事实证据、命中规则、潜在影响与核验状态，避免黑箱评分和无依据结论。" actions={<><button type="button" onClick={() => setBatchOpen(true)} disabled={pendingRisks.length === 0} className="inline-flex items-center gap-2 rounded-xl border border-emerald-400/25 px-4 py-2.5 text-xs text-emerald-200 disabled:opacity-40"><ShieldCheck className="h-3.5 w-3.5" />批量核验候选（{pendingRisks.length}）</button><Select value={exportFormat} onChange={setExportFormat} className="min-w-44" options={[{ value: "docx", label: "导出格式：Word" }, { value: "pdf", label: "导出格式：PDF" }, { value: "md", label: "导出格式：Markdown" }]} /><button type="button" onClick={() => void downloadRisks()} disabled={exporting} className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-300 hover:border-cyan-400/25 hover:text-cyan-200 disabled:opacity-40"><Download className="h-3.5 w-3.5" />{exporting ? "生成中…" : exported ? "已下载" : "下载风险清单"}</button><Button variant="primary" disabled={cases.length === 0} onClick={() => setOpen(true)}><Plus className="h-3.5 w-3.5" />登记风险</Button></>} />
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{filters.map(([label, count, value]) => <button key={value} onClick={() => setLevel(value)} className={`rounded-xl border p-4 text-left transition ${level === value ? "border-cyan-300/25 bg-cyan-300/[0.07]" : "border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.04]"}`}><p className="text-xs text-slate-500">{label}</p><p className="numeric mt-2 text-2xl font-semibold text-white">{count}</p></button>)}</div>
     {risks.length > 0 && <Panel>
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.07] p-5">
@@ -172,6 +185,12 @@ export default function RiskPage() {
             {drawerRisk.ruleCodes?.length ? ` · 规则 ${drawerRisk.ruleCodes.join("、")}` : ""}
           </p>
         </DrawerSection>
+        <DrawerSection label="Actions · 操作">
+          <div className="flex flex-wrap gap-2">
+            {drawerRisk.status === "待核验" && <button type="button" onClick={() => { setReviewing({ risk: drawerRisk, mode: "verify" }); setDrawerRiskId(null); }} className="rounded-lg border border-emerald-400/25 px-3 py-1.5 text-[10px] text-emerald-200">确认风险</button>}
+            <button type="button" onClick={() => { if (window.confirm("确定删除该风险？删除后不可恢复（服务端备份同步移除）。")) { deleteRisk(drawerRisk.id); setDrawerRiskId(null); } }} className="rounded-lg border border-rose-400/20 px-3 py-1.5 text-[10px] text-rose-300">删除风险</button>
+          </div>
+        </DrawerSection>
       </>}
     </DetailDrawer>
     <EnterpriseDialog open={open} onClose={() => setOpen(false)} title="登记企业风险" description="仅录入可追溯、可复核的风险信号">
@@ -182,6 +201,14 @@ export default function RiskPage() {
         <div className="flex justify-end gap-2"><button type="button" onClick={() => setOpen(false)} className="rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-400">取消</button><button type="submit" className="rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]">保存并待核验</button></div>
       </form>
     </EnterpriseDialog>
-    <EnterpriseDialog open={Boolean(reviewing)} onClose={() => setReviewing(null)} title={reviewing?.mode === "mitigate" ? "登记风险缓释" : "人工核验候选风险"} description={reviewing?.risk.title}><form onSubmit={submitReview} className="space-y-4"><div className="rounded-xl border border-amber-400/10 bg-amber-400/[0.035] p-3 text-[10px] leading-5 text-amber-100/60">{reviewing?.mode === "verify" ? "确认后该候选风险会进入正式风险台账。请对照原始资料和适用规则，不要只依据模型文字。" : "记录已经实际采取或确认的缓释措施，不能用计划中的动作冒充已完成。"}</div><label className="block"><span className="mb-1.5 block text-[11px] text-slate-400">操作人</span><input required name="reviewer" placeholder="填写真实姓名或工号" className="field-control" /></label><label className="block"><span className="mb-1.5 block text-[11px] text-slate-400">{reviewing?.mode === "verify" ? "核验意见" : "缓释措施与依据"}</span><textarea required name="note" rows={4} placeholder="记录核验依据、修正内容或实际缓释动作" className="field-control resize-none" /></label><div className="flex justify-end gap-2"><button type="button" onClick={() => setReviewing(null)} className="rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-400">取消</button><button type="submit" className="rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]">保存审计记录</button></div></form></EnterpriseDialog>
+    <EnterpriseDialog open={Boolean(reviewing)} onClose={() => setReviewing(null)} title={reviewing?.mode === "mitigate" ? "登记风险缓释" : "人工核验候选风险"} description={reviewing?.risk.title}><form onSubmit={submitReview} className="space-y-4"><div className="rounded-xl border border-amber-400/10 bg-amber-400/[0.035] p-3 text-[10px] leading-5 text-amber-100/60">{reviewing?.mode === "verify" ? "确认后该候选风险会进入正式风险台账。请对照原始资料和适用规则，不要只依据模型文字。" : "记录已经实际采取或确认的缓释措施，不能用计划中的动作冒充已完成。"}</div><label className="block"><span className="mb-1.5 block text-[11px] text-slate-400">操作人</span><input required name="reviewer" placeholder="填写真实姓名或工号" className="field-control" /></label><label className="block"><span className="mb-1.5 block text-[11px] text-slate-400">{reviewing?.mode === "verify" ? "核验意见" : "缓释措施与依据"}</span><textarea required name="note" rows={4} placeholder="记录核验依据、修正内容或实际缓释动作" className="field-control resize-none" /></label><div className="flex justify-end gap-2"><button type="button" onClick={() => setReviewing(null)} className="rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-400">取消</button><button type="submit" className="rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]">保存审计记录</button></div></form>    </EnterpriseDialog>
+    <EnterpriseDialog open={batchOpen} onClose={() => setBatchOpen(false)} title="批量核验候选风险" description={`将当前 ${pendingRisks.length} 条「待核验」候选风险一次性标记为已确认`}>
+      <form onSubmit={submitBatch} className="space-y-4">
+        <div className="rounded-xl border border-amber-400/10 bg-amber-400/[0.035] p-3 text-[10px] leading-5 text-amber-100/60">批量确认会把这 {pendingRisks.length} 条候选风险全部记为「已确认」并写入统一核验意见。请确认已逐条对照原始资料与适用规则；如需逐条填写不同意见，请分别核验。</div>
+        <label className="block"><span className="mb-1.5 block text-[11px] text-slate-400">操作人（必填）</span><input required name="reviewer" placeholder="填写真实姓名或工号" className="field-control" /></label>
+        <label className="block"><span className="mb-1.5 block text-[11px] text-slate-400">核验意见</span><textarea required name="note" rows={3} placeholder="说明本轮核验所依据的资料与规则" className="field-control resize-none" /></label>
+        <div className="flex justify-end gap-2"><button type="button" onClick={() => setBatchOpen(false)} className="rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-400">取消</button><button type="submit" className="rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]">批量核验 {pendingRisks.length} 条</button></div>
+      </form>
+    </EnterpriseDialog>
   </div>;
 }

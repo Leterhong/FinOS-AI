@@ -67,6 +67,14 @@ interface EnterpriseState {
   updateRule: (id: string, patch: Partial<Pick<EnterpriseRule, "name" | "domain" | "version" | "conditions" | "enabled" | "industries">>) => void;
   testRule: (id: string, record: Omit<RuleTestRecord, "id" | "testedAt">) => void;
   deleteRule: (id: string) => void;
+  /** 彻底删除项目，并级联清理其资料、风险、任务、底稿与对话记录。 */
+  deleteCase: (id: string) => void;
+  /** 删除风险（误登记或不再需要的候选）。 */
+  deleteRisk: (id: string) => void;
+  /** 删除流程任务。 */
+  deleteTask: (id: string) => void;
+  /** 批量核验候选风险（一次 set、逐条推送）。 */
+  verifyRisks: (ids: string[], input: { reviewer: string; note: string }) => void;
   addTask: (input: NewTask) => void;
   updateTask: (id: string, patch: Partial<Pick<WorkflowTask, "title" | "assignee" | "due" | "priority" | "note" | "stage">>, actor: string, note?: string) => void;
   advanceTask: (id: string, actor: string, note?: string) => void;
@@ -458,6 +466,52 @@ export const useEnterpriseStore = create<EnterpriseState>()(
       deleteDocument: (id) => {
         withProgress(set, (state) => ({ documents: state.documents.filter((d) => d.id !== id) }));
         pushDelete("documents", id);
+      },
+      deleteCase: (id) => {
+        const state = get();
+        const docIds = state.documents.filter((d) => d.caseId === id).map((d) => d.id);
+        const riskIds = state.risks.filter((r) => r.caseId === id).map((r) => r.id);
+        const taskIds = state.tasks.filter((t) => t.caseId === id).map((t) => t.id);
+        const briefIds = state.briefs.filter((b) => b.caseId === id).map((b) => b.id);
+        withProgress(set, (s) => ({
+          cases: s.cases.filter((c) => c.id !== id),
+          documents: s.documents.filter((d) => d.caseId !== id),
+          risks: s.risks.filter((r) => r.caseId !== id),
+          tasks: s.tasks.filter((t) => t.caseId !== id),
+          briefs: s.briefs.filter((b) => b.caseId !== id),
+          assistantMessages: s.assistantMessages.filter((m) => m.caseId !== id),
+          activeCaseId: s.activeCaseId === id ? "" : s.activeCaseId,
+        }));
+        pushDelete("cases", id);
+        for (const docId of docIds) pushDelete("documents", docId);
+        for (const riskId of riskIds) pushDelete("risks", riskId);
+        for (const taskId of taskIds) pushDelete("tasks", taskId);
+        for (const briefId of briefIds) pushDelete("briefs", briefId);
+      },
+      deleteRisk: (id) => {
+        withProgress(set, (state) => ({ risks: state.risks.filter((risk) => risk.id !== id) }));
+        pushDelete("risks", id);
+      },
+      deleteTask: (id) => {
+        withProgress(set, (state) => ({ tasks: state.tasks.filter((task) => task.id !== id) }));
+        pushDelete("tasks", id);
+      },
+      verifyRisks: (ids, input) => {
+        const now = new Date().toISOString();
+        const target = new Set(ids);
+        withProgress(set, (state) => ({
+          risks: state.risks.map((risk) => target.has(risk.id) ? {
+            ...risk,
+            status: "已确认",
+            verificationNote: input.note,
+            verifiedBy: input.reviewer,
+            verifiedAt: now,
+            updatedAt: now,
+          } : risk),
+        }));
+        for (const risk of get().risks.filter((item) => target.has(item.id))) {
+          pushEntity("risks", syncMap.risks.payload(risk));
+        }
       },
       rerunRulesForDocument: (id) => {
         const state = get();

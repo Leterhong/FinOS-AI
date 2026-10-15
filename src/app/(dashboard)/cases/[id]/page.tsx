@@ -2,8 +2,8 @@
 
 import { type FormEvent, useMemo, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { Archive, ArrowLeft, Bot, CheckCircle2, Download, FileText, Pencil, Scale, ShieldAlert, Sparkles, UserPlus, Workflow } from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
+import { Archive, ArrowLeft, Bot, CheckCircle2, Download, FileText, Pencil, Scale, ShieldAlert, Sparkles, Trash2, UserPlus, Workflow } from "lucide-react";
 import EnterpriseDialog from "@/components/enterprise/EnterpriseDialog";
 import { Select } from "@/components/ui/Select";
 import { EmptyStateCard, PageIntro, Panel, PanelHeader, RiskBadge } from "@/components/enterprise/EnterpriseUI";
@@ -20,6 +20,7 @@ import type { CaseStatus, RiskLevel } from "@/types/enterprise";
 
 export default function CaseWorkspacePage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const caseId = decodeURIComponent(params.id);
   const cases = useEnterpriseStore((state) => state.cases);
   const documents = useEnterpriseStore((state) => state.documents);
@@ -30,6 +31,7 @@ export default function CaseWorkspacePage() {
   const runs = useEnterpriseStore((state) => state.agents);
   const updateCase = useEnterpriseStore((state) => state.updateCase);
   const addRisk = useEnterpriseStore((state) => state.addRisk);
+  const deleteCase = useEnterpriseStore((state) => state.deleteCase);
   const setActiveCaseId = useEnterpriseStore((state) => state.setActiveCaseId);
   const activeModel = useModelStore((state) => state.active);
   const [editOpen, setEditOpen] = useState(false);
@@ -283,7 +285,7 @@ export default function CaseWorkspacePage() {
 
     <Panel><PanelHeader eyebrow="Deliverable" title="研判交付" description="导出的 Markdown 报告包含事实引用、财务指标、风险状态和人工流程" /><div className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-medium text-slate-200">项目研判报告</p><p className="mt-1 text-[10px] text-slate-400">导出前请先处理待复核事实与候选风险。</p></div><button type="button" onClick={exportReport} className="inline-flex items-center justify-center gap-2 rounded-xl border border-cyan-400/20 bg-cyan-400/[0.06] px-4 py-2.5 text-xs text-cyan-200"><Download className="h-3.5 w-3.5" />下载 Markdown 报告</button></div></Panel>
 
-    <div className="flex justify-end"><button type="button" onClick={() => updateCase(project.id, { archivedAt: project.archivedAt ? undefined : new Date().toISOString() })} className="inline-flex items-center gap-2 text-[10px] text-slate-400 hover:text-amber-300"><Archive className="h-3.5 w-3.5" />{project.archivedAt ? "恢复项目" : "归档项目"}</button></div>
+    <div className="flex justify-end gap-4"><button type="button" onClick={() => { if (window.confirm("确定删除该项目？其资料、事实、风险、流程任务、投研底稿与对话记录将一并删除，服务端备份同步移除，且不可恢复。建议优先使用「归档项目」。")) { deleteCase(project.id); router.push("/cases"); } }} className="inline-flex items-center gap-2 text-[10px] text-slate-400 hover:text-rose-300"><Trash2 className="h-3.5 w-3.5" />删除项目</button><button type="button" onClick={() => updateCase(project.id, { archivedAt: project.archivedAt ? undefined : new Date().toISOString() })} className="inline-flex items-center gap-2 text-[10px] text-slate-400 hover:text-amber-300"><Archive className="h-3.5 w-3.5" />{project.archivedAt ? "恢复项目" : "归档项目"}</button></div>
 
     <EnterpriseDialog open={editOpen} onClose={() => setEditOpen(false)} title="编辑企业项目" description="项目状态和责任人变更会同步到工作区">
       <form onSubmit={saveProject} className="space-y-4">{[["company","企业名称",project.company],["title","研判任务",project.title],["industry","所属行业",project.industry],["amount","融资/分析规模",project.amount],["owner","负责人",project.owner],["nextAction","下一步动作",project.nextAction]].map(([name,label,value]) => <label key={name} className="block"><span className="mb-1.5 block text-[11px] text-slate-400">{label}</span><input required name={name} defaultValue={value} className="field-control" /></label>)}<div className="grid grid-cols-2 gap-3"><label><span className="mb-1.5 block text-[11px] text-slate-400">状态</span><Select name="status" defaultValue={project.status} options={[{ value: "研判中", label: "研判中" }, { value: "资料补充", label: "资料补充" }, { value: "待复核", label: "待复核" }, { value: "已完成", label: "已完成" }]} /></label><label><span className="mb-1.5 block text-[11px] text-slate-400">风险等级</span><Select name="risk" defaultValue={project.risk} options={[{ value: "low", label: "低风险" }, { value: "medium", label: "中风险" }, { value: "high", label: "高风险" }, { value: "critical", label: "重大风险" }]} /></label></div><div className="flex justify-end gap-2"><button type="button" onClick={() => setEditOpen(false)} className="rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-400">取消</button><button type="submit" className="rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-semibold text-[#041018]">保存项目</button></div></form>
