@@ -42,9 +42,14 @@ def test_catalog_lists_sources_and_runtime(client, auth):
     assert resp.status_code == 200, resp.text
     data = resp.json()["data"]
     providers = {item["provider"] for item in data["sources"]}
-    assert {"akshare", "fx", "worldbank", "gleif", "sec", "cninfo"} <= providers
+    assert {"akshare", "fx", "worldbank", "gleif", "sec", "treasury", "cninfo"} <= providers
     assert all(item["requiresKey"] is False for item in data["sources"])
     assert "cacheSeconds" in data["runtime"] and "minIntervalSeconds" in data["runtime"]
+
+
+def test_sec_filings_empty_cik_returns_502(client, auth):
+    # 空 CIK 由 provider 校验拒绝，不发起网络请求。
+    assert client.get("/api/data-sources/sec/filings?cik=", headers=auth).status_code == 502
 
 
 def test_cninfo_empty_inputs_return_502(client, auth):

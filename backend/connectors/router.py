@@ -14,7 +14,9 @@ from backend.connectors.http_providers import (
     fx_series,
     gleif_search,
     sec_company_concept,
+    sec_recent_filings,
     sec_tags,
+    treasury_avg_interest_rates,
     worldbank_indicator,
     worldbank_indicators,
 )
@@ -51,7 +53,8 @@ def catalog(user: User = Depends(get_current_user)):
         ("fx", "ECB 汇率", "api.frankfurter.dev", ["latest", "series"]),
         ("worldbank", "世界银行", "api.worldbank.org", ["indicator"]),
         ("gleif", "GLEIF 法人识别", "api.gleif.org", ["search"]),
-        ("sec", "SEC EDGAR", "data.sec.gov", ["concept", "tags"]),
+        ("sec", "SEC EDGAR", "data.sec.gov", ["concept", "tags", "filings"]),
+        ("treasury", "美国财政部 Fiscal Data", "api.fiscaldata.treasury.gov", ["avg-interest"]),
         ("cninfo", "巨潮资讯（上市公司公告）", "www.cninfo.com.cn", ["company", "announcements"]),
     ]:
         for dataset in datasets:
@@ -97,6 +100,23 @@ def external_sec(
     user: User = Depends(get_current_user),
 ):
     return _external(sec_company_concept, cik, tag, limit)
+
+
+@router.get("/sec/filings")
+def external_sec_filings(
+    cik: str = "",
+    limit: int = Query(10, ge=1, le=40),
+    user: User = Depends(get_current_user),
+):
+    return _external(sec_recent_filings, cik, limit)
+
+
+@router.get("/treasury/rates")
+def external_treasury_rates(
+    limit: int = Query(10, ge=1, le=40),
+    user: User = Depends(get_current_user),
+):
+    return _external(treasury_avg_interest_rates, limit)
 
 
 @router.get("/cninfo/company")

@@ -297,3 +297,48 @@ def cninfo_announcements(sec_code: str, limit: int = 10, category: str = "") -> 
             "PDF": f"{CNINFO_PDF_HOST}/{adjunct}" if adjunct else "",
         })
     return rows
+
+
+# ---------------------------------------------------------------- SEC EDGAR 公司申报文件
+def sec_recent_filings(cik: str, limit: int = 10) -> list[dict[str, Any]]:
+    digits = "".join(c for c in (cik or "") if c.isdigit())
+    if not digits:
+        raise ExternalDataError("请提供有效的 CIK（数字）")
+    limit = max(1, min(int(limit), 40))
+    cik10 = digits.zfill(10)
+    data = _get_json(f"https://data.sec.gov/submissions/CIK{cik10}.json")
+    recent = (data.get("filings") or {}).get("recent") or {}
+    forms = recent.get("form") or []
+    dates = recent.get("filingDate") or []
+    accessions = recent.get("accessionNumber") or []
+    documents = recent.get("primaryDocument") or []
+    rows: list[dict[str, Any]] = []
+    for index in range(min(limit, len(forms))):
+        accession = str(accessions[index]).replace("-", "") if index < len(accessions) else ""
+        document = documents[index] if index < len(documents) else ""
+        rows.append({
+            "公司": data.get("name"),
+            "表单类型": forms[index],
+            "申报日期": dates[index] if index < len(dates) else "",
+            "文件": f"https://www.sec.gov/Archives/edgar/data/{int(digits)}/{accession}/{document}" if accession and document else "",
+        })
+    return rows
+
+
+# ---------------------------------------------------------------- 美国财政部 Fiscal Data
+def treasury_avg_interest_rates(limit: int = 10) -> list[dict[str, Any]]:
+    limit = max(1, min(int(limit), 40))
+    url = (
+        "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v2/accounting/od/avg_interest_rates"
+        f"?page%5Bsize%5D={limit}&sort=-record_date"
+    )
+    data = _get_json(url)
+    return [
+        {
+            "记录日期": item.get("record_date"),
+            "证券类型": item.get("security_type_desc"),
+            "证券": item.get("security_desc"),
+            "平均利率(%)": item.get("avg_interest_rate_amt"),
+        }
+        for item in (data.get("data") or [])
+    ]
