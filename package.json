@@ -23,7 +23,7 @@
     "lucide-react": "^0.468.0",
     "mammoth": "^1.12.1",
     "next": "^15.3.0",
-    "pdf-parse": "^1.1.1",
+    "pdf-parse": "^2.4.5",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "redis": "^4.7.1",
