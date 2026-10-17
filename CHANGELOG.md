@@ -28,6 +28,7 @@
 
 ### 变更
 
+- 默认隔离早期「个人财富 OS」后端模块（`autonomous`/`personal_os`/`intelligence`/`multimodal`/`services/*`/`agents`/`memory`/`financial`/`tasks`/`document`）：不再注册其路由、不启动其调度线程，缩小公开 API 面与启动开销；需要兼容时设 `ENABLE_LEGACY_MODULES=1`
 - 全局命令面板（⌘K）搜索范围扩展到规则、流程任务与投研底稿（此前仅项目/资料/风险/页面）
 - 智能研判助手对话体验增强：新消息/流式生成自动滚动跟随、向上翻阅时显示「回到底部」、助手回答支持一键复制、消息显示时间
 - 持久化裁剪护盾：表格行数与简报正文在写入前统一裁剪（内存与推送仍保留完整数据），降低 localStorage 配额溢出风险

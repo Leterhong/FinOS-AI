@@ -40,6 +40,8 @@ os.environ["JWT_SECRET"] = "finos-ai-test-jwt-secret-not-for-production-use-only
 # 固定测试主密钥（解码后恰为 32 字节），确保加密字段可读写
 os.environ["ENCRYPTION_MASTER_KEY"] = "Zmlub3MtYWktdGVzdC1tYXN0ZXIta2V5LTMyYnl0ZXM="
 os.environ["ENV"] = "test"
+# 测试环境注册遗留「个人财富 OS」路由（生产默认不注册），以保持既有回归覆盖。
+os.environ.setdefault("ENABLE_LEGACY_MODULES", "1")
 
 from fastapi.testclient import TestClient  # noqa: E402
 

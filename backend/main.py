@@ -10,6 +10,7 @@
 """
 from __future__ import annotations
 
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -28,10 +29,13 @@ from backend.database import SessionLocal, init_db
 from backend.migration.legacy_import import run_legacy_import
 from backend.security.data_migration import encrypt_existing_sensitive_data
 from backend.tasks import worker as task_worker
-from backend.tasks.router import router as task_router
 
 settings = get_settings()
 logger = get_logger("finos.app")
+
+# 遗留「个人财富 OS」模块开关：默认关闭（前端已不使用这些接口），
+# 仅测试/兼容场景通过 ENABLE_LEGACY_MODULES=1 开启。
+_legacy_enabled = os.getenv("ENABLE_LEGACY_MODULES", "0").strip().lower() in {"1", "true", "yes", "on"}
 
 
 @asynccontextmanager
@@ -68,15 +72,18 @@ async def lifespan(_: FastAPI):
                     logger.info("legacy_migration_done", extra={"stats": str(stats)})
             except Exception as exc:  # noqa: BLE001
                 logger.error("legacy_migration_skipped", extra={"error": str(exc)})
-    # 启动异步任务 Worker 与自动化调度线程（非阻塞后台线程）
+    # 启动异步任务 Worker（非阻塞后台线程）
     task_worker.start_worker()
-    from backend.autonomous.scheduler.service import start_scheduler
+    # 遗留「个人财富 OS」自动化调度线程：默认不启动（与企业金融业务无关）。
+    if _legacy_enabled:
+        from backend.autonomous.scheduler.service import start_scheduler
 
-    start_scheduler()
+        start_scheduler()
     yield
-    from backend.autonomous.scheduler.service import stop_scheduler
+    if _legacy_enabled:
+        from backend.autonomous.scheduler.service import stop_scheduler
 
-    stop_scheduler()
+        stop_scheduler()
     task_worker.stop_worker()
 
 
@@ -150,63 +157,70 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 
 
 # ---- 路由注册 ----
+# 核心模块：企业金融产品实际使用。
 from backend.auth import router as auth_router  # noqa: E402
 from backend.user import router as user_router  # noqa: E402
-from backend.financial import router as financial_router  # noqa: E402
 from backend.ai import router as ai_router  # noqa: E402
-from backend.document import router as document_router  # noqa: E402
-from backend.memory import router as memory_router  # noqa: E402
 from backend.notification import router as notification_router  # noqa: E402
-# Phase 7.0.2 业务服务层
-from backend.services.financial.router import router as svc_financial_router  # noqa: E402
-from backend.services.twin.router import router as svc_twin_router  # noqa: E402
-from backend.services.rag.router import router as svc_rag_router  # noqa: E402
-from backend.services.agent.router import router as svc_agent_router  # noqa: E402
-from backend.services.cfo.router import router as svc_cfo_router  # noqa: E402
-from backend.services.monitor.router import router as svc_monitor_router  # noqa: E402
-from backend.services.document.router import router as svc_document_router  # noqa: E402
 from backend.security.router import router as security_router  # noqa: E402
-# Phase 7.1 Wealth Intelligence Engine
-from backend.intelligence.router import router as intelligence_router  # noqa: E402
-# Phase 7.2 Multimodal Intelligence + AI Agent Ecosystem
-from backend.multimodal.api import router as multimodal_router  # noqa: E402
-from backend.agents.api import router as agents_router  # noqa: E402
-from backend.report.api import router as report_router  # noqa: E402
-from backend.personal_os.router import router as personal_os_router  # noqa: E402  Phase 7.3
-from backend.autonomous.router import router as autonomic_router  # noqa: E402  Phase 7.4
-from backend.backup import router as backup_router  # noqa: E402  Phase 7.6 备份/导出
+from backend.report.api import router as report_router  # noqa: E402  风险清单 PDF
+from backend.backup import router as backup_router  # noqa: E402  备份/导出
 from backend.enterprise import router as enterprise_router  # noqa: E402  2.1 企业工作区持久化
 from backend.governance import router as governance_router  # noqa: E402  2.2 企业治理
-from backend.connectors.router import router as data_sources_router  # noqa: E402  外部数据源（AKShare）
+from backend.connectors.router import router as data_sources_router  # noqa: E402  外部数据源
 
 for r in (
     auth_router,
     user_router,
-    financial_router,
     ai_router,
-    document_router,
-    memory_router,
     notification_router,
-    svc_financial_router,
-    svc_twin_router,
-    svc_rag_router,
-    svc_agent_router,
-    svc_cfo_router,
-    svc_monitor_router,
-    svc_document_router,
     security_router,
-    intelligence_router,
-    multimodal_router,
-    agents_router,
     report_router,
-    personal_os_router,
-    autonomic_router,
     backup_router,
     enterprise_router,
     governance_router,
     data_sources_router,
-    task_router,
     health_router,
     metrics_router,
 ):
     app.include_router(r, prefix=settings.api_prefix)
+
+# 遗留「个人财富 OS」模块：前端从不调用，默认不注册以缩小公开 API 面与启动开销。
+# 需要这些接口时设 ENABLE_LEGACY_MODULES=1（测试环境即如此）。
+if _legacy_enabled:  # pragma: no cover - 遗留兼容开关
+    from backend.financial import router as financial_router  # noqa: E402
+    from backend.document import router as document_router  # noqa: E402
+    from backend.memory import router as memory_router  # noqa: E402
+    from backend.services.financial.router import router as svc_financial_router  # noqa: E402
+    from backend.services.twin.router import router as svc_twin_router  # noqa: E402
+    from backend.services.rag.router import router as svc_rag_router  # noqa: E402
+    from backend.services.agent.router import router as svc_agent_router  # noqa: E402
+    from backend.services.cfo.router import router as svc_cfo_router  # noqa: E402
+    from backend.services.monitor.router import router as svc_monitor_router  # noqa: E402
+    from backend.services.document.router import router as svc_document_router  # noqa: E402
+    from backend.intelligence.router import router as intelligence_router  # noqa: E402
+    from backend.multimodal.api import router as multimodal_router  # noqa: E402
+    from backend.agents.api import router as agents_router  # noqa: E402
+    from backend.personal_os.router import router as personal_os_router  # noqa: E402
+    from backend.autonomous.router import router as autonomic_router  # noqa: E402
+    from backend.tasks.router import router as task_router  # noqa: E402
+
+    for r in (
+        financial_router,
+        document_router,
+        memory_router,
+        svc_financial_router,
+        svc_twin_router,
+        svc_rag_router,
+        svc_agent_router,
+        svc_cfo_router,
+        svc_monitor_router,
+        svc_document_router,
+        intelligence_router,
+        multimodal_router,
+        agents_router,
+        personal_os_router,
+        autonomic_router,
+        task_router,
+    ):
+        app.include_router(r, prefix=settings.api_prefix)

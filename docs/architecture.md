@@ -238,6 +238,14 @@ FinOS AI/
 
 在 `backend/agents/plugins/` 下新建插件类，继承 `BaseAgent`，声明 `name` / `description` / `run()`，注册表会自动发现。详见 [ai-agent.md](./ai-agent.md)。
 
+### 遗留模块隔离（ENABLE_LEGACY_MODULES）
+
+后端保留了早期「个人财富 OS」模块（`autonomous`、`personal_os`、`intelligence`、`multimodal`、`services/*`、`agents`、`memory`、`financial`、`tasks`、`document`）。当前企业金融产品**前端均不调用**这些接口。
+
+- 默认**不注册**这些路由、**不启动**其后台调度线程，缩小公开 API 面与启动开销。
+- 需要保留兼容时设 `ENABLE_LEGACY_MODULES=1`（测试环境即如此，以保留既有回归覆盖）。
+- 核心接口始终启用：`auth`、`user`、`ai`、`notification`、`security`、`report`（风险 PDF）、`backup`、`enterprise`、`governance`、`data-sources`。
+
 ---
 
 **免责声明**：FinOS AI 提供信息分析和辅助决策，不构成投资建议。
