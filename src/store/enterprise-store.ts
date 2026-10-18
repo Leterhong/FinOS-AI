@@ -325,7 +325,8 @@ export const useEnterpriseStore = create<EnterpriseState>()(
             return {
               ...document,
               status: "已解析",
-              analysis,
+              // 与服务端 analysis 上限（60000）对齐，避免超长叙述推送被 422 拒绝而反复重试。
+              analysis: capText(analysis, 60_000) ?? "",
               model,
               error: undefined,
               // 提取置信度：有结构化事实视为高，无事实视为低（不再停留在易误解的 0）。
