@@ -330,10 +330,40 @@ test("compose 的 Access Token 默认有效期必须为 15 分钟（安全模型
   assert.equal(m[1], "15", `compose 默认 Access Token 有效期应为 15 分钟，实际 ${m[1]}`);
 });
 
-test("Next 页面响应必须声明 CSP（Report-Only）与跨源隔离头", () => {
+test("Next 页面响应必须声明强制 CSP 与跨源隔离头", () => {
   const cfg = read(join(ROOT, "next.config.ts"));
-  for (const key of ["Content-Security-Policy-Report-Only", "Cross-Origin-Opener-Policy", "Cross-Origin-Resource-Policy"]) {
+  for (const key of ["Content-Security-Policy", "Cross-Origin-Opener-Policy", "Cross-Origin-Resource-Policy"]) {
     assert.ok(cfg.includes(key), `next.config.ts 缺少安全响应头 ${key}`);
   }
   assert.ok(/frame-ancestors 'none'/.test(cfg), "CSP 必须禁止页面被内嵌（frame-ancestors 'none'）");
+});
+
+// ---------------------------------------------------------------- 2026-11 安全审计回归
+test("V-02 回归：前端 CSP 必须为强制执行而非 Report-Only", () => {
+  const config = read(join(ROOT, "next.config.ts"));
+  assert.ok(
+    !/Content-Security-Policy-Report-Only/.test(config),
+    "CSP 仍为 Report-Only，对注入无拦截力",
+  );
+  assert.match(config, /Content-Security-Policy/, "缺少 CSP 头");
+});
+
+test("V-03 回归：技能剧本必须以不可信内容定界符包裹后再注入系统提示", () => {
+  const route = read(join(SRC, "app", "api", "enterprise", "ai", "route.ts"));
+  assert.match(
+    route,
+    /不可信参考材料[\s\S]*skill\.playbook[\s\S]*技能剧本结束/,
+    "skill.playbook 必须包裹在不可信内容定界符内，防止存储型提示注入",
+  );
+});
+
+test("V-04 回归：调试残留文件不得入库", () => {
+  assert.equal(existsSync(join(ROOT, "tmp-route-head.txt")), false, "tmp-route-head.txt 必须删除");
+});
+
+test("V-07 回归：模型 Provider 出站前必须复检 baseUrl（调用时校验）", () => {
+  const provider = read(join(SRC, "ai", "model-center", "providers", "OpenAICompatibleProvider.ts"));
+  assert.match(provider, /assertSafeBaseUrl/, "Provider 未引入 baseUrl 校验");
+  const callSites = (provider.match(/ensureSafeEndpoint\(\)/g) || []).length;
+  assert.ok(callSites >= 3, `Provider 三个出站入口（generate/stream/embed）均需调用时校验，实际 ${callSites} 处`);
 });

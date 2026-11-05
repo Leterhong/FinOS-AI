@@ -113,3 +113,23 @@ def test_upload_rejects_dangerous_extension(client, auth):
     assert resp.status_code != 500, "非法文件类型不得抛出未处理异常"
     if resp.status_code == 200:
         assert resp.json().get("success") is False, "可执行文件必须被拒绝"
+
+
+# ---------------------------------------------------------------- 2026-11 安全审计回归
+def test_intelligence_events_requires_auth(client):
+    """V-05 回归：遗留静态目录端点也必须要求认证。"""
+    resp = client.get(f"{API}/intelligence/events")
+    assert resp.status_code in (401, 403), f"无认证端点返回 {resp.status_code}"
+
+    auth_resp = client.get(f"{API}/intelligence/events", headers=auth_fixture_headers(client))
+    assert auth_resp.status_code == 200, auth_resp.text
+
+
+def auth_fixture_headers(client):
+    """独立获取认证头（避免依赖 auth fixture 的用例顺序）。"""
+    import uuid
+
+    email = f"sec-audit-{uuid.uuid4().hex[:8]}@finos.test"
+    r = client.post(f"{API}/auth/register", json={"email": email, "password": "Test1234!"})
+    token = r.json()["data"]["token"]
+    return {"Authorization": f"Bearer {token}"}

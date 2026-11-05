@@ -161,7 +161,7 @@ def get_score_history(
 
 # ------------------------------------------------------------------ 事件模拟
 @router.get("/events")
-def events():
+def events(user: User = Depends(get_current_user)):
     """可模拟的人生事件目录（含参数定义与默认值）。"""
     return ok({"events": list_events()}, "人生事件目录")
 

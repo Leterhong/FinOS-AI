@@ -7,7 +7,12 @@
 # ============================================================
 set -euo pipefail
 
-echo "[entrypoint] DATABASE_URL=${DATABASE_URL:-<unset, fallback sqlite>}"
+# 日志只输出数据库类型与主机，屏蔽凭据（DATABASE_URL 含密码，禁止原样打印）。
+if [ -n "${DATABASE_URL:-}" ]; then
+  echo "[entrypoint] DATABASE_URL=$(echo "${DATABASE_URL}" | sed -E 's#://[^@/]+@#://***:***@#')"
+else
+  echo "[entrypoint] DATABASE_URL=<unset, fallback sqlite>"
+fi
 
 if [ -n "${DATABASE_URL:-}" ] && echo "${DATABASE_URL}" | grep -q "postgresql"; then
   echo "[entrypoint] 等待 PostgreSQL 就绪…"

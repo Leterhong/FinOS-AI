@@ -19,6 +19,7 @@ import type {
   AIStreamChunk,
   TokenUsage,
 } from "../../types";
+import { assertSafeBaseUrl } from "./base-url-guard";
 import type { AIProviderConfig, ModelTestResult, ProviderType } from "../types";
 
 export interface ResolvedModel {
@@ -60,6 +61,11 @@ export class OpenAICompatibleProvider {
       this.m.providerType === "claude" &&
       /anthropic\.com/.test(this.m.baseUrl)
     );
+  }
+
+  /** 出站前对 baseUrl 做调用时复检：缩小「保存时校验 → DNS 变更」的 TOCTOU 窗口。 */
+  private async ensureSafeEndpoint(): Promise<void> {
+    await assertSafeBaseUrl(this.m.baseUrl);
   }
 
   private chatUrl(): string {
@@ -166,6 +172,7 @@ export class OpenAICompatibleProvider {
   // ── core Provider 契约 ──────────────────────────────────────────────────
 
   async generate(request: AIRequest): Promise<AIResponse> {
+    await this.ensureSafeEndpoint();
     const start = Date.now();
     const res = await fetch(this.chatUrl(), {
       method: "POST",
@@ -195,6 +202,7 @@ export class OpenAICompatibleProvider {
 
   /** SSE 流式（OpenAI 兼容）；非 OC 协议降级为整段返回。 */
   async *stream(request: AIRequest): AsyncIterable<AIStreamChunk> {
+    await this.ensureSafeEndpoint();
     if (this.isAnthropic) {
       const response = await this.generate(request);
       yield { content: response.content, done: true, model: response.model };
@@ -278,6 +286,7 @@ export class OpenAICompatibleProvider {
   }
 
   async embed(texts: string[]): Promise<number[][]> {
+    await this.ensureSafeEndpoint();
     const url = `${this.m.baseUrl}/embeddings`;
     const res = await fetch(url, {
       method: "POST",

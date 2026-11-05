@@ -112,6 +112,8 @@ export default function GovernancePage() {
     const invitation = (snapshot.invitations ?? []).find((item) => item.memberId === inviteId);
     if (!invitation) return;
     autoAcceptRef.current = true;
+    // 令牌用后即从地址栏清除，避免滞留在浏览器历史与引用页。
+    window.history.replaceState(null, "", window.location.pathname);
     void acceptInvitation(invitation);
     // acceptInvitation 每次渲染都会重建，用 ref 保证只自动接受一次即可。
     // eslint-disable-next-line react-hooks/exhaustive-deps
