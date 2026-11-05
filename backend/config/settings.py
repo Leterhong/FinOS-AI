@@ -122,6 +122,9 @@ class Settings(BaseSettings):
     # --- 启动期自动迁移前端 Node 侧 .data 历史数据（任务 #290，默认关闭） ---
     migrate_legacy_data: bool = False
 
+    # --- Guest 访客清理（R-01 缓解，默认 0 = 关闭；>0 时启动期清理超龄空访客） ---
+    guest_cleanup_days: int = 0
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

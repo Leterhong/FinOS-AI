@@ -15,6 +15,12 @@
 | V-07 | `src/ai/model-center/providers/OpenAICompatibleProvider.ts` | 新增 `ensureSafeEndpoint()`，`generate/stream/embed` 三个出站入口调用时复检 `assertSafeBaseUrl`；`tester` 原有校验保留 | 低：合法公网端点校验通过不受影响；playground/企业 AI/文档管线首次获得调用时校验 | 契约测试 `V-07 回归`（三入口断言）|
 | V-08 | `.github/workflows/ci.yml` | 顶层 `permissions: contents: read` 最小权限 | 无 | CI 运行验证 |
 
+## 追加：R-01 缓解（审计报告发布同日）
+
+| 编号 | 修改文件 | 修改内容 | 影响原有业务 | 回归测试 |
+| --- | --- | --- | --- | --- |
+| R-01 缓解 | `backend/security/guest_cleanup.py`（新增）、`backend/main.py`（lifespan 调用）、`backend/config/settings.py`（`GUEST_CLEANUP_DAYS`，默认 0）、`.env.example` | 启动期清理「超龄 + 零业务数据 + 无活跃会话」的 guest 账户；默认关闭，显式设置才生效；元数据驱动业务表扫描 | 无（默认关闭；开启后仅影响空访客账户，注册用户与有数据访客绝不触碰） | pytest `test_guest_cleanup_removes_empty_old_guest_only`（多边界断言）|
+
 ## 修复效果验证方式
 
 - 全部门禁：typecheck ✓、contract 28/28 ✓（新增 4 条安全回归）、unit 79/79 ✓、build ✓、pytest 全绿 ✓、ruff ✓、e2e 18/18 ✓

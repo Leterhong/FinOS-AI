@@ -4,13 +4,11 @@
 
 ---
 
-## R-01 (P2) bootstrap 无认证创建 guest 用户行——数据库膨胀面
+## R-01 (P2) bootstrap 无认证创建 guest 用户行——数据库膨胀面 【已缓解 2026-11-06】
 
 - 现状：每次无 Cookie 的冷访问调用 `POST /api/auth/bootstrap` 都会创建一个 guest `User` 行（bcrypt 随机密码），仅靠 60/min/IP 限流约束。单 IP 理论上每天可制造 86,400 个孤儿用户。
-- 不修复原因：清理涉及不可逆数据删除，按任务规约暂缓高风险数据库操作。
-- 建议方案（待审批后实施）：
-  1. 启动时/定时清理「无任何关联业务数据且超过 N 天未活跃」的 guest 账户（N 默认 30，`GUEST_CLEANUP_DAYS` 环境变量控制，默认关闭）；
-  2. 或将 guest 创建改为 Redis 短期会话、首次产生业务数据时才落库。
+- **已实施缓解**：`backend/security/guest_cleanup.py` + `GUEST_CLEANUP_DAYS` 环境变量（默认 0 = 关闭）。开启后启动期删除同时满足以下全部条件的访客：①邮箱匹配 guest 前缀；②创建超过 N 天；③名下无任何业务数据（元数据驱动全表扫描，新表自动纳入）；④无活跃 refresh 会话。非 guest 前缀的注册用户绝不触碰。回归测试 `test_guest_cleanup_removes_empty_old_guest_only` 覆盖边界（空访客删除 / 有数据保留 / 未过期保留 / 非 guest 保留 / 开关关闭零操作）。
+- 残余：默认仍为关闭，部署者需显式设置 `GUEST_CLEANUP_DAYS`（如 30）才生效——保留人工决策权以控制不可逆删除。
 
 ## R-02 (P3) 前端工作区会话无服务端吊销
 
@@ -48,10 +46,10 @@
 - 现状：`backend/core/security.py:158` 未设置该变量时从 JWT_SECRET 派生 legacy Fernet 密钥（违反密钥分离）。
 - 建议：部署时显式设置 `LEGACY_ENCRYPTION_KEY`；代码层面在 prod 缺失时告警。
 
-## R-09 (Info) access jti 吊销缓存为进程内
+## R-09 (Info) access jti 吊销缓存仅在无 Redis 时为进程内 【勘误 2026-11-06】
 
-- 现状：多 worker 部署下吊销不跨进程共享；影响窗口受 15 分钟 TTL 限制（refresh 已数据库级家族吊销）。
-- 建议：jti 吊销迁移到 Redis（与限流共用实例）。
+- 勘误：初版清单误记为「进程内」。实际实现走 `backend.core.cache`（`security.py:90-108`）——部署 Redis 时吊销跨 worker 共享；仅 Redis 不可用降级时为进程内（影响窗口受 15 分钟 TTL 限制，refresh 已数据库级家族吊销）。
+- 结论：生产部署（compose 含 Redis）下无需修复；仅纯 SQLite+无 Redis 的单机降级模式存在该限制。
 
 ## R-10 (Info) 治理邀请令牌经邮件/链接明文传递
 

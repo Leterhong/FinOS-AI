@@ -72,6 +72,18 @@ async def lifespan(_: FastAPI):
                     logger.info("legacy_migration_done", extra={"stats": str(stats)})
             except Exception as exc:  # noqa: BLE001
                 logger.error("legacy_migration_skipped", extra={"error": str(exc)})
+    # Guest 访客清理（R-01，默认关闭；GUEST_CLEANUP_DAYS>0 时启用）
+    if settings.guest_cleanup_days > 0:
+        try:
+            from backend.security.guest_cleanup import cleanup_stale_guests
+
+            with SessionLocal() as db:
+                removed = cleanup_stale_guests(db, settings.guest_cleanup_days)
+            if removed:
+                logger.info("guest_cleanup", extra={"removed": removed})
+        except Exception as exc:  # noqa: BLE001 清理失败不得阻断启动
+            logger.error("guest_cleanup_failed", extra={"error": str(exc)})
+
     # 启动异步任务 Worker（非阻塞后台线程）
     task_worker.start_worker()
     # 遗留「个人财富 OS」自动化调度线程：默认不启动（与企业金融业务无关）。

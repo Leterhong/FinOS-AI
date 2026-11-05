@@ -133,3 +133,71 @@ def auth_fixture_headers(client):
     r = client.post(f"{API}/auth/register", json={"email": email, "password": "Test1234!"})
     token = r.json()["data"]["token"]
     return {"Authorization": f"Bearer {token}"}
+
+
+# ---------------------------------------------------------------- R-01 Guest 清理回归
+def _mk_guest(db_session, email: str, days_old: int):
+    from datetime import datetime, timedelta, timezone
+
+    from backend.user.models import User
+
+    u = User(
+        email=email,
+        password_hash="x",
+        created_at=datetime.now(timezone.utc) - timedelta(days=days_old),
+    )
+    db_session.add(u)
+    db_session.commit()
+    db_session.refresh(u)
+    return u
+
+
+def test_guest_cleanup_removes_empty_old_guest_only(client, db_session):
+    """R-01 回归：仅删除「过期 + 空数据 + 无活跃会话」的 guest；其余全部保留。"""
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import select
+
+    from backend.auth.models import RefreshToken
+    from backend.enterprise.models import EnterpriseCase
+    from backend.security.guest_cleanup import cleanup_stale_guests
+    from backend.user.models import User
+
+    old_empty = _mk_guest(db_session, f"guest-{uuid.uuid4().hex[:8]}@guest.finos.local", days_old=40)
+    old_with_data = _mk_guest(db_session, f"guest-{uuid.uuid4().hex[:8]}@guest.finos.local", days_old=40)
+    gc_case_id = f"CASE-GC-{uuid.uuid4().hex[:8]}"
+    db_session.add(EnterpriseCase(id=gc_case_id, user_id=old_with_data.id, company="有数据的访客", title="t"))
+    new_empty = _mk_guest(db_session, f"guest-{uuid.uuid4().hex[:8]}@guest.finos.local", days_old=1)
+    real_user = _mk_guest(db_session, f"real-{uuid.uuid4().hex[:8]}@finos.test", days_old=400)  # 非 guest 前缀，绝不触碰
+
+    # old_empty 保留一条已过期的 refresh 会话（不构成活跃会话，可清理）
+    db_session.add(
+        RefreshToken(
+            user_id=old_empty.id,
+            jti="gc-expired",
+            expires_at=datetime.now(timezone.utc) - timedelta(days=1),
+            revoked=False,
+        )
+    )
+    # old_with_data 保留一条活跃会话（双重保险路径）
+    db_session.add(
+        RefreshToken(
+            user_id=old_with_data.id,
+            jti="gc-active",
+            expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+            revoked=False,
+        )
+    )
+    db_session.commit()
+
+    removed = cleanup_stale_guests(db_session, max_age_days=30)
+    assert removed == 1, f"应仅删除 1 个空访客，实际 {removed}"
+
+    assert db_session.scalar(select(User).where(User.id == old_empty.id)) is None
+    assert db_session.scalar(select(User).where(User.id == old_with_data.id)) is not None, "有业务数据的访客必须保留"
+    assert db_session.scalar(select(User).where(User.id == new_empty.id)) is not None, "未过期的访客必须保留"
+    assert db_session.scalar(select(User).where(User.id == real_user.id)) is not None, "非 guest 前缀账户绝不清理"
+    assert db_session.scalar(select(EnterpriseCase).where(EnterpriseCase.id == gc_case_id)) is not None
+
+    # 关闭开关时零操作
+    assert cleanup_stale_guests(db_session, max_age_days=0) == 0
