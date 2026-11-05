@@ -10,16 +10,15 @@
 - **已实施缓解**：`backend/security/guest_cleanup.py` + `GUEST_CLEANUP_DAYS` 环境变量（默认 0 = 关闭）。开启后启动期删除同时满足以下全部条件的访客：①邮箱匹配 guest 前缀；②创建超过 N 天；③名下无任何业务数据（元数据驱动全表扫描，新表自动纳入）；④无活跃 refresh 会话。非 guest 前缀的注册用户绝不触碰。回归测试 `test_guest_cleanup_removes_empty_old_guest_only` 覆盖边界（空访客删除 / 有数据保留 / 未过期保留 / 非 guest 保留 / 开关关闭零操作）。
 - 残余：默认仍为关闭，部署者需显式设置 `GUEST_CLEANUP_DAYS`（如 30）才生效——保留人工决策权以控制不可逆删除。
 
-## R-02 (P3) 前端工作区会话无服务端吊销
+## R-02 (P3) 前端工作区会话无服务端吊销 【已缓解 2026-11-06】
 
-- 现状：`finos_session` 为无状态 HMAC token（7 天 TTL），登出/清洗仅清 Cookie，已泄露的 token 在过期前始终有效。
-- 不修复原因：引入服务端会话存储（Redis 吊销名单）属架构变更，超出最小改动原则。
-- 建议方案：在 Next.js 侧增加共享吊销缓存（Redis），`/api/account/purge` 与登出时写入会话 jti；所有 API 路由校验。
+- **已实施缓解**：`src/auth/revocation.ts` 按 userId 记录「吊销时间戳」——`/api/account/purge` 与 `/api/workspace/session?reset=true` 触发吊销；`getSessionUserId` 校验 iat 早于吊销时间戳的会话一律拒绝。覆盖该用户全部旧 token（无需逐 token 记录）。
+- 存储为进程内 Map：自托管单实例（默认形态）下有效；多实例部署需替换为 Redis 共享存储（接口收敛在 revocation.ts 两个函数内）。残余：登出前已被窃取的 token 在吊销前仍可用（与所有无状态会话方案相同的固有限制）。
 
-## R-03 (P3) 遗留端点面在误配置下扩大
+## R-03 (P3) 遗留端点面在误配置下扩大 【已加固 2026-11-06】
 
-- 现状：`ENABLE_LEGACY_MODULES=1` 时挂载约 140 个遗留端点（个人理财/自动化/多模态等）。测试套件全局开启该开关；生产误配置会重新暴露这些面。
-- 建议：部署文档强化警告；考虑将开关默认值与 `ENV=production` 绑定为强制关闭。
+- **已实施加固**：`backend/main.py` 在非 debug 环境检测到 `ENABLE_LEGACY_MODULES=1` 时输出显式 warning（含暴露面说明），误配置在日志中可见。开关默认仍为关闭。
+- 残余：告警非强制阻断——如需硬关闭可将警告升级为启动失败（属行为变更，暂缓）。
 
 ## R-04 (Info) CSP 仍允许 unsafe-inline / unsafe-eval
 
@@ -36,15 +35,15 @@
 - 现状：滑动窗口限流（Redis/降级进程内）仅按 IP；企业 NAT 出口下多用户共享配额。
 - 建议：认证后按 user_id 追加独立配额桶（中间件需感知认证态）。
 
-## R-07 (Info) Python 依赖无 lockfile / 11 个依赖无上界 / pytest 在生产 requirements
+## R-07 (Info) Python 依赖无 lockfile / pytest 在生产 requirements 【已部分缓解 2026-11-06】
 
-- 现状：requirements.txt 为范围固定；构建时传递依赖不钉扎；pytest 进入生产镜像。
-- 建议：引入 pip-tools（`requirements.in` → `requirements.lock` 带 hash）；将 pytest 拆分到 `requirements-dev.txt`。
+- **已实施**：pytest 拆分至 `backend/requirements-dev.txt`（生产镜像与 e2e job 仅装生产依赖；后端 CI job 装开发依赖）。生产镜像不再携带 pytest。
+- 残余：11 个依赖仍无上界、无 pip lockfile——引入 pip-tools 需单独验证构建兼容性，避免盲目升级。
 
-## R-08 (Info) LEGACY_ENCRYPTION_KEY 回退派生自 JWT_SECRET
+## R-08 (Info) LEGACY_ENCRYPTION_KEY 回退派生自 JWT_SECRET 【已加固 2026-11-06】
 
-- 现状：`backend/core/security.py:158` 未设置该变量时从 JWT_SECRET 派生 legacy Fernet 密钥（违反密钥分离）。
-- 建议：部署时显式设置 `LEGACY_ENCRYPTION_KEY`；代码层面在 prod 缺失时告警。
+- **已实施加固**：`backend/core/security.py:_legacy_fernet` 在未设置独立密钥时输出显式 warning（密钥分离违规提示），部署误配置在日志中可见。回退行为保留（历史密文兼容）。
+- 建议：部署时仍应显式设置 `LEGACY_ENCRYPTION_KEY` 以消除告警。
 
 ## R-09 (Info) access jti 吊销缓存仅在无 Redis 时为进程内 【勘误 2026-11-06】
 

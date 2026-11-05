@@ -153,9 +153,18 @@ def decode_refresh_token(token: str) -> dict | None:
 # ---------- API Key 加密（AES-256-GCM；兼容读取 Phase 7.0.1 Fernet 密文） ----------
 def _legacy_fernet() -> Fernet:
     # 遗留 Fernet 密文优先使用独立密钥 LEGACY_ENCRYPTION_KEY；未配置时回退到历史派生方式（向后兼容）。
+    # R-08 加固：回退意味着加密密钥与 JWT 签名密钥分离失败，显式告警提示部署者设置独立密钥。
     import os
 
-    source = os.getenv("LEGACY_ENCRYPTION_KEY") or settings.jwt_secret
+    legacy_key = os.getenv("LEGACY_ENCRYPTION_KEY")
+    if not legacy_key:
+        import logging
+
+        logging.getLogger("finos.security").warning(
+            "LEGACY_ENCRYPTION_KEY not set; falling back to JWT_SECRET-derived key "
+            "(key separation violated). Set a dedicated key to silence this warning."
+        )
+    source = legacy_key or settings.jwt_secret
     digest = hashlib.sha256(source.encode("utf-8")).digest()
     return Fernet(base64.urlsafe_b64encode(digest))
 

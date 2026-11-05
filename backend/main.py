@@ -36,6 +36,14 @@ logger = get_logger("finos.app")
 # 遗留「个人财富 OS」模块开关：默认关闭（前端已不使用这些接口），
 # 仅测试/兼容场景通过 ENABLE_LEGACY_MODULES=1 开启。
 _legacy_enabled = os.getenv("ENABLE_LEGACY_MODULES", "0").strip().lower() in {"1", "true", "yes", "on"}
+# R-03 加固：遗留模块（个人财富 OS 等）不应在生产环境暴露——误配置时显式告警。
+if _legacy_enabled and not settings.debug:
+    logger.warning(
+        "legacy_modules_enabled_in_production "
+        "ENABLE_LEGACY_MODULES=1 will expose ~140 legacy endpoints "
+        "(personal-finance OS, autonomous automation, multimodal). "
+        "Disable it unless this instance is intentionally serving legacy clients."
+    )
 
 
 @asynccontextmanager

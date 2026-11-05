@@ -10,6 +10,7 @@ import "server-only";
 import { cookies } from "next/headers";
 import type { NextRequest } from "next/server";
 import { signSession, verifySession, SESSION_TTL_MS } from "./crypto";
+import { isWorkspaceSessionRevoked } from "./revocation";
 import type { SessionPayload } from "./types";
 
 export const SESSION_COOKIE = "finos_session";
@@ -73,8 +74,11 @@ export async function getSession(): Promise<SessionPayload | null> {
 /**
  * 获取当前登录用户的 userId —— 所有业务 API 的唯一可信 userId 来源。
  * 未登录返回 null，调用方应据此返回 401。
+ * R-02 缓解：登出/清洗后按 userId 吊销旧会话（iat 早于吊销时间戳即拒绝）。
  */
 export async function getSessionUserId(): Promise<string | null> {
   const session = await getSession();
-  return session?.userId ?? null;
+  if (!session) return null;
+  if (isWorkspaceSessionRevoked(session.userId, session.iat)) return null;
+  return session.userId;
 }

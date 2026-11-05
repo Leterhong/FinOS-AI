@@ -2,6 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { NextRequest, NextResponse } from "next/server";
 import { clearSession, getSessionUserId, isSecureContext } from "@/auth/session";
+import { revokeWorkspaceSessions } from "@/auth/revocation";
 import { modelConfigStore } from "@/ai/model-center/models/store";
 
 export const runtime = "nodejs";
@@ -37,6 +38,8 @@ export async function POST(req: NextRequest) {
     }
   }
   modelConfigStore.forget(userId);
+  // R-02 缓解：服务端吊销该用户全部旧会话（旧 token 即使被复制也已失效）。
+  revokeWorkspaceSessions(userId);
   await clearSession(isSecureContext(req));
   return NextResponse.json({ deleted: true });
 }

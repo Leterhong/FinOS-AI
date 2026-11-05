@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession, isSecureContext, setSession } from "@/auth/session";
+import { revokeWorkspaceSessions } from "@/auth/revocation";
 import { modelConfigStore } from "@/ai/model-center/models/store";
 import { readBodyWithLimit } from "@/lib/limited-body";
 
@@ -77,6 +78,9 @@ export async function POST(req: NextRequest) {
   }
 
   if (body?.reset) {
+    // R-02 缓解：重建访客工作区前吊销旧会话（旧 token 即使被复制也已失效）。
+    const previousReset = await getSession();
+    if (previousReset?.userId) revokeWorkspaceSessions(previousReset.userId);
     const workspaceId = `workspace-${randomUUID()}`;
     await setSession(
       { userId: workspaceId, email: `${workspaceId}@local.finos` },

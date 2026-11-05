@@ -43,7 +43,7 @@ jobs:
         with:
           python-version: "3.11"  # 与运行镜像 deploy/docker/Dockerfile.api 对齐（ruff.toml target 亦为 3.11）
           cache: pip
-      - run: pip install -r backend/requirements.txt
+      - run: pip install -r backend/requirements-dev.txt
       - run: pip install ruff
       - run: ruff check backend
       # 迁移烟测：空 SQLite 库完整 upgrade 到 head，防止迁移链回归

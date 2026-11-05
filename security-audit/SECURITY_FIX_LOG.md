@@ -21,6 +21,15 @@
 | --- | --- | --- | --- | --- |
 | R-01 缓解 | `backend/security/guest_cleanup.py`（新增）、`backend/main.py`（lifespan 调用）、`backend/config/settings.py`（`GUEST_CLEANUP_DAYS`，默认 0）、`.env.example` | 启动期清理「超龄 + 零业务数据 + 无活跃会话」的 guest 账户；默认关闭，显式设置才生效；元数据驱动业务表扫描 | 无（默认关闭；开启后仅影响空访客账户，注册用户与有数据访客绝不触碰） | pytest `test_guest_cleanup_removes_empty_old_guest_only`（多边界断言）|
 
+## 追加：R-02/R-03/R-07/R-08 缓解（审计后续批次）
+
+| 编号 | 修改文件 | 修改内容 | 影响原有业务 | 回归测试 |
+| --- | --- | --- | --- | --- |
+| R-02 | `src/auth/revocation.ts`（新增）、`src/auth/session.ts`（getSessionUserId 校验）、`src/app/api/account/purge/route.ts`、`src/app/api/workspace/session/route.ts` | 按 userId 吊销时间戳；purge/reset 触发吊销；iat 早于时间戳的会话拒绝 | 低：登出/清洗后原 token 失效属预期行为；正常登录流 iat 晚于任何吊销时间戳不受影响 | 全部门禁 + e2e 18/18（登录/清洗/重建流覆盖） |
+| R-03 | `backend/main.py` | 非 debug 环境 ENABLE_LEGACY_MODULES=1 时输出显式 warning | 无（仅日志） | ruff + pytest 套件（conftest 开启 legacy 时验证不影响启动） |
+| R-07 | `backend/requirements-dev.txt`（新增）、`backend/requirements.txt`（移除 pytest）、`.github/workflows/ci.yml`（backend job 改装 dev 依赖） | 生产镜像/依赖不再携带 pytest | 无（生产代码无 pytest 导入） | CI backend job 正常运行 pytest |
+| R-08 | `backend/core/security.py:_legacy_fernet` | 未设置 LEGACY_ENCRYPTION_KEY 时输出显式 warning（密钥分离违规提示） | 无（回退行为保留，历史密文兼容） | pytest 加解密套件 |
+
 ## 修复效果验证方式
 
 - 全部门禁：typecheck ✓、contract 28/28 ✓（新增 4 条安全回归）、unit 79/79 ✓、build ✓、pytest 全绿 ✓、ruff ✓、e2e 18/18 ✓
