@@ -108,7 +108,7 @@ async def lifespan(_: FastAPI):
 
 
 # 生产（非本地 SQLite 降级）默认关闭交互式文档与 OpenAPI，减少接口结构暴露面。
-_docs_enabled = settings.debug or settings.database_url.startswith("sqlite")
+_docs_enabled = settings.debug  # PT-19 修复：SQLite 部署不再自动暴露 Swagger（需显式 DEBUG=true）
 
 app = FastAPI(
     title=settings.app_name,

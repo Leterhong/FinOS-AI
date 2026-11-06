@@ -4,7 +4,7 @@
 
 ---
 
-## R-01 (P2) bootstrap 无认证创建 guest 用户行——数据库膨胀面 【已缓解 2026-11-06】
+## R-01 (P2) bootstrap 无认证创建 guest 用户行——数据库膨胀面 【已缓解 2026-11-06；动态渗透 PT-01 确认利用面并验证缓解有效】
 
 - 现状：每次无 Cookie 的冷访问调用 `POST /api/auth/bootstrap` 都会创建一个 guest `User` 行（bcrypt 随机密码），仅靠 60/min/IP 限流约束。单 IP 理论上每天可制造 86,400 个孤儿用户。
 - **已实施缓解**：`backend/security/guest_cleanup.py` + `GUEST_CLEANUP_DAYS` 环境变量（默认 0 = 关闭）。开启后启动期删除同时满足以下全部条件的访客：①邮箱匹配 guest 前缀；②创建超过 N 天；③名下无任何业务数据（元数据驱动全表扫描，新表自动纳入）；④无活跃 refresh 会话。非 guest 前缀的注册用户绝不触碰。回归测试 `test_guest_cleanup_removes_empty_old_guest_only` 覆盖边界（空访客删除 / 有数据保留 / 未过期保留 / 非 guest 保留 / 开关关闭零操作）。

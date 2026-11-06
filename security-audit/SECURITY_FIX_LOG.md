@@ -30,7 +30,13 @@
 | R-07 | `backend/requirements-dev.txt`（新增）、`backend/requirements.txt`（移除 pytest）、`.github/workflows/ci.yml`（backend job 改装 dev 依赖） | 生产镜像/依赖不再携带 pytest | 无（生产代码无 pytest 导入） | CI backend job 正常运行 pytest |
 | R-08 | `backend/core/security.py:_legacy_fernet` | 未设置 LEGACY_ENCRYPTION_KEY 时输出显式 warning（密钥分离违规提示） | 无（回退行为保留，历史密文兼容） | pytest 加解密套件 |
 
-## 修复效果验证方式
+## 追加：PT-19 修复（动态渗透测试发现）
+
+| 编号 | 修改文件 | 修改内容 | 影响原有业务 | 回归测试 |
+| --- | --- | --- | --- | --- |
+| PT-19(P2) | `backend/main.py:111` | `/docs` `/redoc` `/openapi.json` 暴露条件从 `debug or sqlite` 收紧为 `debug`（显式 DEBUG=true） | 低：本地开发者需设 DEBUG=true 才能查看 Swagger（原来 SQLite 模式自动暴露全量 API 文档给未认证访问者） | pytest 全绿（conftest 用 SQLite 但 ENV=test 不触发 debug；需显式 DEBUG=true 才开 docs）；全页面 200 |
+
+## 修复效果验证方式## 修复效果验证方式
 
 - 全部门禁：typecheck ✓、contract 28/28 ✓（新增 4 条安全回归）、unit 79/79 ✓、build ✓、pytest 全绿 ✓、ruff ✓、e2e 18/18 ✓
 - V-01/V-06 为运行时行为（shell 日志、浏览器 history），以人工核验 + 代码评审确认
