@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FinOS AI — Evidence-Driven Enterprise Financial Intelligence Workspace</title>
+  <meta name="description" content="面向企业经营与风险研判的开源金融服务 Agent。资料解析 → 事实抽取 → 规则匹配 → 风险信号 → AI 分析 → 人工复核 → 决策。">
+  <style>
+    :root {
+      --bg: #080A0D;
+      --surface: #0E1116;
+      --elevated: #141820;
+      --border: rgba(255,255,255,0.08);
+      --text: #F5F7FA;
+      --text-2: #A7AFBC;
+      --text-3: #747D8C;
+      --brand: #19C37D;
+      --ai: #4C8DFF;
+      --risk: #FF4D4F;
+      --radius: 12px;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; border-color:var(--border); }
+    html { background:var(--bg); color:var(--text); font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif; -webkit-font-smoothing:antialiased; }
+    body { min-height:100vh; }
+
+    .container { max-width:1080px; margin:0 auto; padding:0 24px; }
+
+    /* ── Hero ── */
+    .hero { text-align:center; padding:80px 24px 64px; position:relative; overflow:hidden; }
+    .hero::before { content:''; position:absolute; top:-120px; left:50%; transform:translateX(-50%); width:600px; height:400px;
+      background:radial-gradient(ellipse,rgba(25,195,125,0.08) 0%,transparent 70%); pointer-events:none; }
+    .hero h1 { font-size:48px; font-weight:800; letter-spacing:-0.03em; line-height:1.15; }
+    .hero h1 .ai { color:var(--brand); }
+    .hero .tagline { margin-top:16px; font-size:18px; color:var(--text-2); line-height:1.7; max-width:640px; margin-left:auto; margin-right:auto; }
+    .hero .badges { margin-top:24px; display:flex; flex-wrap:wrap; justify-content:center; gap:8px; }
+    .hero .badges img { height:22px; border-radius:4px; }
+    .hero .cta { margin-top:32px; display:flex; justify-content:center; gap:12px; }
+    .btn { display:inline-flex; align-items:center; gap:8px; padding:12px 24px; border-radius:var(--radius); font-size:14px; font-weight:600; text-decoration:none; transition:all .2s; }
+    .btn-primary { background:var(--brand); color:#041018; }
+    .btn-primary:hover { background:#0E9F63; }
+    .btn-secondary { background:var(--elevated); color:var(--text-2); border:1px solid var(--border); }
+    .btn-secondary:hover { background:var(--surface); color:var(--text); }
+
+    /* ── Section ── */
+    .section { padding:48px 0; }
+    .section-title { font-size:28px; font-weight:700; text-align:center; letter-spacing:-0.02em; margin-bottom:8px; }
+    .section-sub { text-align:center; color:var(--text-3); font-size:14px; margin-bottom:36px; }
+
+    /* ── Value Chain ── */
+    .chain { display:flex; flex-wrap:wrap; justify-content:center; gap:4px; padding:24px 0; }
+    .chain-item { padding:8px 16px; border-radius:8px; border:1px solid var(--border); background:var(--surface); font-size:13px; font-weight:500; color:var(--text-2); }
+    .chain-item.hl-brand { border-color:rgba(25,195,125,0.3); background:rgba(25,195,125,0.08); color:var(--brand); }
+    .chain-item.hl-ai { border-color:rgba(76,141,255,0.3); background:rgba(76,141,255,0.08); color:var(--ai); }
+    .chain-arrow { display:flex; align-items:center; color:var(--text-3); font-size:14px; padding:0 2px; }
+
+    /* ── Feature Grid ── */
+    .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:16px; }
+    .card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:24px; transition:border-color .2s; }
+    .card:hover { border-color:rgba(255,255,255,0.16); }
+    .card .icon { font-size:24px; margin-bottom:12px; }
+    .card h3 { font-size:15px; font-weight:600; margin-bottom:8px; }
+    .card p { font-size:13px; color:var(--text-2); line-height:1.7; }
+
+    /* ── Architecture ── */
+    .arch { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:24px; font-family:'Cascadia Code',monospace; font-size:13px; line-height:1.9; color:var(--text-2); overflow-x:auto; white-space:pre; }
+    .arch .kw { color:var(--brand); }
+    .arch .str { color:var(--ai); }
+
+    /* ── Quick Start ── */
+    .steps { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:16px; }
+    .step { background:var(--elevated); border:1px solid var(--border); border-radius:var(--radius); padding:20px; }
+    .step .num { display:inline-grid; place-items:center; width:28px; height:28px; border-radius:50%; background:rgba(25,195,125,0.12); color:var(--brand); font-weight:700; font-size:13px; margin-bottom:12px; }
+    .step h4 { font-size:14px; font-weight:600; margin-bottom:6px; }
+    .step p { font-size:12px; color:var(--text-2); line-height:1.6; }
+    .step code { background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px; font-size:11px; color:var(--text-2); }
+
+    /* ── Principles ── */
+    .principles { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:16px; }
+    .principle { display:flex; gap:12px; align-items:flex-start; }
+    .principle .check { color:var(--brand); font-weight:700; font-size:16px; flex-shrink:0; margin-top:2px; }
+    .principle h4 { font-size:13px; font-weight:600; }
+    .principle p { font-size:12px; color:var(--text-2); line-height:1.6; margin-top:4px; }
+
+    /* ── Footer ── */
+    footer { border-top:1px solid var(--border); padding:32px 24px; text-align:center; color:var(--text-3); font-size:12px; }
+    footer a { color:var(--text-2); text-decoration:none; }
+    footer a:hover { color:var(--brand); }
+    footer .links { display:flex; justify-content:center; gap:24px; margin-bottom:12px; flex-wrap:wrap; }
+
+    @media (max-width:640px) {
+      .hero h1 { font-size:32px; }
+      .hero .tagline { font-size:15px; }
+      .chain { flex-direction:column; align-items:center; }
+      .chain-arrow { transform:rotate(90deg); }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Hero -->
+<div class="hero">
+  <h1>FinOS <span class="ai">AI</span></h1>
+  <p class="tagline">面向企业经营与风险研判的开源金融服务 Agent。<br>
+    让企业资料、经营事实、业务规则与外部研究进入同一条可追溯的研判链路。</p>
+  <div class="badges">
+    <img src="https://img.shields.io/badge/release-2.2.1-38bdf8.svg" alt="Release">
+    <img src="https://img.shields.io/badge/license-MIT-22c55e.svg" alt="MIT License">
+    <img src="https://img.shields.io/badge/TypeScript-strict-3178c6.svg" alt="TypeScript Strict">
+    <img src="https://img.shields.io/badge/security-policy-f59e0b.svg" alt="Security Policy">
+  </div>
+  <div class="cta">
+    <a class="btn btn-primary" href="https://github.com/Leterhong/FinOS-AI">GitHub 仓库</a>
+    <a class="btn btn-secondary" href="https://github.com/Leterhong/FinOS-AI/blob/main/docs/user-guide.md">使用指引</a>
+  </div>
+</div>
+
+<!-- Value Chain -->
+<div class="container section">
+  <h2 class="section-title">核心价值链</h2>
+  <p class="section-sub">每一步都可追溯——点击任何结论可以回到原始证据。</p>
+  <div class="chain">
+    <span class="chain-item">企业项目</span><span class="chain-arrow">→</span>
+    <span class="chain-item">资料上传</span><span class="chain-arrow">→</span>
+    <span class="chain-item">事实抽取</span><span class="chain-arrow">→</span>
+    <span class="chain-item hl-brand">证据引用</span><span class="chain-arrow">→</span>
+    <span class="chain-item">规则匹配</span><span class="chain-arrow">→</span>
+    <span class="chain-item">风险信号</span><span class="chain-arrow">→</span>
+    <span class="chain-item hl-ai">AI 分析</span><span class="chain-arrow">→</span>
+    <span class="chain-item">人工复核</span><span class="chain-arrow">→</span>
+    <span class="chain-item">决策交付</span>
+  </div>
+</div>
+
+<!-- Features -->
+<div class="container section">
+  <h2 class="section-title">核心模块</h2>
+  <p class="section-sub">12 个业务模块覆盖企业金融研判全流程。</p>
+  <div class="grid">
+    <div class="card"><div class="icon">📊</div><h3>经营决策台</h3><p>统一观察项目、资料、风险、任务和 Agent 运行态。Priority Work 面板展示需要人工处理的事项。</p></div>
+    <div class="card"><div class="icon">📁</div><h3>项目中心</h3><p>管理企业研判项目、行业、融资需求、负责人。支持 Table/Board 双视图。</p></div>
+    <div class="card"><div class="icon">📄</div><h3>资料研判</h3><p>上传 PDF、Word、Excel、CSV、图片。四阶段管线：解析 → 抽取 → 规则判定 → 叙述。事实逐条携带原文引用。</p></div>
+    <div class="card"><div class="icon">🛡️</div><h3>风险中心</h3><p>按严重度聚合风险信号。结构化详情抽屉展示 What/Why/Evidence/Rule/Impact/Review/Traceability。</p></div>
+    <div class="card"><div class="icon">⚖️</div><h3>规则库</h3><p>管理准入、授信、并购规则。结构化条件 + Visual View 决策链 + 测试样本记录 + 版本回放。</p></div>
+    <div class="card"><div class="icon">🤖</div><h3>Agent 中心</h3><p>编排资料理解、规则匹配、风险研判 Agent。每条运行可展开执行轨迹。</p></div>
+    <div class="card"><div class="icon">💬</div><h3>智能研判助手</h3><p>基于项目上下文的 AI 流式对话。只使用工作区明确数据，区分事实与推断。</p></div>
+    <div class="card"><div class="icon">🔗</div><h3>AI 模型中心</h3><p>接入 OpenAI、DeepSeek、通义千问、Ollama 等。密钥服务端 AES-256-GCM 加密保存。</p></div>
+    <div class="card"><div class="icon">🏛️</div><h3>企业治理</h3><p>五级 RBAC、项目授权、数据密级、人工复核队列、规则版本回放、模型评测、审计。</p></div>
+  </div>
+</div>
+
+<!-- Architecture -->
+<div class="container section">
+  <h2 class="section-title">技术架构</h2>
+  <p class="section-sub">Next.js 15 + FastAPI + PostgreSQL/SQLite + Redis（可选）</p>
+  <div class="arch">
+<span style="color:var(--text)">Browser</span>
+  └─ Next.js 15 / React 19 / TypeScript strict / Tailwind CSS
+       ├─ <span class="kw">企业零数据工作区</span>（Zustand 本地持久化 + 服务端同步）
+       ├─ <span class="kw">Route Handlers</span>（工作区会话、模型配置、AI 网关 SSE）
+       ├─ <span class="str">AES-256-GCM</span> 模型凭据存储（仅服务端可解密）
+       └─ FastAPI
+            ├─ 访客会话 / JWT / HttpOnly Refresh Cookie（原子轮换）
+            ├─ 企业持久化 / 组织治理 / 确定性规则引擎
+            ├─ SQLite（开发）/ PostgreSQL 16（生产）
+            └─ Redis（可选，限流 + 缓存 + 吊销共享）</div>
+</div>
+
+<!-- Quick Start -->
+<div class="container section">
+  <h2 class="section-title">快速开始</h2>
+  <p class="section-sub">5 分钟完成一次从"上传资料"到"输出风险清单"的完整研判。</p>
+  <div class="steps">
+    <div class="step"><span class="num">1</span><h4>接入 AI 模型</h4><p>到模型中心添加你自己的大模型（支持 DeepSeek、OpenAI、Ollama 等），测试连接后保存。</p></div>
+    <div class="step"><span class="num">2</span><h4>创建企业项目</h4><p>新建一个融资、尽调或经营分析项目。项目是所有资料、风险和 AI 分析的容器。</p></div>
+    <div class="step"><span class="num">3</span><h4>上传资料</h4><p>上传 PDF、Word、Excel 或图片。系统自动抽取结构化事实（逐条携带原文引用）。</p></div>
+    <div class="step"><span class="num">4</span><h4>查看研判结果</h4><p>查看规则命中（确定性引擎判定）和 AI 分析叙述。点击事实可定位到原文。</p></div>
+    <div class="step"><span class="num">5</span><h4>人工复核</h4><p>核验候选风险、登记缓释措施。所有操作留痕进入不可篡改审计记录。</p></div>
+    <div class="step"><span class="num">6</span><h4>导出报告</h4><p>复制风险清单或项目研判报告为 Markdown 格式，用于授信或尽调流程。</p></div>
+  </div>
+</div>
+
+<!-- Principles -->
+<div class="container section">
+  <h2 class="section-title">设计原则</h2>
+  <p class="section-sub">这些原则决定了 FinOS AI 与普通 AI Chat 产品的本质区别。</p>
+  <div class="principles">
+    <div class="principle"><span class="check">✓</span><div><h4>Evidence First</h4><p>重要判断必须能回到原始资料、事实字段和引用位置。UI 提供 Evidence Chain 逐级追溯。</p></div></div>
+    <div class="principle"><span class="check">✓</span><div><h4>Human in the Loop</h4><p>AI 生成草稿和线索，关键决策由授权人员确认。系统不执行审批、授信或付款。</p></div></div>
+    <div class="principle"><span class="check">✓</span><div><h4>Explainable Rules</h4><p>规则命中由确定性引擎计算（非 LLM），展示命中原因、潜在影响和证据。</p></div></div>
+    <div class="principle"><span class="check">✓</span><div><h4>Secure by Default</h4><p>密钥不进入前端，上传和出站访问经过安全边界，生产弱密钥拒绝启动。</p></div></div>
+    <div class="principle"><span class="check">✓</span><div><h4>Zero Preset Data</h4><p>不预置任何企业、金额、风险或 AI 结论。所有数据由用户主动录入。</p></div></div>
+    <div class="principle"><span class="check">✓</span><div><h4>Open & Self-hosted</h4><p>MIT 开源，支持自托管，按业务需要扩展。</p></div></div>
+  </div>
+</div>
+
+<footer>
+  <div class="links">
+    <a href="https://github.com/Leterhong/FinOS-AI">GitHub</a>
+    <a href="https://github.com/Leterhong/FinOS-AI/blob/main/docs/user-guide.md">使用指引</a>
+    <a href="https://github.com/Leterhong/FinOS-AI/blob/main/CONTRIBUTING.md">贡献指南</a>
+    <a href="https://github.com/Leterhong/FinOS-AI/blob/main/SECURITY.md">安全策略</a>
+    <a href="https://github.com/Leterhong/FinOS-AI/blob/main/CHANGELOG.md">更新日志</a>
+  </div>
+  <p>FinOS AI 提供信息分析与决策辅助，不构成投资、授信、法律、审计或合规意见。</p>
+  <p>MIT License © Leterhong &amp; FinOS AI contributors</p>
+</footer>
+
+</body>
+</html>
